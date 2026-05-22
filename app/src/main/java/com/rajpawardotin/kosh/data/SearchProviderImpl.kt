@@ -7,6 +7,8 @@ import kotlinx.coroutines.*
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -50,7 +52,7 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             }
             
             onStatusUpdate("Searching $searchEngine...")
-            val results = fetchSearchResults(query, searchEngine)
+            val results = fetchSearchResults(query, searchEngine, onStatusUpdate)
             if (results.isEmpty()) {
                 return@withContext "No search results found."
             }
@@ -123,116 +125,385 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
         }
     }
 
-    private fun fetchSearchResults(query: String, searchEngine: String): List<SearchResult> {
-        val results = mutableListOf<SearchResult>()
+    private fun fetchSearchResults(
+        query: String,
+        searchEngine: String,
+        onStatusUpdate: (String) -> Unit
+    ): List<SearchResult> {
+        val prefs = context.getSharedPreferences("neural_core_prefs", Context.MODE_PRIVATE)
+        val tavilyKey = prefs.getString("tavily_api_key", "") ?: ""
+        val braveKey = prefs.getString("brave_api_key", "") ?: ""
+
+        when (searchEngine) {
+            "Tavily API" -> {
+                if (tavilyKey.isBlank()) {
+                    onStatusUpdate("Tavily API Key missing. Trying free fallback...")
+                    return fetchSearchResultsWithFallback(query, onStatusUpdate)
+                }
+                try {
+                    onStatusUpdate("Querying Tavily API...")
+                    val searchResult = queryTavilyApi(query, tavilyKey)
+                    if (searchResult.isNotEmpty()) return searchResult
+                    onStatusUpdate("Tavily returned no results. Trying fallbacks...")
+                } catch (e: Exception) {
+                    onStatusUpdate("Tavily API error: ${e.localizedMessage}. Trying fallbacks...")
+                }
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            "Brave Search API" -> {
+                if (braveKey.isBlank()) {
+                    onStatusUpdate("Brave Search API Key missing. Trying free fallback...")
+                    return fetchSearchResultsWithFallback(query, onStatusUpdate)
+                }
+                try {
+                    onStatusUpdate("Querying Brave Search API...")
+                    val searchResult = queryBraveSearchApi(query, braveKey)
+                    if (searchResult.isNotEmpty()) return searchResult
+                    onStatusUpdate("Brave returned no results. Trying fallbacks...")
+                } catch (e: Exception) {
+                    onStatusUpdate("Brave API error: ${e.localizedMessage}. Trying fallbacks...")
+                }
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            "DuckDuckGo (Free)" -> {
+                try {
+                    onStatusUpdate("Searching DuckDuckGo...")
+                    val searchResult = queryDuckDuckGoVqd(query)
+                    if (searchResult.isNotEmpty()) return searchResult
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                onStatusUpdate("DDG (Free) failed. Trying legacy HTML scraper...")
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            "Google Scraper" -> {
+                try {
+                    onStatusUpdate("Querying Google Scraper...")
+                    val googleResult = queryGoogleScraper(query)
+                    if (googleResult.isNotEmpty()) return googleResult
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                onStatusUpdate("Google Scraper failed. Trying fallbacks...")
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            "Bing Scraper" -> {
+                try {
+                    onStatusUpdate("Querying Bing Scraper...")
+                    val bingResult = queryBingScraper(query)
+                    if (bingResult.isNotEmpty()) return bingResult
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                onStatusUpdate("Bing Scraper failed. Trying fallbacks...")
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            "DuckDuckGo Lite" -> {
+                try {
+                    onStatusUpdate("Querying DDG Lite Scraper...")
+                    val ddgLiteResult = queryDuckDuckGoLite(query)
+                    if (ddgLiteResult.isNotEmpty()) return ddgLiteResult
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                onStatusUpdate("DDG Lite failed. Trying fallbacks...")
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+            else -> {
+                return fetchSearchResultsWithFallback(query, onStatusUpdate)
+            }
+        }
+    }
+
+    private fun fetchSearchResultsWithFallback(
+        query: String,
+        onStatusUpdate: (String) -> Unit
+    ): List<SearchResult> {
+        // Try VQD first
         try {
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            when (searchEngine) {
-                "DuckDuckGo HTML" -> {
-                    val url = "https://html.duckduckgo.com/html/?q=$encodedQuery"
-                    val request = Request.Builder()
-                        .url(url)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                        .build()
-                    val response = client.newCall(request).execute()
-                    val html = response.body?.string() ?: return results
-                    val doc = Jsoup.parse(html)
-                    doc.select(".result").forEach { element ->
-                        val titleLink = element.select("a.result__a").firstOrNull() ?: return@forEach
-                        val title = titleLink.text()
-                        val rawLink = titleLink.attr("href")
-                        val link = extractDdgLink(rawLink)
-                        val snippet = element.select(".result__snippet").text()
-                        if (title.isNotEmpty() && link.startsWith("http")) {
-                            results.add(SearchResult(title, link, snippet))
-                        }
-                    }
+            onStatusUpdate("Trying DuckDuckGo (Free)...")
+            val res = queryDuckDuckGoVqd(query)
+            if (res.isNotEmpty()) return res
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Try DuckDuckGo HTML
+        try {
+            onStatusUpdate("Trying DuckDuckGo HTML Scraper...")
+            val res = queryDuckDuckGoHtml(query)
+            if (res.isNotEmpty()) return res
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Try DuckDuckGo Lite
+        try {
+            onStatusUpdate("Trying DuckDuckGo Lite...")
+            val res = queryDuckDuckGoLite(query)
+            if (res.isNotEmpty()) return res
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Try Bing Scraper
+        try {
+            onStatusUpdate("Trying Bing Scraper...")
+            val res = queryBingScraper(query)
+            if (res.isNotEmpty()) return res
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Try Google Scraper
+        try {
+            onStatusUpdate("Trying Google Scraper...")
+            val res = queryGoogleScraper(query)
+            if (res.isNotEmpty()) return res
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        onStatusUpdate("All free engines failed/blocked.")
+        return emptyList()
+    }
+
+    private fun queryDuckDuckGoVqd(query: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        
+        // Step 1: Bootstrap VQD Token
+        val bootstrapUrl = "https://duckduckgo.com/?q=$encodedQuery"
+        val bootstrapRequest = Request.Builder()
+            .url(bootstrapUrl)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+        
+        val bootstrapResponse = client.newCall(bootstrapRequest).execute()
+        val bootstrapHtml = bootstrapResponse.body?.string() ?: return results
+        
+        val vqdRegex = """vqd\s*=\s*['"]([^'"]+)['"]""".toRegex()
+        val matchResult = vqdRegex.find(bootstrapHtml) ?: return results
+        val vqdToken = matchResult.groupValues[1]
+        
+        // Step 2: Query links.duckduckgo.com/d.js
+        val djsUrl = "https://links.duckduckgo.com/d.js?q=$encodedQuery&vqd=$vqdToken&s=0&o=json&api=d.js"
+        val djsRequest = Request.Builder()
+            .url(djsUrl)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Referer", "https://duckduckgo.com/")
+            .build()
+            
+        val djsResponse = client.newCall(djsRequest).execute()
+        val djsBody = djsResponse.body?.string() ?: return results
+        
+        val startIdx = djsBody.indexOf('[')
+        val endIdx = djsBody.lastIndexOf(']')
+        if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+            val jsonArrayString = djsBody.substring(startIdx, endIdx + 1)
+            val jsonArray = org.json.JSONArray(jsonArrayString)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                val title = obj.optString("t", "")
+                val rawLink = obj.optString("u", "")
+                val snippet = obj.optString("a", "")
+                val link = extractDdgLink(rawLink)
+                if (title.isNotEmpty() && link.startsWith("http")) {
+                    results.add(SearchResult(title, link, snippet))
                 }
-                "DuckDuckGo Lite" -> {
-                    val formBody = FormBody.Builder()
-                        .add("q", query)
-                        .build()
-                    val request = Request.Builder()
-                        .url("https://lite.duckduckgo.com/lite/")
-                        .post(formBody)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .build()
-                    val response = client.newCall(request).execute()
-                    val html = response.body?.string() ?: return results
-                    val doc = Jsoup.parse(html)
-                    val tdLinks = doc.select("td.result-link")
-                    tdLinks.forEach { td ->
-                        val a = td.select("a").firstOrNull() ?: return@forEach
-                        val title = a.text()
-                        val rawLink = a.attr("href")
-                        val link = extractDdgLink(rawLink)
-                        val tr = td.parent()
-                        val nextTr = tr?.nextElementSibling()
-                        val snippet = nextTr?.select("td.result-snippet")?.text() ?: ""
-                        if (title.isNotEmpty() && link.startsWith("http")) {
-                            results.add(SearchResult(title, link, snippet))
-                        }
-                    }
+            }
+        }
+        return results
+    }
+
+    private fun queryTavilyApi(query: String, apiKey: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        
+        val jsonRequest = org.json.JSONObject().apply {
+            put("api_key", apiKey)
+            put("query", query)
+            put("search_depth", "basic")
+            put("include_answer", false)
+            put("max_results", 5)
+        }
+        
+        val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+        val requestBody = jsonRequest.toString().toRequestBody(mediaType)
+        
+        val request = Request.Builder()
+            .url("https://api.tavily.com/search")
+            .post(requestBody)
+            .build()
+            
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw Exception("HTTP error code: ${response.code}")
+        }
+        val responseBody = response.body?.string() ?: return results
+        val jsonResponse = org.json.JSONObject(responseBody)
+        if (jsonResponse.has("results")) {
+            val resultsArray = jsonResponse.getJSONArray("results")
+            for (i in 0 until resultsArray.length()) {
+                val obj = resultsArray.getJSONObject(i)
+                val title = obj.optString("title", "")
+                val link = obj.optString("url", "")
+                val snippet = obj.optString("content", "")
+                if (title.isNotEmpty() && link.startsWith("http")) {
+                    results.add(SearchResult(title, link, snippet))
                 }
-                "Google Scraper" -> {
-                    val url = "https://www.google.com/search?q=$encodedQuery"
-                    val request = Request.Builder()
-                        .url(url)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .build()
-                    val response = client.newCall(request).execute()
-                    val html = response.body?.string() ?: return results
-                    val doc = Jsoup.parse(html)
-                    val googleG = doc.select(".g")
-                    if (googleG.isNotEmpty()) {
-                        googleG.forEach { element ->
-                            val a = element.select("a[href]").firstOrNull() ?: return@forEach
-                            val link = a.attr("href")
-                            val title = element.select("h3").text()
-                            val snippet = element.select("div[style*=-webkit-line-clamp], .VwiC3b").text()
-                            if (title.isNotEmpty() && link.startsWith("http")) {
-                                results.add(SearchResult(title, link, snippet))
-                            }
-                        }
-                    } else {
-                        doc.select("a[href]").forEach { a ->
-                            val href = a.attr("href")
-                            if (href.startsWith("/url?q=")) {
-                                val actualUrl = href.substringAfter("/url?q=").substringBefore("&")
-                                val decodedUrl = URLDecoder.decode(actualUrl, "UTF-8")
-                                val title = a.select("h3").text()
-                                val parent = a.parent()?.parent()?.parent()
-                                val snippet = parent?.select(".VwiC3b, .yD755d, .BNeawe")?.text() ?: ""
-                                if (title.isNotEmpty() && decodedUrl.startsWith("http")) {
-                                    results.add(SearchResult(title, decodedUrl, snippet))
-                                }
-                            }
-                        }
-                    }
-                }
-                "Bing Scraper" -> {
-                    val url = "https://www.bing.com/search?q=$encodedQuery"
-                    val request = Request.Builder()
-                        .url(url)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .build()
-                    val response = client.newCall(request).execute()
-                    val html = response.body?.string() ?: return results
-                    val doc = Jsoup.parse(html)
-                    doc.select(".b_algo").forEach { element ->
-                        val a = element.select("h2 a").firstOrNull() ?: return@forEach
-                        val link = a.attr("href")
-                        val title = a.text()
-                        val snippet = element.select(".b_caption p, .b_snippet").text()
-                        if (title.isNotEmpty() && link.startsWith("http")) {
-                            results.add(SearchResult(title, link, snippet))
-                        }
+            }
+        }
+        return results
+    }
+
+    private fun queryBraveSearchApi(query: String, apiKey: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val url = "https://api.search.brave.com/res/v1/web/search?q=$encodedQuery"
+        
+        val request = Request.Builder()
+            .url(url)
+            .header("X-Subscription-Token", apiKey)
+            .header("Accept", "application/json")
+            .build()
+            
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw Exception("HTTP error code: ${response.code}")
+        }
+        val responseBody = response.body?.string() ?: return results
+        val jsonResponse = org.json.JSONObject(responseBody)
+        if (jsonResponse.has("web")) {
+            val web = jsonResponse.getJSONObject("web")
+            if (web.has("results")) {
+                val resultsArray = web.getJSONArray("results")
+                for (i in 0 until resultsArray.length()) {
+                    val obj = resultsArray.getJSONObject(i)
+                    val title = obj.optString("title", "")
+                    val link = obj.optString("url", "")
+                    val snippet = obj.optString("description", "")
+                    if (title.isNotEmpty() && link.startsWith("http")) {
+                        results.add(SearchResult(title, link, snippet))
                     }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        }
+        return results
+    }
+
+    private fun queryDuckDuckGoHtml(query: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val url = "https://html.duckduckgo.com/html/?q=$encodedQuery"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .build()
+        val response = client.newCall(request).execute()
+        val html = response.body?.string() ?: return results
+        val doc = Jsoup.parse(html)
+        doc.select(".result").forEach { element ->
+            val titleLink = element.select("a.result__a").firstOrNull() ?: return@forEach
+            val title = titleLink.text()
+            val rawLink = titleLink.attr("href")
+            val link = extractDdgLink(rawLink)
+            val snippet = element.select(".result__snippet").text()
+            if (title.isNotEmpty() && link.startsWith("http")) {
+                results.add(SearchResult(title, link, snippet))
+            }
+        }
+        return results
+    }
+
+    private fun queryDuckDuckGoLite(query: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val formBody = FormBody.Builder()
+            .add("q", query)
+            .build()
+        val request = Request.Builder()
+            .url("https://lite.duckduckgo.com/lite/")
+            .post(formBody)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+        val response = client.newCall(request).execute()
+        val html = response.body?.string() ?: return results
+        val doc = Jsoup.parse(html)
+        val tdLinks = doc.select("td.result-link")
+        tdLinks.forEach { td ->
+            val a = td.select("a").firstOrNull() ?: return@forEach
+            val title = a.text()
+            val rawLink = a.attr("href")
+            val link = extractDdgLink(rawLink)
+            val tr = td.parent()
+            val nextTr = tr?.nextElementSibling()
+            val snippet = nextTr?.select("td.result-snippet")?.text() ?: ""
+            if (title.isNotEmpty() && link.startsWith("http")) {
+                results.add(SearchResult(title, link, snippet))
+            }
+        }
+        return results
+    }
+
+    private fun queryGoogleScraper(query: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val url = "https://www.google.com/search?q=$encodedQuery"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+        val response = client.newCall(request).execute()
+        val html = response.body?.string() ?: return results
+        val doc = Jsoup.parse(html)
+        val googleG = doc.select(".g")
+        if (googleG.isNotEmpty()) {
+            googleG.forEach { element ->
+                val a = element.select("a[href]").firstOrNull() ?: return@forEach
+                val link = a.attr("href")
+                val title = element.select("h3").text()
+                val snippet = element.select("div[style*=-webkit-line-clamp], .VwiC3b").text()
+                if (title.isNotEmpty() && link.startsWith("http")) {
+                    results.add(SearchResult(title, link, snippet))
+                }
+            }
+        } else {
+            doc.select("a[href]").forEach { a ->
+                val href = a.attr("href")
+                if (href.startsWith("/url?q=")) {
+                    val actualUrl = href.substringAfter("/url?q=").substringBefore("&")
+                    val decodedUrl = URLDecoder.decode(actualUrl, "UTF-8")
+                    val title = a.select("h3").text()
+                    val parent = a.parent()?.parent()?.parent()
+                    val snippet = parent?.select(".VwiC3b, .yD755d, .BNeawe")?.text() ?: ""
+                    if (title.isNotEmpty() && decodedUrl.startsWith("http")) {
+                        results.add(SearchResult(title, decodedUrl, snippet))
+                    }
+                }
+            }
+        }
+        return results
+    }
+
+    private fun queryBingScraper(query: String): List<SearchResult> {
+        val results = mutableListOf<SearchResult>()
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val url = "https://www.bing.com/search?q=$encodedQuery"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()
+        val response = client.newCall(request).execute()
+        val html = response.body?.string() ?: return results
+        val doc = Jsoup.parse(html)
+        doc.select(".b_algo").forEach { element ->
+            val a = element.select("h2 a").firstOrNull() ?: return@forEach
+            val link = a.attr("href")
+            val title = a.text()
+            val snippet = element.select(".b_caption p, .b_snippet").text()
+            if (title.isNotEmpty() && link.startsWith("http")) {
+                results.add(SearchResult(title, link, snippet))
+            }
         }
         return results
     }

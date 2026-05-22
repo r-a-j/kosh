@@ -63,7 +63,7 @@ class ChatViewModel(
     val backends = listOf("CPU", "GPU", "NPU (Qualcomm)")
 
     var selectedSearchEngine by mutableStateOf(
-        prefs.getString("selected_search_engine", "DuckDuckGo HTML") ?: "DuckDuckGo HTML"
+        prefs.getString("selected_search_engine", "DuckDuckGo (Free)") ?: "DuckDuckGo (Free)"
     )
         private set
 
@@ -72,7 +72,34 @@ class ChatViewModel(
         prefs.edit().putString("selected_search_engine", engine).apply()
     }
 
-    val searchEngines = listOf("DuckDuckGo HTML", "DuckDuckGo Lite", "Google Scraper", "Bing Scraper")
+    val searchEngines = listOf(
+        "DuckDuckGo (Free)",
+        "DuckDuckGo Lite",
+        "Google Scraper",
+        "Bing Scraper",
+        "Tavily API",
+        "Brave Search API"
+    )
+
+    var tavilyApiKey by mutableStateOf(
+        prefs.getString("tavily_api_key", "") ?: ""
+    )
+        private set
+
+    fun updateTavilyApiKey(key: String) {
+        tavilyApiKey = key
+        prefs.edit().putString("tavily_api_key", key).apply()
+    }
+
+    var braveApiKey by mutableStateOf(
+        prefs.getString("brave_api_key", "") ?: ""
+    )
+        private set
+
+    fun updateBraveApiKey(key: String) {
+        braveApiKey = key
+        prefs.edit().putString("brave_api_key", key).apply()
+    }
 
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
         private set

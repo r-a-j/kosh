@@ -30,6 +30,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 
 @Composable
 fun ModelConfigCard(
@@ -45,6 +52,10 @@ fun ModelConfigCard(
     ramUsage: Double,
     selectedSearchEngine: String,
     searchEngines: List<String>,
+    tavilyApiKey: String = "",
+    braveApiKey: String = "",
+    onTavilyApiKeyChange: (String) -> Unit = {},
+    onBraveApiKeyChange: (String) -> Unit = {},
     onPickModel: () -> Unit,
     onDeleteModel: () -> Unit,
     onSelectBackend: (String) -> Unit,
@@ -197,6 +208,82 @@ fun ModelConfigCard(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = selectedSearchEngine == "Tavily API",
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            var showKey by remember { mutableStateOf(false) }
+                            OutlinedTextField(
+                                value = tavilyApiKey,
+                                onValueChange = onTavilyApiKeyChange,
+                                label = { Text("Tavily API Key", color = Color.Gray, style = MaterialTheme.typography.labelMedium) },
+                                placeholder = { Text("tvly-...", color = Color.DarkGray, style = MaterialTheme.typography.labelMedium) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { showKey = !showKey }) {
+                                        Icon(
+                                            imageVector = if (showKey) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = if (showKey) "Hide" else "Show",
+                                            tint = Color.Gray
+                                        )
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF03DAC5),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    cursorColor = Color(0xFF03DAC5)
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                textStyle = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        visible = selectedSearchEngine == "Brave Search API",
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            var showKey by remember { mutableStateOf(false) }
+                            OutlinedTextField(
+                                value = braveApiKey,
+                                onValueChange = onBraveApiKeyChange,
+                                label = { Text("Brave Search API Key", color = Color.Gray, style = MaterialTheme.typography.labelMedium) },
+                                placeholder = { Text("BS-...", color = Color.DarkGray, style = MaterialTheme.typography.labelMedium) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                                trailingIcon = {
+                                    IconButton(onClick = { showKey = !showKey }) {
+                                        Icon(
+                                            imageVector = if (showKey) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                            contentDescription = if (showKey) "Hide" else "Show",
+                                            tint = Color.Gray
+                                        )
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF03DAC5),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    cursorColor = Color(0xFF03DAC5)
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                textStyle = MaterialTheme.typography.bodyMedium
+                            )
                         }
                     }
                 }
