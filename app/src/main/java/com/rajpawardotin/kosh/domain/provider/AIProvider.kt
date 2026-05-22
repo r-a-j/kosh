@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.domain.provider
+package com.rajpawardotin.kosh.domain.provider
 
 import kotlinx.coroutines.flow.Flow
 
@@ -11,3 +11,4 @@ interface AIProvider {
     
     fun close()
 }
+

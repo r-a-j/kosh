@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.components
+package com.rajpawardotin.kosh.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -302,3 +302,4 @@ fun Step2Ignite(
         }
     }
 }
+

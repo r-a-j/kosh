@@ -1,6 +1,6 @@
-package com.rajpawardotin.aicoredemo.data
+package com.rajpawardotin.kosh.data
 
-import com.rajpawardotin.aicoredemo.domain.provider.SearchProvider
+import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -47,3 +47,4 @@ class SearchProviderImpl : SearchProvider {
         }
     }
 }
+

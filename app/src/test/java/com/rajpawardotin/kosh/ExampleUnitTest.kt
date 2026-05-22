@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo
+package com.rajpawardotin.kosh
 
 import org.junit.Test
 

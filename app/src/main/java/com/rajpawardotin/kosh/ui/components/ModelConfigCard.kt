@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.components
+package com.rajpawardotin.kosh.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -193,3 +193,4 @@ fun ModelConfigCard(
         }
     }
 }
+

@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo
+package com.rajpawardotin.kosh
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -9,11 +9,11 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rajpawardotin.aicoredemo.data.LiteRTModelProvider
-import com.rajpawardotin.aicoredemo.data.SearchProviderImpl
-import com.rajpawardotin.aicoredemo.ui.chat.ChatScreen
-import com.rajpawardotin.aicoredemo.ui.chat.ChatViewModel
-import com.rajpawardotin.aicoredemo.ui.theme.AICoreDemoTheme
+import com.rajpawardotin.kosh.data.LiteRTModelProvider
+import com.rajpawardotin.kosh.data.SearchProviderImpl
+import com.rajpawardotin.kosh.ui.chat.ChatScreen
+import com.rajpawardotin.kosh.ui.chat.ChatViewModel
+import com.rajpawardotin.kosh.ui.theme.KoshTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            AICoreDemoTheme(darkTheme = true) {
+            KoshTheme(darkTheme = true) {
                 val chatViewModel: ChatViewModel = viewModel(factory = viewModelFactory)
                 ChatScreen(
                     viewModel = chatViewModel,
@@ -40,3 +40,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.data
+package com.rajpawardotin.kosh.data
 
 import android.content.Context
 import com.google.ai.edge.litertlm.Backend
@@ -8,7 +8,7 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.MessageCallback
-import com.rajpawardotin.aicoredemo.domain.provider.AIProvider
+import com.rajpawardotin.kosh.domain.provider.AIProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -70,3 +70,4 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
         isInitialized = false
     }
 }
+

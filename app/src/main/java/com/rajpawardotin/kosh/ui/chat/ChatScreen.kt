@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.chat
+package com.rajpawardotin.kosh.ui.chat
 
 import android.content.Context
 import android.net.Uri
@@ -34,11 +34,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rajpawardotin.aicoredemo.domain.model.ChatMessage
-import com.rajpawardotin.aicoredemo.ui.components.ChatBubble
-import com.rajpawardotin.aicoredemo.ui.components.ChatInput
-import com.rajpawardotin.aicoredemo.ui.components.ModelConfigCard
-import com.rajpawardotin.aicoredemo.ui.components.NeuralCoreWizard
+import com.rajpawardotin.kosh.domain.model.ChatMessage
+import com.rajpawardotin.kosh.ui.components.ChatBubble
+import com.rajpawardotin.kosh.ui.components.ChatInput
+import com.rajpawardotin.kosh.ui.components.ModelConfigCard
+import com.rajpawardotin.kosh.ui.components.NeuralCoreWizard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -405,5 +405,6 @@ private suspend fun copyFileToInternalStorage(context: Context, uri: Uri): Strin
     }
     file.absolutePath
 }
+
 
 

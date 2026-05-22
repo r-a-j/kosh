@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.theme
+package com.rajpawardotin.kosh.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

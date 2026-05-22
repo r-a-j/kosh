@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.components
+package com.rajpawardotin.kosh.ui.components
  
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -152,3 +152,4 @@ fun ChatInput(
         }
     }
 }
+

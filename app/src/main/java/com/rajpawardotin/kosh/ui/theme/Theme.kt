@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.theme
+package com.rajpawardotin.kosh.ui.theme
 
 import android.app.Activity
 import android.os.Build
@@ -34,7 +34,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun AICoreDemoTheme(
+fun KoshTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = true,

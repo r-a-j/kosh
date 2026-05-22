@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.chat
+package com.rajpawardotin.kosh.ui.chat
 
 sealed interface ChatContentBlock {
     data class Text(val content: String) : ChatContentBlock
@@ -146,3 +146,4 @@ object ResponseParser {
         return blocks
     }
 }
+

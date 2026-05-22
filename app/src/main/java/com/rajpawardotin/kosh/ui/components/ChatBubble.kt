@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.components
+package com.rajpawardotin.kosh.ui.components
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -45,11 +45,11 @@ import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
-import com.rajpawardotin.aicoredemo.domain.model.ChatMessage
-import com.rajpawardotin.aicoredemo.ui.chat.ChatContentBlock
-import com.rajpawardotin.aicoredemo.ui.chat.ChecklistItem
-import com.rajpawardotin.aicoredemo.ui.chat.ResponseParser
-import com.rajpawardotin.aicoredemo.ui.chat.SourceItem
+import com.rajpawardotin.kosh.domain.model.ChatMessage
+import com.rajpawardotin.kosh.ui.chat.ChatContentBlock
+import com.rajpawardotin.kosh.ui.chat.ChecklistItem
+import com.rajpawardotin.kosh.ui.chat.ResponseParser
+import com.rajpawardotin.kosh.ui.chat.SourceItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -550,3 +550,4 @@ fun SourcesCarousel(items: List<SourceItem>) {
         }
     }
 }
+

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AI Core Demo"
+rootProject.name = "Kosh"
 include(":app")
  

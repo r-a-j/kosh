@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.ui.chat
+package com.rajpawardotin.kosh.ui.chat
 
 import android.content.Context
 import androidx.compose.runtime.getValue
@@ -7,9 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rajpawardotin.aicoredemo.domain.model.ChatMessage
-import com.rajpawardotin.aicoredemo.domain.provider.AIProvider
-import com.rajpawardotin.aicoredemo.domain.provider.SearchProvider
+import com.rajpawardotin.kosh.domain.model.ChatMessage
+import com.rajpawardotin.kosh.domain.provider.AIProvider
+import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -216,3 +216,4 @@ class ChatViewModel(
         isEngineReady = aiProvider.isInitialized
     }
 }
+

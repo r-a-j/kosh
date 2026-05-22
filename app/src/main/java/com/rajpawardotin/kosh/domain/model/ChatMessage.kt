@@ -1,4 +1,4 @@
-package com.rajpawardotin.aicoredemo.domain.model
+package com.rajpawardotin.kosh.domain.model
 
 data class ChatMessage(
     val text: String,
@@ -6,3 +6,4 @@ data class ChatMessage(
     val isStreaming: Boolean = false,
     val isSystemMessage: Boolean = false
 )
+

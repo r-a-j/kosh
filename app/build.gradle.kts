@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.rajpawardotin.aicoredemo"
+    namespace = "com.rajpawardotin.kosh"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -12,7 +12,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.rajpawardotin.aicoredemo"
+        applicationId = "com.rajpawardotin.kosh"
         minSdk = 36
         targetSdk = 36
         versionCode = 1
