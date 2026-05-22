@@ -19,7 +19,7 @@ data class SourceItem(
 )
 
 object ResponseParser {
-    private val checklistRegex = """^(?:-\s*\[\s*([ xX]?)\s*\]|[\-*]|\d+\.)\s+(.+)""".toRegex()
+    private val checklistRegex = """^(?:[-*+]\s*\[\s*([ xX]?)\s*\])\s+(.+)""".toRegex()
     private val markdownLinkRegex = """\[([^\]]+)\]\((https?://[^\s)]+)\)""".toRegex()
     private val plainUrlRegex = """(?<!\]\()https?://[^\s)]+""".toRegex()
 
@@ -87,8 +87,12 @@ object ResponseParser {
                 flushText()
                 
                 val checkedChar = checklistMatch.groupValues[1]
-                val itemText = checklistMatch.groupValues[2]
+                var itemText = checklistMatch.groupValues[2]
                 val isChecked = checkedChar.lowercase() == "x"
+                
+                if (itemText.startsWith("~~") && itemText.endsWith("~~")) {
+                    itemText = itemText.substring(2, itemText.length - 2).trim()
+                }
                 
                 currentChecklistItems.add(
                     ChecklistItem(

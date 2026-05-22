@@ -443,7 +443,7 @@ fun ChecklistCard(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = item.text,
+                            text = parseMarkdownToAnnotatedString(item.text),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 textDecoration = if (isChecked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
                                 color = if (isChecked) Color.Gray else Color.White
@@ -550,4 +550,57 @@ fun SourcesCarousel(items: List<SourceItem>) {
         }
     }
 }
+
+fun parseMarkdownToAnnotatedString(text: String): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    val pattern = """(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\*.*?\*|_.*?_|~~.*?~~)""".toRegex()
+    val matches = pattern.findAll(text)
+    
+    var lastIndex = 0
+    for (match in matches) {
+        if (match.range.first > lastIndex) {
+            builder.append(text.substring(lastIndex, match.range.first))
+        }
+        
+        val token = match.value
+        when {
+            token.startsWith("***") && token.endsWith("***") -> {
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                builder.append(token.substring(3, token.length - 3))
+                builder.pop()
+            }
+            token.startsWith("**") && token.endsWith("**") -> {
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
+                builder.append(token.substring(2, token.length - 2))
+                builder.pop()
+            }
+            token.startsWith("*") && token.endsWith("*") -> {
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                builder.append(token.substring(1, token.length - 1))
+                builder.pop()
+            }
+            token.startsWith("_") && token.endsWith("_") -> {
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
+                builder.append(token.substring(1, token.length - 1))
+                builder.pop()
+            }
+            token.startsWith("~~") && token.endsWith("~~") -> {
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
+                builder.append(token.substring(2, token.length - 2))
+                builder.pop()
+            }
+            else -> {
+                builder.append(token)
+            }
+        }
+        lastIndex = match.range.last + 1
+    }
+    
+    if (lastIndex < text.length) {
+        builder.append(text.substring(lastIndex))
+    }
+    
+    return builder.toAnnotatedString()
+}
+
 
