@@ -43,9 +43,12 @@ fun ModelConfigCard(
     tokensPerSecond: Float,
     npuLoad: Int,
     ramUsage: Double,
+    selectedSearchEngine: String,
+    searchEngines: List<String>,
     onPickModel: () -> Unit,
     onDeleteModel: () -> Unit,
     onSelectBackend: (String) -> Unit,
+    onSelectSearchEngine: (String) -> Unit,
     onStartEngine: () -> Unit,
     onToggleInternet: (Boolean) -> Unit
 ) {
@@ -145,6 +148,59 @@ fun ModelConfigCard(
                 ramUsage = ramUsage,
                 modifier = Modifier.padding(horizontal = 0.dp)
             )
+
+            AnimatedVisibility(
+                visible = isInternetEnabled,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Web Search Engine",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.Gray,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        searchEngines.chunked(2).forEach { rowEngines ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowEngines.forEach { engine ->
+                                    val selected = engine == selectedSearchEngine
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (selected) Color(0xFF6200EE).copy(alpha = 0.15f) else Color.Transparent,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (selected) Color(0xFF6200EE).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.05f)
+                                        ),
+                                        onClick = { onSelectSearchEngine(engine) }
+                                    ) {
+                                        Box(
+                                            modifier = Modifier.padding(vertical = 10.dp, horizontal = 8.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = engine,
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (selected) Color(0xFF03DAC5) else Color.Gray,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             AnimatedVisibility(
                 visible = modelPath != null && !isEngineReady,

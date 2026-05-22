@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         val aiProvider = LiteRTModelProvider(applicationContext)
-        val searchProvider = SearchProviderImpl()
+        val searchProvider = SearchProviderImpl(applicationContext)
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")

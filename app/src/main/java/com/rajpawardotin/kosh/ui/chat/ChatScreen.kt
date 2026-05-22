@@ -5,6 +5,9 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.drawWithContent
@@ -112,6 +116,49 @@ fun ChatScreen(
                 .background(Brush.radialGradient(listOf(Color(0xFF312E81).copy(alpha = 0.22f), Color.Transparent)))
                 .blur(80.dp)
         )
+
+        // Bottom pulsing web search blue/cyan glow
+        AnimatedVisibility(
+            visible = viewModel.isSearchingInternet,
+            enter = fadeIn(animationSpec = tween(500)),
+            exit = fadeOut(animationSpec = tween(500)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            val infiniteTransition = rememberInfiniteTransition(label = "blue_glow")
+            val glowAlpha by infiniteTransition.animateFloat(
+                initialValue = 0.1f,
+                targetValue = 0.35f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "glowAlpha"
+            )
+            val glowSize by infiniteTransition.animateFloat(
+                initialValue = 350f,
+                targetValue = 500f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(1200, easing = FastOutSlowInEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "glowSize"
+            )
+            Box(
+                modifier = Modifier
+                    .size(glowSize.dp)
+                    .offset(y = 120.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color(0xFF00E5FF).copy(alpha = glowAlpha),
+                                Color(0xFF2979FF).copy(alpha = glowAlpha * 0.5f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+                    .blur(60.dp)
+            )
+        }
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
@@ -287,7 +334,8 @@ fun ChatScreen(
                                             text = when {
                                                 viewModel.currentResponseChunk.isNotEmpty() -> viewModel.currentResponseChunk
                                                 else -> viewModel.agenticStateLabel
-                                            }
+                                            },
+                                            isSearchingInternet = viewModel.isSearchingInternet
                                         )
                                     }
                                 }
@@ -347,9 +395,12 @@ fun ChatScreen(
                         tokensPerSecond = viewModel.tokensPerSecond,
                         npuLoad = viewModel.npuLoad,
                         ramUsage = viewModel.ramUsage,
+                        selectedSearchEngine = viewModel.selectedSearchEngine,
+                        searchEngines = viewModel.searchEngines,
                         onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
                         onDeleteModel = { viewModel.deleteModel() },
                         onSelectBackend = { viewModel.selectBackend(it) },
+                        onSelectSearchEngine = { viewModel.selectSearchEngine(it) },
                         onStartEngine = { viewModel.initializeEngine() },
                         onToggleInternet = { viewModel.isInternetEnabled = it }
                     )
@@ -360,7 +411,7 @@ fun ChatScreen(
 }
 
 @Composable
-fun ThinkingIndicator(text: String) {
+fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
     val infiniteTransition = rememberInfiniteTransition(label = "thinking")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.4f,
@@ -372,6 +423,16 @@ fun ThinkingIndicator(text: String) {
         label = "alpha"
     )
 
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -379,17 +440,28 @@ fun ThinkingIndicator(text: String) {
             .padding(vertical = 8.dp)
             .alpha(alpha)
     ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF03DAC5))
-        )
+        if (isSearchingInternet) {
+            Icon(
+                imageVector = Icons.Default.Public,
+                contentDescription = "Searching Web",
+                tint = Color(0xFF00E5FF),
+                modifier = Modifier
+                    .size(18.dp)
+                    .graphicsLayer(rotationZ = rotation)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF03DAC5))
+            )
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFF03DAC5),
+            color = if (isSearchingInternet) Color(0xFF00E5FF) else Color(0xFF03DAC5),
             fontSize = 14.sp
         )
     }

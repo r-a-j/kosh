@@ -62,6 +62,18 @@ class ChatViewModel(
 
     val backends = listOf("CPU", "GPU", "NPU (Qualcomm)")
 
+    var selectedSearchEngine by mutableStateOf(
+        prefs.getString("selected_search_engine", "DuckDuckGo HTML") ?: "DuckDuckGo HTML"
+    )
+        private set
+
+    fun selectSearchEngine(engine: String) {
+        selectedSearchEngine = engine
+        prefs.edit().putString("selected_search_engine", engine).apply()
+    }
+
+    val searchEngines = listOf("DuckDuckGo HTML", "DuckDuckGo Lite", "Google Scraper", "Bing Scraper")
+
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
         private set
 
@@ -141,13 +153,19 @@ class ChatViewModel(
                     }
                     
                     val searchQuery = determineSearchQuery(rawPrompt)
-                    val searchResults = searchProvider.performSearch(searchQuery)
+                    val searchResults = searchProvider.performSearch(searchQuery, selectedSearchEngine) { status ->
+                        viewModelScope.launch(Dispatchers.Main) {
+                            agenticStateLabel = status
+                        }
+                    }
                     
                     withContext(Dispatchers.Main) { 
-                        isSearchingInternet = false 
                         agenticStateLabel = "Integrating Search Context..."
                     }
                     delay(300)
+                    withContext(Dispatchers.Main) {
+                        isSearchingInternet = false
+                    }
 
                     buildSystemPrompt(searchQuery, searchResults, rawPrompt)
                 } else {
