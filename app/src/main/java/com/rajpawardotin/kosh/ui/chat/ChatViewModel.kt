@@ -39,6 +39,7 @@ class ChatViewModel(
     var npuLoad by mutableStateOf(0)
     var ramUsage by mutableStateOf(3.28)
     var tokensPerSecond by mutableStateOf(0f)
+    var lastSearchQuery by mutableStateOf<String?>(null)
     
     val checkedItems = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
     
@@ -117,6 +118,7 @@ class ChatViewModel(
                     modelPath = null
                     isEngineReady = aiProvider.isInitialized
                     chatMessages.clear()
+                    lastSearchQuery = null
                 }
             }
         }
@@ -180,6 +182,7 @@ class ChatViewModel(
                     }
                 }
 
+                var lastQueryUsed: String? = null
                 val finalPrompt = if (shouldSearch) {
                     withContext(Dispatchers.Main) { 
                         isSearchingInternet = true 
@@ -201,9 +204,24 @@ class ChatViewModel(
                         isSearchingInternet = false
                     }
 
-                    buildSystemPrompt(searchQuery, searchResults, rawPrompt)
+                    val hasResults = searchResults.isNotEmpty() && 
+                            !searchResults.contains("No search results found.") && 
+                            !searchResults.contains("Error performing search:")
+                    
+                    if (hasResults) {
+                        lastQueryUsed = searchQuery
+                        buildSystemPrompt(searchQuery, searchResults, rawPrompt)
+                    } else {
+                        rawPrompt
+                    }
                 } else {
                     rawPrompt
+                }
+
+                if (lastQueryUsed != null) {
+                    withContext(Dispatchers.Main) {
+                        lastSearchQuery = lastQueryUsed
+                    }
                 }
 
                 withContext(Dispatchers.Main) { 
@@ -262,11 +280,39 @@ class ChatViewModel(
         val isMetaQuery = rawPrompt.lowercase().trim().split(" ").size <= 4 &&
                 metaKeywords.any { rawPrompt.contains(it, ignoreCase = true) }
 
-        return if (isMetaQuery) {
+        val baseQuery = if (isMetaQuery) {
             chatMessages.reversed().firstOrNull { it.isUser && it.text != rawPrompt }?.text ?: rawPrompt
         } else {
             rawPrompt
         }
+
+        val lastQuery = lastSearchQuery
+        if (!lastQuery.isNullOrBlank()) {
+            val lowercasePrompt = baseQuery.lowercase()
+            val contextIndicators = listOf(
+                "he", "him", "his", "she", "her", "it", "its", "they", "them", "their",
+                "this", "that", "these", "those", "who", "why", "what", "where", "how",
+                "experiences", "experience", "education", "works", "work", "job", "career",
+                "background", "projects", "project", "details", "info", "information",
+                "website", "site", "page", "author", "creator", "owner"
+            )
+            val isFollowUp = contextIndicators.any { word ->
+                "\\b$word\\b".toRegex().containsMatchIn(lowercasePrompt)
+            }
+            if (isFollowUp) {
+                var cleanPrompt = baseQuery
+                val prefixesToRemove = listOf(
+                    "what are", "what is", "who is", "tell me about", "give me", "show me",
+                    "what does", "how does", "where is", "can you", "please", "how is",
+                    "what was", "who was", "where was", "how was", "do you know", "tell me"
+                )
+                for (prefix in prefixesToRemove) {
+                    cleanPrompt = cleanPrompt.replace("(?i)^\\s*$prefix\\s+".toRegex(), "").trim()
+                }
+                return "$lastQuery $cleanPrompt".trim()
+            }
+        }
+        return baseQuery
     }
 
     private fun buildSystemPrompt(query: String, data: String, userPrompt: String): String {

@@ -125,7 +125,6 @@ fun ChatInput(
                 },
                 enabled = enabled && !isGenerating,
                 modifier = Modifier
-                    .padding(end = 4.dp)
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(
@@ -140,6 +139,8 @@ fun ChatInput(
                     modifier = Modifier.size(20.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             IconButton(
                 onClick = {
