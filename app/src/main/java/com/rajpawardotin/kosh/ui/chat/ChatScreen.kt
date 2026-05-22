@@ -42,6 +42,7 @@ import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.ui.components.ChatBubble
 import com.rajpawardotin.kosh.ui.components.ChatInput
 import com.rajpawardotin.kosh.ui.components.ModelConfigCard
+import com.rajpawardotin.kosh.ui.components.KoshSplashScreen
 import com.rajpawardotin.kosh.ui.components.NeuralCoreWizard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -60,6 +61,16 @@ fun ChatScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
+
+    var showSplash by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(2500)
+        while (viewModel.isInitializing || viewModel.isCopyingModel) {
+            kotlinx.coroutines.delay(100)
+        }
+        showSplash = false
+    }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -412,6 +423,19 @@ fun ChatScreen(
                     )
                 }
             }
+        }
+
+        // Splash Screen Overlay
+        AnimatedVisibility(
+            visible = showSplash,
+            enter = fadeIn(),
+            exit = fadeOut(animationSpec = tween(600))
+        ) {
+            KoshSplashScreen(
+                isInitializing = viewModel.isInitializing,
+                isCopyingModel = viewModel.isCopyingModel,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
