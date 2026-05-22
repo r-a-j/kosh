@@ -146,7 +146,14 @@ class ChatViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val finalPrompt = if (isInternetEnabled) {
+                val shouldSearch = detectSearchRequirement(rawPrompt)
+                if (shouldSearch && !isInternetEnabled) {
+                    withContext(Dispatchers.Main) {
+                        isInternetEnabled = true
+                    }
+                }
+
+                val finalPrompt = if (shouldSearch) {
                     withContext(Dispatchers.Main) { 
                         isSearchingInternet = true 
                         agenticStateLabel = "Querying Web Knowledge..."
@@ -209,6 +216,20 @@ class ChatViewModel(
         }
     }
 
+    private fun detectSearchRequirement(prompt: String): Boolean {
+        if (isInternetEnabled) return true
+        
+        val lowercasePrompt = prompt.lowercase()
+        val searchKeywords = listOf(
+            "search web", "search internet", "search online", "google", "bing", "duckduckgo",
+            "lookup", "look up", "find on web", "browse", "website", "realtime", "real-time",
+            "latest news", "today's headlines", "todays headlines", "weather today", "current price"
+        )
+        val hasUrl = prompt.contains("http://") || prompt.contains("https://") || prompt.contains("www.")
+        
+        return hasUrl || searchKeywords.any { lowercasePrompt.contains(it) }
+    }
+
     private fun determineSearchQuery(rawPrompt: String): String {
         val metaKeywords = listOf("search", "find", "look", "research", "tell me more")
         val isMetaQuery = rawPrompt.lowercase().trim().split(" ").size <= 4 &&
@@ -222,10 +243,13 @@ class ChatViewModel(
     }
 
     private fun buildSystemPrompt(query: String, data: String, userPrompt: String): String {
-        return "SYSTEM: You are an expert AI with web access. Search for: \"$query\".\n" +
-                "DATA:\n$data\n\n" +
-                "USER: $userPrompt\n\n" +
-                "RULE: Use the DATA to answer. Do not say you cannot search."
+        return "You have access to the web search results below to answer the user's query.\n\n" +
+                "SEARCH RESULTS:\n" +
+                "$data\n\n" +
+                "USER QUERY: $userPrompt\n\n" +
+                "INSTRUCTION: Answer the user's query using the SEARCH RESULTS above. " +
+                "Provide a direct, concise, and helpful answer. " +
+                "Do not state that you cannot browse the internet or access real-time information since the search results are already provided to you above."
     }
 
     override fun onCleared() {

@@ -360,6 +360,8 @@ fun ChatScreen(
                         onValueChange = { viewModel.prompt = it },
                         onSend = { viewModel.sendMessage() },
                         onAddClick = { showBottomSheet = true },
+                        isInternetEnabled = viewModel.isInternetEnabled,
+                        onInternetToggle = { viewModel.isInternetEnabled = !viewModel.isInternetEnabled },
                         enabled = viewModel.isEngineReady,
                         isGenerating = viewModel.isGenerating,
                         modifier = Modifier

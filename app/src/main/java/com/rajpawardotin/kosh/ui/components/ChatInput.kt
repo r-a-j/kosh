@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +30,8 @@ fun ChatInput(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onAddClick: () -> Unit,
+    isInternetEnabled: Boolean,
+    onInternetToggle: () -> Unit,
     enabled: Boolean,
     isGenerating: Boolean,
     modifier: Modifier = Modifier
@@ -114,6 +117,29 @@ fun ChatInput(
                     cursorColor = Color(0xFF03DAC5)
                 )
             )
+
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onInternetToggle()
+                },
+                enabled = enabled && !isGenerating,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isInternetEnabled) Color(0xFF00E5FF).copy(alpha = 0.15f)
+                        else Color.White.copy(alpha = 0.05f)
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = "Toggle Web Search",
+                    tint = if (isInternetEnabled) Color(0xFF00E5FF) else Color.Gray.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
 
             IconButton(
                 onClick = {
