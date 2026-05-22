@@ -40,10 +40,8 @@ fun ChatInput(
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .shadow(
-                elevation = if (enabled) 12.dp else 2.dp, 
-                shape = CircleShape, 
-                ambientColor = if (enabled) Color.Cyan.copy(alpha = 0.5f) else Color.Transparent, 
-                spotColor = if (enabled) Color.Cyan else Color.Transparent
+                elevation = if (enabled) 4.dp else 2.dp, 
+                shape = CircleShape
             ),
         shape = CircleShape,
         color = Color(0xFF1E1E22),

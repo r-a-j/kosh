@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -111,11 +112,24 @@ fun ModelConfigCard(
                         ) {
                             Text("WEB", style = MaterialTheme.typography.labelSmall, color = Color.White)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Switch(
-                                checked = isInternetEnabled,
-                                onCheckedChange = onToggleInternet,
-                                modifier = Modifier.height(18.dp)
-                            )
+                            Box(
+                                modifier = Modifier.size(width = 32.dp, height = 20.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Switch(
+                                    checked = isInternetEnabled,
+                                    onCheckedChange = onToggleInternet,
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color(0xFF03DAC5),
+                                        checkedTrackColor = Color(0xFF03DAC5).copy(alpha = 0.2f),
+                                        checkedBorderColor = Color(0xFF03DAC5),
+                                        uncheckedThumbColor = Color.Gray,
+                                        uncheckedTrackColor = Color.White.copy(alpha = 0.05f),
+                                        uncheckedBorderColor = Color.White.copy(alpha = 0.15f)
+                                    ),
+                                    modifier = Modifier.scale(0.6f)
+                                )
+                            }
                         }
                     }
                 }
