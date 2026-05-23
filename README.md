@@ -11,9 +11,13 @@ Built with an offline-first philosophy, Kosh ensures your personal information i
 
 - **Offline-First Local AI**: Run local Large Language Models (LLMs) on-device utilizing the Google LiteRT (TensorFlow Lite) engine.
 - **Hardware-Accelerated Inference**: Native integration with local Neural Processing Units (NPUs) and GPUs to deliver lightning-fast on-device text generation.
-- **Cognitive Vector Memory**: Indexes your personal context, memories, and preferences to build an evolving personal knowledge graph.
-- **Internet-Augmented Inquiries**: Hybrid search capabilities that securely fetch web context when explicit public queries are requested.
-- **Premium Fluid Interface**: Designed with a futuristic dark-glassmorphism aesthetic, top-heavy radial glows, and interactive system-bar layout synchronization.
+- **Local Document RAG Vaults**: Import PDFs, TXTs, and MDs (up to 10MB) directly into SQLite FTS4 databases for secure semantic offline context retrieval.
+- **Internet-Augmented Inquiries**: Dynamic RAM-based web scraping fallback pipelines utilizing DuckDuckGo, Google, and Bing to inject live web context into local models.
+- **Biometric App Lock & Encrypted Vaults**: Secure the app on startup and lock individual chat threads with passwords or fingerprints, encrypting the database using AES-256-GCM.
+- **Zero-Knowledge Encrypted Backups**: Export and import your entire cognitive vault securely using PBKDF2 derived passwords.
+- **BIP39 Seed Phrase Recovery**: Setup 12-word mnemonic recovery phrases for absolute secure vault restoration.
+- **Speech-to-Text Integration**: Native voice dictation utilizing device speech recognition for quick inputs.
+- **Premium Fluid Interface**: Designed with a futuristic dark-glassmorphism aesthetic, top-heavy radial glows, interactive UI animations, and animated canvas loading screens.
 
 ---
 

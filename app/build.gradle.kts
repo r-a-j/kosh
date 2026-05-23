@@ -98,6 +98,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.jsoup)
     implementation(libs.okhttp)
+    implementation(libs.pdfbox.android)
+
     // implementation(libs.mlkit.genai.prompt)
     implementation(libs.litertlm.android)
     implementation(libs.litert.core)

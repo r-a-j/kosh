@@ -56,4 +56,24 @@ class FakeChatRepository : ChatRepository {
         }
         return result
     }
+
+    val documents = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
+
+    override fun saveSessionDocument(document: com.rajpawardotin.kosh.domain.model.SessionDocument) {
+        documents.removeAll { it.id == document.id }
+        documents.add(document)
+    }
+
+    override fun getSessionDocuments(sessionId: String): List<com.rajpawardotin.kosh.domain.model.SessionDocument> {
+        return documents.filter { it.sessionId == sessionId }.sortedBy { it.chunkIndex }
+    }
+
+    override fun searchSessionDocumentsFTS(sessionId: String, query: String): List<com.rajpawardotin.kosh.domain.model.SessionDocument> {
+        val terms = query.lowercase().split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (terms.isEmpty()) return emptyList()
+        return documents.filter { doc ->
+            doc.sessionId == sessionId && terms.any { doc.chunkText.lowercase().contains(it) }
+        }
+    }
 }
+

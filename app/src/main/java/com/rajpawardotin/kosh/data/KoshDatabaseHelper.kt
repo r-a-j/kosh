@@ -11,7 +11,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
+
 
         // Sessions Table
         private const val TABLE_SESSIONS = "sessions"
@@ -91,10 +92,58 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             )
         """.trimIndent()
 
+        val createSessionDocumentsTable = """
+            CREATE TABLE session_documents (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                file_name TEXT,
+                file_type TEXT,
+                file_size INTEGER,
+                chunk_index INTEGER,
+                chunk_text TEXT,
+                is_encrypted INTEGER,
+                created_at INTEGER,
+                FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+            )
+        """.trimIndent()
+
+        val createDocumentsFtsTable = """
+            CREATE VIRTUAL TABLE documents_fts USING fts4(
+                chunk_id,
+                session_id,
+                file_name,
+                chunk_text,
+                notindexed=chunk_id
+            )
+        """.trimIndent()
+
+
+        val createInsertTrigger = """
+            CREATE TRIGGER after_session_document_insert AFTER INSERT ON session_documents 
+            WHEN new.is_encrypted = 0 
+            BEGIN
+                INSERT INTO documents_fts (chunk_id, session_id, file_name, chunk_text) 
+                VALUES (new.id, new.session_id, new.file_name, new.chunk_text);
+            END
+        """.trimIndent()
+
+        val createDeleteTrigger = """
+            CREATE TRIGGER after_session_document_delete AFTER DELETE ON session_documents 
+            WHEN old.is_encrypted = 0
+            BEGIN
+                DELETE FROM documents_fts WHERE chunk_id = old.id;
+            END
+        """.trimIndent()
+
         db.execSQL(createSessionsTable)
         db.execSQL(createMessagesTable)
         db.execSQL(createChecklistTable)
+        db.execSQL(createSessionDocumentsTable)
+        db.execSQL(createDocumentsFtsTable)
+        db.execSQL(createInsertTrigger)
+        db.execSQL(createDeleteTrigger)
     }
+
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
@@ -107,7 +156,52 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         if (oldVersion < 3) {
             db.execSQL("ALTER TABLE $TABLE_SESSIONS ADD COLUMN $KEY_SESSION_ENCRYPTED_KEY_RECOVERY TEXT")
         }
+        if (oldVersion < 4) {
+            db.execSQL("""
+                CREATE TABLE session_documents (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    file_name TEXT,
+                    file_type TEXT,
+                    file_size INTEGER,
+                    chunk_index INTEGER,
+                    chunk_text TEXT,
+                    is_encrypted INTEGER,
+                    created_at INTEGER,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                )
+            """.trimIndent())
+
+            db.execSQL("""
+                CREATE VIRTUAL TABLE documents_fts USING fts4(
+                    chunk_id,
+                    session_id,
+                    file_name,
+                    chunk_text,
+                    notindexed=chunk_id
+                )
+            """.trimIndent())
+
+
+            db.execSQL("""
+                CREATE TRIGGER after_session_document_insert AFTER INSERT ON session_documents 
+                WHEN new.is_encrypted = 0 
+                BEGIN
+                    INSERT INTO documents_fts (chunk_id, session_id, file_name, chunk_text) 
+                    VALUES (new.id, new.session_id, new.file_name, new.chunk_text);
+                END
+            """.trimIndent())
+
+            db.execSQL("""
+                CREATE TRIGGER after_session_document_delete AFTER DELETE ON session_documents 
+                WHEN old.is_encrypted = 0
+                BEGIN
+                    DELETE FROM documents_fts WHERE chunk_id = old.id;
+                END
+            """.trimIndent())
+        }
     }
+
 
     fun saveSession(session: ChatSession) {
         val db = writableDatabase
@@ -265,4 +359,130 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         }
         return states
     }
+
+    fun saveSessionDocument(document: com.rajpawardotin.kosh.domain.model.SessionDocument) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("id", document.id)
+            put("session_id", document.sessionId)
+            put("file_name", document.fileName)
+            put("file_type", document.fileType)
+            put("file_size", document.fileSize)
+            put("chunk_index", document.chunkIndex)
+            put("chunk_text", document.chunkText)
+            put("is_encrypted", if (document.isEncrypted) 1 else 0)
+            put("created_at", document.createdAt)
+        }
+        db.insertWithOnConflict("session_documents", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun getSessionDocuments(sessionId: String): List<com.rajpawardotin.kosh.domain.model.SessionDocument> {
+        val list = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
+        val db = readableDatabase
+        val query = "SELECT * FROM session_documents WHERE session_id = ? ORDER BY chunk_index ASC"
+        db.rawQuery(query, arrayOf(sessionId)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIdx = cursor.getColumnIndexOrThrow("id")
+                val sessIdIdx = cursor.getColumnIndexOrThrow("session_id")
+                val nameIdx = cursor.getColumnIndexOrThrow("file_name")
+                val typeIdx = cursor.getColumnIndexOrThrow("file_type")
+                val sizeIdx = cursor.getColumnIndexOrThrow("file_size")
+                val indexIdx = cursor.getColumnIndexOrThrow("chunk_index")
+                val textIdx = cursor.getColumnIndexOrThrow("chunk_text")
+                val encIdx = cursor.getColumnIndexOrThrow("is_encrypted")
+                val createdIdx = cursor.getColumnIndexOrThrow("created_at")
+
+                do {
+                    list.add(
+                        com.rajpawardotin.kosh.domain.model.SessionDocument(
+                            id = cursor.getString(idIdx),
+                            sessionId = cursor.getString(sessIdIdx),
+                            fileName = cursor.getString(nameIdx),
+                            fileType = cursor.getString(typeIdx),
+                            fileSize = cursor.getLong(sizeIdx),
+                            chunkIndex = cursor.getInt(indexIdx),
+                            chunkText = cursor.getString(textIdx),
+                            isEncrypted = cursor.getInt(encIdx) == 1,
+                            createdAt = cursor.getLong(createdIdx)
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        }
+        return list
+    }
+
+    fun searchSessionDocumentsFTS(sessionId: String, query: String): List<com.rajpawardotin.kosh.domain.model.SessionDocument> {
+        val list = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
+        val db = readableDatabase
+        
+        // Remove common stop words and punctuation to improve RAG search relevance
+        val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
+        val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
+        val terms = sanitizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() && !stopWords.contains(it) }
+
+        // If the query is just stop words (or empty), return the most recent chunks as a fallback
+        if (terms.isEmpty()) {
+            val fallbackSql = "SELECT * FROM session_documents WHERE session_id = ? AND is_encrypted = 0 ORDER BY created_at DESC, chunk_index ASC LIMIT 3"
+            db.rawQuery(fallbackSql, arrayOf(sessionId)).use { cursor ->
+                parseSessionDocumentsCursor(cursor, list)
+            }
+            return list
+        }
+
+        // Construct FTS query using OR operator so that ANY matching term brings up the chunk
+        val matchQuery = terms.joinToString(" OR ")
+        val sql = """
+            SELECT sd.* 
+            FROM session_documents sd
+            JOIN documents_fts fts ON sd.id = fts.chunk_id
+            WHERE fts.session_id = ? AND documents_fts MATCH ?
+            ORDER BY sd.chunk_index ASC
+        """.trimIndent()
+
+        db.rawQuery(sql, arrayOf(sessionId, matchQuery)).use { cursor ->
+            parseSessionDocumentsCursor(cursor, list)
+        }
+        
+        // If FTS returned nothing (e.g. term mismatches), fallback to most recent chunks
+        if (list.isEmpty()) {
+            val fallbackSql = "SELECT * FROM session_documents WHERE session_id = ? AND is_encrypted = 0 ORDER BY created_at DESC, chunk_index ASC LIMIT 3"
+            db.rawQuery(fallbackSql, arrayOf(sessionId)).use { cursor ->
+                parseSessionDocumentsCursor(cursor, list)
+            }
+        }
+        
+        return list
+    }
+
+    private fun parseSessionDocumentsCursor(cursor: android.database.Cursor, list: MutableList<com.rajpawardotin.kosh.domain.model.SessionDocument>) {
+        if (cursor.moveToFirst()) {
+            val idIdx = cursor.getColumnIndexOrThrow("id")
+            val sessIdIdx = cursor.getColumnIndexOrThrow("session_id")
+            val nameIdx = cursor.getColumnIndexOrThrow("file_name")
+            val typeIdx = cursor.getColumnIndexOrThrow("file_type")
+            val sizeIdx = cursor.getColumnIndexOrThrow("file_size")
+            val indexIdx = cursor.getColumnIndexOrThrow("chunk_index")
+            val textIdx = cursor.getColumnIndexOrThrow("chunk_text")
+            val encIdx = cursor.getColumnIndexOrThrow("is_encrypted")
+            val createdIdx = cursor.getColumnIndexOrThrow("created_at")
+
+            do {
+                list.add(
+                    com.rajpawardotin.kosh.domain.model.SessionDocument(
+                        id = cursor.getString(idIdx),
+                        sessionId = cursor.getString(sessIdIdx),
+                        fileName = cursor.getString(nameIdx),
+                        fileType = cursor.getString(typeIdx),
+                        fileSize = cursor.getLong(sizeIdx),
+                        chunkIndex = cursor.getInt(indexIdx),
+                        chunkText = cursor.getString(textIdx),
+                        isEncrypted = cursor.getInt(encIdx) == 1,
+                        createdAt = cursor.getLong(createdIdx)
+                    )
+                )
+            } while (cursor.moveToNext())
+        }
+    }
 }
+

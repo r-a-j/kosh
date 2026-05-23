@@ -18,14 +18,15 @@ import org.mockito.kotlin.mock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
-
+ 
     private val testDispatcher = StandardTestDispatcher()
+    private val context = mock<Context>()
     private lateinit var fakeRepository: FakeChatRepository
     private lateinit var fakeSettings: FakeSettingsProvider
     private lateinit var fakeAI: FakeAIProvider
     private lateinit var fakeSearch: FakeSearchProvider
     private lateinit var viewModel: ChatViewModel
-
+ 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
@@ -35,23 +36,24 @@ class ChatViewModelTest {
         fakeSearch = FakeSearchProvider()
         viewModel = ChatViewModel(fakeAI, fakeSearch, fakeRepository, fakeSettings, testDispatcher)
     }
-
+ 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
     }
-
+ 
     @Test
     fun testInitialState() {
         assertNull(viewModel.currentSessionId)
         assertTrue(viewModel.chatMessages.isEmpty())
         assertTrue(viewModel.savedSessions.isEmpty())
     }
-
+ 
     @Test
     fun testSendMessageCreatesSessionAndSavesMessages() = runTest(testDispatcher) {
         viewModel.prompt = "Hello AI"
-        viewModel.sendMessage()
+        viewModel.sendMessage(context)
+
         
         testScheduler.advanceUntilIdle()
 
@@ -86,7 +88,8 @@ class ChatViewModelTest {
     @Test
     fun testLongPromptTruncatesSessionTitle() = runTest(testDispatcher) {
         viewModel.prompt = "This is an extremely long user prompt that should be truncated when generating the session title"
-        viewModel.sendMessage()
+        viewModel.sendMessage(context)
+
         
         testScheduler.advanceUntilIdle()
 
@@ -98,7 +101,8 @@ class ChatViewModelTest {
     @Test
     fun testNewChatButtonResetsCurrentSession() = runTest(testDispatcher) {
         viewModel.prompt = "First Session Message"
-        viewModel.sendMessage()
+        viewModel.sendMessage(context)
+
         testScheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.currentSessionId)
@@ -111,7 +115,8 @@ class ChatViewModelTest {
 
         // Send a message in the new session
         viewModel.prompt = "Second Session Message"
-        viewModel.sendMessage()
+        viewModel.sendMessage(context)
+
         testScheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.currentSessionId)
@@ -158,7 +163,8 @@ class ChatViewModelTest {
         assertTrue(viewModel.isTemporarySession)
 
         viewModel.prompt = "Temporary Prompt"
-        viewModel.sendMessage()
+        viewModel.sendMessage(context)
+
         testScheduler.advanceUntilIdle()
 
         // 1. Session id should still be set in memory to manage UI checklist items, etc.
@@ -369,6 +375,69 @@ class ChatViewModelTest {
         testScheduler.advanceUntilIdle()
         assertFalse(oldUnlockSuccess)
     }
+
+    @Test
+    fun testSizeLimitedInputStreamThrowsOnLimitExceeded() {
+        val rawData = "a".repeat(15)
+        val stream = com.rajpawardotin.kosh.data.SizeLimitedInputStream(rawData.byteInputStream(), 10)
+        
+        try {
+            val buf = ByteArray(20)
+            stream.read(buf)
+            fail("Expected IOException was not thrown")
+        } catch (e: java.io.IOException) {
+            assertTrue(e.message!!.contains("secure size limit"))
+        }
+    }
+
+    @Test
+    fun testTextChunkingSlidingWindow() {
+        val method = ChatViewModel::class.java.getDeclaredMethod("chunkText", String::class.java, Int::class.java, Int::class.java)
+        method.isAccessible = true
+        
+        val longText = "a".repeat(1800)
+        @Suppress("UNCHECKED_CAST")
+        val chunks = method.invoke(viewModel, longText, 1000, 200) as List<String>
+        
+        assertEquals(2, chunks.size)
+        assertEquals(1000, chunks[0].length)
+        assertEquals(1000, chunks[1].length)
+    }
+
+    @Test
+    fun testRAMPurgingOnSwitchAndLock() = runTest(testDispatcher) {
+        val doc = com.rajpawardotin.kosh.domain.model.SessionDocument(
+            id = "doc1",
+            sessionId = "sess1",
+            fileName = "file.txt",
+            fileType = "txt",
+            fileSize = 100,
+            chunkIndex = 0,
+            chunkText = "hello text",
+            isEncrypted = true,
+            createdAt = 1000L
+        )
+        viewModel.activeSessionDocuments.add(doc)
+        assertFalse(viewModel.activeSessionDocuments.isEmpty())
+        
+        // Lock app/keys -> activeSessionDocuments must be cleared
+        viewModel.clearActiveSessionKeys()
+        assertTrue(viewModel.activeSessionDocuments.isEmpty())
+        
+        // Populate again
+        viewModel.activeSessionDocuments.add(doc)
+        assertFalse(viewModel.activeSessionDocuments.isEmpty())
+        
+        // Load another session -> activeSessionDocuments must be cleared
+        val mockSession = ChatSession(id = "sess2", title = "Sess 2", createdAt = 0L, lastActive = 0L, modelPath = null, lastSearchQuery = null)
+        fakeRepository.saveSession(mockSession)
+        
+        viewModel.loadSession("sess2")
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(viewModel.activeSessionDocuments.isEmpty())
+    }
+
 
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true

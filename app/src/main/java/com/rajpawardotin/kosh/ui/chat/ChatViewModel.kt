@@ -13,7 +13,11 @@ import com.rajpawardotin.kosh.data.Bip39Utils
 import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
+import com.rajpawardotin.kosh.domain.model.AttachedFile
+import com.rajpawardotin.kosh.domain.model.SessionDocument
+import com.rajpawardotin.kosh.data.DocumentParser
 import com.rajpawardotin.kosh.domain.provider.AIProvider
+
 import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import com.rajpawardotin.kosh.domain.provider.SettingsProvider
 import com.rajpawardotin.kosh.domain.repository.ChatRepository
@@ -65,6 +69,20 @@ class ChatViewModel(
     
     val checkedItems = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
     val chatMessages = mutableStateListOf<ChatMessage>()
+    val attachedFiles = mutableStateListOf<AttachedFile>()
+    val activeSessionDocuments = mutableStateListOf<SessionDocument>()
+
+    fun attachFile(file: AttachedFile) {
+        if (attachedFiles.any { it.fileName == file.fileName }) {
+            showToast("File is already attached.")
+            return
+        }
+        attachedFiles.add(file)
+    }
+
+    fun detachFile(file: AttachedFile) {
+        attachedFiles.remove(file)
+    }
 
     var currentSessionId by mutableStateOf<String?>(null)
     val savedSessions = androidx.compose.runtime.mutableStateListOf<ChatSession>()
@@ -92,7 +110,9 @@ class ChatViewModel(
             }
         }
         activeSessionKeys.clear()
+        activeSessionDocuments.clear()
     }
+
 
     fun lockAppOnBackground() {
         clearActiveSessionKeys()
@@ -216,16 +236,33 @@ class ChatViewModel(
         }
         
         val checklist = chatRepository.getChecklistStatesForSession(sessionId)
+        
+        val sessionDocs = chatRepository.getSessionDocuments(sessionId)
+        val decryptedDocs = if (isEncrypted && isUnlocked) {
+            val key = activeSessionKeys[sessionId]!!
+            sessionDocs.map { doc ->
+                val decName = try { CryptoUtils.decryptMessage(doc.fileName, key) } catch (e: Exception) { doc.fileName }
+                val decText = try { CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) { "[Decryption Failed]" }
+                doc.copy(fileName = decName, chunkText = decText)
+            }
+        } else {
+            emptyList()
+        }
+
         withContext(Dispatchers.Main) {
             currentSessionId = sessionId
             chatMessages.clear()
             chatMessages.addAll(messages)
+            
+            activeSessionDocuments.clear()
+            activeSessionDocuments.addAll(decryptedDocs)
             
             checkedItems.clear()
             checkedItems.putAll(checklist)
             
             lastSearchQuery = session?.lastSearchQuery
         }
+
         
         // Update session last active time
         session?.let {
@@ -808,8 +845,16 @@ class ChatViewModel(
         }
     }
 
-    fun sendMessage() {
-        val rawPrompt = prompt
+    fun sendMessage(context: Context) {
+        val rawPrompt = if (prompt.isBlank() && attachedFiles.isNotEmpty()) {
+            if (attachedFiles.size == 1) {
+                "Summarize the attached document: ${attachedFiles.first().fileName}"
+            } else {
+                "Summarize the attached documents: " + attachedFiles.joinToString(", ") { it.fileName }
+            }
+        } else {
+            prompt
+        }
         if (rawPrompt.isBlank() || isGenerating) return
 
         // 1. Resolve Session ID
@@ -823,6 +868,10 @@ class ChatViewModel(
         // 2. Add User Message in memory
         val userMessage = ChatMessage(text = rawPrompt, isUser = true)
         chatMessages.add(userMessage)
+
+        // Keep copy of attached files, then clear the state immediately to refresh UI
+        val filesToProcess = attachedFiles.toList()
+        attachedFiles.clear()
 
         prompt = ""
         isGenerating = true
@@ -873,7 +922,72 @@ class ChatViewModel(
                         chatRepository.saveSession(newSession)
                         loadSavedSessionsInternal()
                     }
+                }
 
+                // Process attached files (if any)
+                for (file in filesToProcess) {
+                    try {
+                        val uri = Uri.parse(file.uriString)
+                        val extractedText = DocumentParser.extractText(context, uri, file.fileName)
+                        val chunks = chunkText(extractedText)
+                        
+                        val isEncrypted = activeSessionKeys.containsKey(sessionId!!) || isTemporarySession
+                        val key = activeSessionKeys[sessionId!!]
+                        
+                        chunks.forEachIndexed { index, chunkText ->
+                            val chunkId = java.util.UUID.randomUUID().toString()
+                            
+                            if (!isTemporarySession) {
+                                val storedName = if (isEncrypted && key != null) CryptoUtils.encryptMessage(file.fileName, key) else file.fileName
+                                val storedText = if (isEncrypted && key != null) CryptoUtils.encryptMessage(chunkText, key) else chunkText
+                                
+                                val docChunk = SessionDocument(
+                                    id = chunkId,
+                                    sessionId = sessionId!!,
+                                    fileName = storedName,
+                                    fileType = file.fileType,
+                                    fileSize = file.fileSize,
+                                    chunkIndex = index,
+                                    chunkText = storedText,
+                                    isEncrypted = isEncrypted,
+                                    createdAt = System.currentTimeMillis()
+                                )
+                                chatRepository.saveSessionDocument(docChunk)
+                            }
+                            
+                            // For encrypted or temporary sessions, keep chunks in RAM
+                            if (isTemporarySession || (isEncrypted && key != null)) {
+                                val docChunkDecrypted = SessionDocument(
+                                    id = chunkId,
+                                    sessionId = sessionId!!,
+                                    fileName = file.fileName,
+                                    fileType = file.fileType,
+                                    fileSize = file.fileSize,
+                                    chunkIndex = index,
+                                    chunkText = chunkText,
+                                    isEncrypted = isEncrypted,
+                                    createdAt = System.currentTimeMillis()
+                                )
+                                withContext(Dispatchers.Main) {
+                                    activeSessionDocuments.add(docChunkDecrypted)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        withContext(Dispatchers.Main) {
+                            showToast("Failed to process ${file.fileName}: ${e.localizedMessage}")
+                        }
+                        withContext(Dispatchers.Main) {
+                            isGenerating = false
+                            isThinking = false
+                            agenticStateLabel = "Neural Standby"
+                        }
+                        return@launch
+                    }
+                }
+
+                if (!isTemporarySession) {
                     // Now save the message (guarantees that the session row already exists)
                     val key = activeSessionKeys[sessionId!!]
                     val userMsgToSave = if (key != null) {
@@ -882,6 +996,14 @@ class ChatViewModel(
                         userMessage
                     }
                     chatRepository.saveMessage(sessionId!!, userMsgToSave)
+                }
+
+                // local RAG retrieval
+                val documentContext = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
+                val basePrompt = if (documentContext.isNotEmpty()) {
+                    "$documentContext\n\nUSER QUERY: $rawPrompt"
+                } else {
+                    rawPrompt
                 }
 
                 val shouldSearch = detectSearchRequirement(rawPrompt)
@@ -919,12 +1041,12 @@ class ChatViewModel(
                     
                     if (hasResults) {
                         lastQueryUsed = searchQuery
-                        buildSystemPrompt(searchQuery, searchResults, rawPrompt)
+                        buildSystemPrompt(searchQuery, searchResults, basePrompt)
                     } else {
-                        rawPrompt
+                        basePrompt
                     }
                 } else {
-                    rawPrompt
+                    basePrompt
                 }
 
                 if (lastQueryUsed != null) {
@@ -986,7 +1108,8 @@ class ChatViewModel(
                         loadSavedSessionsInternal()
                     }
                 }
-            } catch (e: Exception) {
+            }
+ catch (e: Exception) {
                 var errorMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
                     isThinking = false
@@ -1075,9 +1198,83 @@ class ChatViewModel(
                 "Do not state that you cannot browse the internet or access real-time information since the search results are already provided to you above."
     }
 
+    private fun chunkText(text: String, chunkSize: Int = 1000, overlap: Int = 200): List<String> {
+        if (text.isBlank()) return emptyList()
+        val chunks = mutableListOf<String>()
+        var start = 0
+        while (start < text.length) {
+            val end = minOf(start + chunkSize, text.length)
+            val chunk = text.substring(start, end)
+            chunks.add(chunk)
+            if (end == text.length) break
+            start += (chunkSize - overlap)
+        }
+        return chunks
+    }
+
+    private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): String {
+        val isEncrypted = activeSessionKeys.containsKey(sessionId)
+        val relevantDocs = if (isEncrypted) {
+            val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
+            val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
+            val terms = sanitizedQuery.split(Regex("\\s+")).filter { it.isNotBlank() && !stopWords.contains(it) }
+            
+            if (terms.isEmpty() || justAttached) {
+                activeSessionDocuments.takeLast(3).reversed()
+            } else {
+                val matches = activeSessionDocuments
+                    .map { doc ->
+                        val text = doc.chunkText.lowercase()
+                        var score = 0
+                        for (term in terms) {
+                            var index = 0
+                            while (true) {
+                                index = text.indexOf(term, index)
+                                if (index == -1) break
+                                score++
+                                index += term.length
+                            }
+                        }
+                        doc to score
+                    }
+                    .filter { it.second > 0 }
+                    .sortedByDescending { it.second }
+                    .map { it.first }
+                    .take(3)
+                
+                if (matches.isEmpty()) {
+                    activeSessionDocuments.takeLast(3).reversed()
+                } else {
+                    matches
+                }
+            }
+        } else {
+            val docs = chatRepository.searchSessionDocumentsFTS(sessionId, query)
+            if (docs.isEmpty() && justAttached) {
+                // As a secondary fallback if FTS and recent fallback both somehow failed
+                emptyList()
+            } else {
+                docs.take(3)
+            }
+        }
+
+        if (relevantDocs.isEmpty()) return ""
+
+        val sb = StringBuilder()
+        sb.append("Answer the user query using ONLY the following document context:\n")
+        sb.append("--- START DOCUMENT CONTEXT ---\n")
+        for (doc in relevantDocs) {
+            sb.append("[File: ${doc.fileName}]\n")
+            sb.append("${doc.chunkText}\n\n")
+        }
+        sb.append("--- END DOCUMENT CONTEXT ---")
+        return sb.toString()
+    }
+
     override fun onCleared() {
         super.onCleared()
         aiProvider.close()
         isEngineReady = aiProvider.isInitialized
     }
 }
+

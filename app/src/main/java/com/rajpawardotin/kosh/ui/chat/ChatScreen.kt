@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.*
 import com.rajpawardotin.kosh.domain.model.ChatSession
+import com.rajpawardotin.kosh.domain.model.AttachedFile
 import androidx.compose.runtime.*
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -137,6 +138,50 @@ fun ChatScreen(
                     } finally {
                         viewModel.isCopyingModel = false
                     }
+                }
+            }
+        }
+    )
+
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            uri?.let {
+                val contentResolver = context.contentResolver
+                var fileName = "unknown"
+                var fileSize = 0L
+                var fileType = "txt"
+
+                contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIndex != -1) {
+                            fileName = cursor.getString(nameIndex)
+                        }
+                        if (sizeIndex != -1) {
+                            fileSize = cursor.getLong(sizeIndex)
+                        }
+                    }
+                }
+
+                val extension = fileName.substringAfterLast('.', "").lowercase()
+                fileType = if (extension.isNotEmpty()) extension else "txt"
+
+                if (extension != "txt" && extension != "md" && extension != "pdf") {
+                    Toast.makeText(context, "Unsupported format. Only .txt, .md, and .pdf are supported.", Toast.LENGTH_SHORT).show()
+                } else if (fileSize > 10 * 1024 * 1024) {
+                    Toast.makeText(context, "File size exceeds 10MB secure limit.", Toast.LENGTH_SHORT).show()
+                } else {
+                    viewModel.attachFile(
+                        AttachedFile(
+                            fileName = fileName,
+                            fileType = fileType,
+                            fileSize = fileSize,
+                            uriString = it.toString()
+                        )
+                    )
+
                 }
             }
         }
@@ -1020,10 +1065,11 @@ fun ChatScreen(
                     ChatInput(
                         value = viewModel.prompt,
                         onValueChange = { viewModel.prompt = it },
-                        onSend = { viewModel.sendMessage() },
+                        onSend = { viewModel.sendMessage(context) },
                         onVoiceClick = { startVoiceInput() },
-                        isInternetEnabled = viewModel.isInternetEnabled,
-                        onInternetToggle = { viewModel.isInternetEnabled = !viewModel.isInternetEnabled },
+                        onAttachClick = { documentPickerLauncher.launch("*/*") },
+                        attachedFiles = viewModel.attachedFiles,
+                        onDetachFile = { viewModel.detachFile(it) },
                         enabled = viewModel.isEngineReady,
                         isGenerating = viewModel.isGenerating,
                         modifier = Modifier

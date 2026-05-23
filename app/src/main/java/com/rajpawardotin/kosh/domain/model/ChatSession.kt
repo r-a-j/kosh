@@ -14,3 +14,23 @@ data class ChatSession(
     val encryptedKeyBiometric: String? = null,
     val encryptedKeyRecovery: String? = null
 )
+
+data class AttachedFile(
+    val fileName: String,
+    val fileType: String,
+    val fileSize: Long,
+    val uriString: String
+)
+
+data class SessionDocument(
+    val id: String,
+    val sessionId: String,
+    val fileName: String,
+    val fileType: String,
+    val fileSize: Long,
+    val chunkIndex: Int,
+    val chunkText: String,
+    val isEncrypted: Boolean,
+    val createdAt: Long
+)
+

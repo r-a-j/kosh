@@ -3,6 +3,7 @@ package com.rajpawardotin.kosh.data
 import android.content.Context
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
+import com.rajpawardotin.kosh.domain.model.SessionDocument
 import com.rajpawardotin.kosh.domain.repository.ChatRepository
 
 class SQLiteChatRepository(context: Context) : ChatRepository {
@@ -39,4 +40,17 @@ class SQLiteChatRepository(context: Context) : ChatRepository {
     override fun getChecklistStatesForSession(sessionId: String): Map<String, Boolean> {
         return dbHelper.getChecklistStatesForSession(sessionId)
     }
+
+    override fun saveSessionDocument(document: SessionDocument) {
+        dbHelper.saveSessionDocument(document)
+    }
+
+    override fun getSessionDocuments(sessionId: String): List<SessionDocument> {
+        return dbHelper.getSessionDocuments(sessionId)
+    }
+
+    override fun searchSessionDocumentsFTS(sessionId: String, query: String): List<SessionDocument> {
+        return dbHelper.searchSessionDocumentsFTS(sessionId, query)
+    }
 }
+

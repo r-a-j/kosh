@@ -30,7 +30,10 @@ class MainActivity : FragmentActivity() {
 
         enableEdgeToEdge()
         
+        com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
+        
         val aiProvider = LiteRTModelProvider(applicationContext)
+
         val searchProvider = SearchProviderImpl(applicationContext)
         val chatRepository = SQLiteChatRepository(applicationContext)
         val settingsProvider = SharedPrefsSettingsProvider(applicationContext)
