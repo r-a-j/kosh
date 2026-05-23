@@ -11,7 +11,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         // Sessions Table
         private const val TABLE_SESSIONS = "sessions"
@@ -28,6 +28,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         private const val KEY_SESSION_VALIDATION_TOKEN = "validation_token"
         private const val KEY_SESSION_ENCRYPTED_KEY_PASSWORD = "encrypted_session_key_password"
         private const val KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC = "encrypted_session_key_biometric"
+        private const val KEY_SESSION_ENCRYPTED_KEY_RECOVERY = "encrypted_session_key_recovery"
 
         // Messages Table
         private const val TABLE_MESSAGES = "messages"
@@ -63,7 +64,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $KEY_SESSION_SALT TEXT,
                 $KEY_SESSION_VALIDATION_TOKEN TEXT,
                 $KEY_SESSION_ENCRYPTED_KEY_PASSWORD TEXT,
-                $KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC TEXT
+                $KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC TEXT,
+                $KEY_SESSION_ENCRYPTED_KEY_RECOVERY TEXT
             )
         """.trimIndent()
 
@@ -102,6 +104,9 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             db.execSQL("ALTER TABLE $TABLE_SESSIONS ADD COLUMN $KEY_SESSION_ENCRYPTED_KEY_PASSWORD TEXT")
             db.execSQL("ALTER TABLE $TABLE_SESSIONS ADD COLUMN $KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC TEXT")
         }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE $TABLE_SESSIONS ADD COLUMN $KEY_SESSION_ENCRYPTED_KEY_RECOVERY TEXT")
+        }
     }
 
     fun saveSession(session: ChatSession) {
@@ -118,6 +123,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(KEY_SESSION_VALIDATION_TOKEN, session.validationToken)
             put(KEY_SESSION_ENCRYPTED_KEY_PASSWORD, session.encryptedKeyPassword)
             put(KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC, session.encryptedKeyBiometric)
+            put(KEY_SESSION_ENCRYPTED_KEY_RECOVERY, session.encryptedKeyRecovery)
         }
         val rowsUpdated = db.update(TABLE_SESSIONS, values, "$KEY_SESSION_ID = ?", arrayOf(session.id))
         if (rowsUpdated == 0) {
@@ -155,6 +161,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 val tokenIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_VALIDATION_TOKEN)
                 val encPassIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_ENCRYPTED_KEY_PASSWORD)
                 val encBioIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_ENCRYPTED_KEY_BIOMETRIC)
+                val encRecIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_ENCRYPTED_KEY_RECOVERY)
 
                 do {
                     sessionsList.add(
@@ -169,7 +176,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                             salt = cursor.getString(saltIdx),
                             validationToken = cursor.getString(tokenIdx),
                             encryptedKeyPassword = cursor.getString(encPassIdx),
-                            encryptedKeyBiometric = cursor.getString(encBioIdx)
+                            encryptedKeyBiometric = cursor.getString(encBioIdx),
+                            encryptedKeyRecovery = cursor.getString(encRecIdx)
                         )
                     )
                 } while (cursor.moveToNext())

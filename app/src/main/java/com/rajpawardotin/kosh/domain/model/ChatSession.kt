@@ -11,5 +11,6 @@ data class ChatSession(
     val salt: String? = null,
     val validationToken: String? = null,
     val encryptedKeyPassword: String? = null,
-    val encryptedKeyBiometric: String? = null
+    val encryptedKeyBiometric: String? = null,
+    val encryptedKeyRecovery: String? = null
 )

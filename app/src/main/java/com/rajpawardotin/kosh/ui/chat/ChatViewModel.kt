@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajpawardotin.kosh.data.Bip39Utils
 import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
@@ -24,7 +25,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.security.MessageDigest
 import javax.crypto.SecretKey
+import javax.crypto.spec.SecretKeySpec
 
 class ChatViewModel(
     private val aiProvider: AIProvider,
@@ -296,16 +299,21 @@ class ChatViewModel(
         password: String, 
         enableBiometric: Boolean, 
         context: Context, 
-        onResult: (Boolean) -> Unit
+        onResult: (Boolean, String?) -> Unit
     ) {
         viewModelScope.launch(ioDispatcher) {
             try {
+                val (mnemonic, entropy) = Bip39Utils.generateMnemonic(context)
+                val recoveryKeyBytes = MessageDigest.getInstance("SHA-256").digest(entropy)
+                val recoveryKey = SecretKeySpec(recoveryKeyBytes, "AES")
+
                 val salt = CryptoUtils.generateSalt()
                 val derivedKey = CryptoUtils.deriveKeyFromPassword(password, salt)
                 val sessionKey = CryptoUtils.generateRandomSessionKey()
                 
                 val sessionKeyEncodedBase64 = java.util.Base64.getEncoder().encodeToString(sessionKey.encoded)
                 val encryptedKeyPassword = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, derivedKey)
+                val encryptedKeyRecovery = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, recoveryKey)
                 
                 val messages = chatRepository.getMessagesForSession(sessionId).toList()
                 for (msg in messages) {
@@ -336,26 +344,27 @@ class ChatViewModel(
                                                          salt = java.util.Base64.getEncoder().encodeToString(salt),
                                                          validationToken = null,
                                                          encryptedKeyPassword = encryptedKeyPassword,
-                                                         encryptedKeyBiometric = encryptedKeyBiometric
+                                                         encryptedKeyBiometric = encryptedKeyBiometric,
+                                                         encryptedKeyRecovery = encryptedKeyRecovery
                                                      )
                                                      saveSessionEncrypted(updatedSession)
                                                      loadSavedSessionsInternal()
                                                      withContext(Dispatchers.Main) {
                                                          showToast("Chat locked and secured successfully")
-                                                         onResult(true)
+                                                         onResult(true, mnemonic)
                                                      }
                                                 } else {
-                                                     withContext(Dispatchers.Main) { onResult(false) }
+                                                     withContext(Dispatchers.Main) { onResult(false, null) }
                                                 }
                                             } catch (e: Exception) {
                                                 e.printStackTrace()
-                                                withContext(Dispatchers.Main) { onResult(false) }
+                                                withContext(Dispatchers.Main) { onResult(false, null) }
                                             }
                                         }
                                     }
                                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                                         super.onAuthenticationError(errorCode, errString)
-                                        onResult(false)
+                                        onResult(false, null)
                                     }
                                     override fun onAuthenticationFailed() {
                                         super.onAuthenticationFailed()
@@ -370,7 +379,7 @@ class ChatViewModel(
                             biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            onResult(false)
+                            onResult(false, null)
                         }
                     }
                 } else {
@@ -382,21 +391,75 @@ class ChatViewModel(
                             salt = java.util.Base64.getEncoder().encodeToString(salt),
                             validationToken = null,
                             encryptedKeyPassword = encryptedKeyPassword,
-                            encryptedKeyBiometric = null
+                            encryptedKeyBiometric = null,
+                            encryptedKeyRecovery = encryptedKeyRecovery
                         )
                         saveSessionEncrypted(updatedSession)
                         loadSavedSessionsInternal()
                         withContext(Dispatchers.Main) {
                             showToast("Chat locked and secured successfully")
-                            onResult(true)
+                            onResult(true, mnemonic)
                         }
                     } else {
-                        withContext(Dispatchers.Main) { onResult(false) }
+                        withContext(Dispatchers.Main) { onResult(false, null) }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                withContext(Dispatchers.Main) { onResult(false) }
+                withContext(Dispatchers.Main) { onResult(false, null) }
+            }
+        }
+    }
+
+    fun recoverSessionWithMnemonic(
+        sessionId: String,
+        mnemonic: String,
+        newPassword: String,
+        context: Context,
+        onResult: (Boolean) -> Unit
+    ) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val entropy = Bip39Utils.mnemonicToEntropy(mnemonic, context)
+                val recoveryKeyBytes = MessageDigest.getInstance("SHA-256").digest(entropy)
+                val recoveryKey = SecretKeySpec(recoveryKeyBytes, "AES")
+
+                val sessions = chatRepository.getSessionsOrderedByLastActive()
+                val session = sessions.find { it.id == sessionId }
+                if (session == null || session.encryptedKeyRecovery == null) {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                    return@launch
+                }
+
+                val sessionKeyEncodedBase64 = CryptoUtils.decryptMessage(session.encryptedKeyRecovery, recoveryKey)
+                val sessionKeyBytes = java.util.Base64.getDecoder().decode(sessionKeyEncodedBase64)
+                val sessionKey = SecretKeySpec(sessionKeyBytes, "AES")
+
+                // Re-encrypt session key with new password
+                val newSalt = CryptoUtils.generateSalt()
+                val newDerivedKey = CryptoUtils.deriveKeyFromPassword(newPassword, newSalt)
+                val newEncryptedKeyPassword = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, newDerivedKey)
+
+                val updatedSession = session.copy(
+                    salt = java.util.Base64.getEncoder().encodeToString(newSalt),
+                    encryptedKeyPassword = newEncryptedKeyPassword,
+                    encryptedKeyBiometric = null // Reset biometrics on password recovery
+                )
+
+                activeSessionKeys[sessionId] = sessionKey
+                saveSessionEncrypted(updatedSession)
+                loadSessionInternal(sessionId)
+
+                withContext(Dispatchers.Main) {
+                    showToast("Vault recovered successfully")
+                    onResult(true)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast("Recovery failed: ${e.localizedMessage}")
+                    onResult(false)
+                }
             }
         }
     }

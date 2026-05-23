@@ -239,13 +239,26 @@ class ChatViewModelTest {
         fakeRepository.saveMessage(sessionId, msg2)
 
         var lockSuccess = false
-        val dummyContext = mock<Context>()
-        viewModel.lockSession(sessionId, "strong_password_123", enableBiometric = false, context = dummyContext) { success ->
+        var recoveryMnemonic: String? = null
+        val mockContext = mock<Context>()
+        val mockAssets = mock<android.content.res.AssetManager>()
+        org.mockito.kotlin.whenever(mockContext.assets).thenReturn(mockAssets)
+        val realFile = java.io.File("app/src/main/assets/bip39_english.txt").let {
+            if (it.exists()) it else java.io.File("src/main/assets/bip39_english.txt")
+        }
+        org.mockito.kotlin.whenever(mockAssets.open("bip39_english.txt")).thenAnswer {
+            java.io.FileInputStream(realFile)
+        }
+
+        viewModel.lockSession(sessionId, "strong_password_123", enableBiometric = false, context = mockContext) { success, mnemonic ->
             lockSuccess = success
+            recoveryMnemonic = mnemonic
         }
         testScheduler.advanceUntilIdle()
 
         assertTrue(lockSuccess)
+        assertNotNull(recoveryMnemonic)
+        assertEquals(12, recoveryMnemonic!!.split(" ").size)
         
         val savedSession = fakeRepository.sessions.find { it.id == sessionId }
         assertNotNull(savedSession)
@@ -288,6 +301,73 @@ class ChatViewModelTest {
         assertEquals(2, viewModel.chatMessages.size)
         assertEquals("This is a secret message", viewModel.chatMessages[0].text)
         assertEquals("AI response about secrets", viewModel.chatMessages[1].text)
+    }
+
+    @Test
+    fun testVaultRecoveryWithMnemonic() = runTest(testDispatcher) {
+        val sessionId = "vault-recovery"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Locked Vault",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeRepository.saveSession(session)
+        
+        val mockContext = mock<Context>()
+        val mockAssets = mock<android.content.res.AssetManager>()
+        org.mockito.kotlin.whenever(mockContext.assets).thenReturn(mockAssets)
+        val realFile = java.io.File("app/src/main/assets/bip39_english.txt").let {
+            if (it.exists()) it else java.io.File("src/main/assets/bip39_english.txt")
+        }
+        org.mockito.kotlin.whenever(mockAssets.open("bip39_english.txt")).thenAnswer {
+            java.io.FileInputStream(realFile)
+        }
+
+        // 1. Lock the session first to get its recovery key and payload
+        var lockSuccess = false
+        var recoveryMnemonic: String? = null
+        viewModel.lockSession(sessionId, "old_pass", enableBiometric = false, context = mockContext) { success, mnemonic ->
+            lockSuccess = success
+            recoveryMnemonic = mnemonic
+        }
+        testScheduler.advanceUntilIdle()
+        assertTrue(lockSuccess)
+        assertNotNull(recoveryMnemonic)
+
+        // Clear active keys to simulate sealed vault
+        viewModel.activeSessionKeys.clear()
+
+        // 2. Perform recovery with correct mnemonic and new password
+        var recoverySuccess = false
+        viewModel.recoverSessionWithMnemonic(sessionId, recoveryMnemonic!!, "new_pass", mockContext) { success ->
+            recoverySuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        assertTrue(recoverySuccess)
+
+        // Verify key is in active session keys
+        assertTrue(viewModel.activeSessionKeys.containsKey(sessionId))
+
+        // 3. Clear active keys again, and verify we can unlock with the new password
+        viewModel.activeSessionKeys.clear()
+        var unlockSuccess = false
+        viewModel.unlockSessionWithPassword(sessionId, "new_pass") { success ->
+            unlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        assertTrue(unlockSuccess)
+
+        // 4. Verify we cannot unlock with the old password
+        viewModel.activeSessionKeys.clear()
+        var oldUnlockSuccess = true
+        viewModel.unlockSessionWithPassword(sessionId, "old_pass") { success ->
+            oldUnlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        assertFalse(oldUnlockSuccess)
     }
 
     class FakeAIProvider : AIProvider {

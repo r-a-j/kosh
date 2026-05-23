@@ -8,13 +8,10 @@ import android.content.Intent
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,22 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.*
@@ -55,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,6 +65,7 @@ fun ChatScreen(
     var showBottomSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
 
@@ -91,6 +77,9 @@ fun ChatScreen(
 
     var sessionToLock by remember { mutableStateOf<ChatSession?>(null) }
     var showManageLockDialog by remember { mutableStateOf(false) }
+    
+    var sessionRecoveryMnemonic by remember { mutableStateOf<String?>(null) }
+    var showRecoveryPhraseDialog by remember { mutableStateOf(false) }
     
     var backupPasswordToExport by remember { mutableStateOf("") }
     var showExportPasswordDialog by remember { mutableStateOf(false) }
@@ -120,7 +109,7 @@ fun ChatScreen(
 
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collect { message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -523,7 +512,8 @@ fun ChatScreen(
                         
                         AlertDialog(
                             onDismissRequest = { sessionToDelete = null },
-                            containerColor = Color(0xFF1E1E22),
+                            modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(28.dp)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(28.dp)),
+                            containerColor = Color(0xFF16161A),
                             titleContentColor = Color.White,
                             textContentColor = Color.White.copy(alpha = 0.8f),
                             title = { Text("Delete Cognitive Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
@@ -690,6 +680,8 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding)
             ) {
                 // Header (Stays at the very top)
                 Row(
@@ -924,13 +916,16 @@ fun ChatScreen(
                 } else {
                     if (isLocked) {
                         LockedVaultScreen(
-                            title = currentSession.title,
+                            title = currentSession!!.title,
                             hasBiometricKey = currentSession.encryptedKeyBiometric != null,
                             onUnlockWithPassword = { pwd, onDone ->
                                 viewModel.unlockSessionWithPassword(currentSession.id, pwd, onDone)
                             },
                             onUnlockWithBiometrics = { onDone ->
                                 viewModel.unlockSessionWithBiometrics(currentSession.id, context, onDone)
+                            },
+                            onRecoverWithMnemonic = { mnemonic, newPwd, onDone ->
+                                viewModel.recoverSessionWithMnemonic(currentSession.id, mnemonic, newPwd, context, onDone)
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -1031,7 +1026,8 @@ fun ChatScreen(
                         isGenerating = viewModel.isGenerating,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                            .imePadding()
+                            .navigationBarsPadding()
                             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                     )
                 }
@@ -1085,11 +1081,7 @@ fun ChatScreen(
         }
 
         // App Lock Overlay
-        AnimatedVisibility(
-            visible = viewModel.isAppLocked,
-            enter = fadeIn(animationSpec = tween(400)),
-            exit = fadeOut(animationSpec = tween(400))
-        ) {
+        if (viewModel.isAppLocked) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1166,27 +1158,39 @@ fun ChatScreen(
             var confirmPassword by remember { mutableStateOf("") }
             var enableBiometric by remember { mutableStateOf(false) }
             var passwordVisibility by remember { mutableStateOf(false) }
-            var confirmPasswordVisibility by remember { mutableStateOf(false) }
             var isProcessing by remember { mutableStateOf(false) }
 
             AlertDialog(
                 onDismissRequest = { if (!isProcessing) sessionToLock = null },
-                containerColor = Color(0xFF1E1E22),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+                containerColor = Color(0xFF16161A),
                 titleContentColor = Color.White,
-                textContentColor = Color.White.copy(alpha = 0.8f),
-                title = { Text("Lock Cognitive Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                textContentColor = Color.White.copy(alpha = 0.7f),
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Lock Vault", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
+                    }
+                },
                 text = {
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text("Set a custom password to encrypt this vault. Messages will be encrypted using AES-256-GCM.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                        Text("Secure this conversation with AES-256 encryption. This will mask the title and content in history.", style = MaterialTheme.typography.bodyMedium)
                         
                         OutlinedTextField(
                             value = password,
                             onValueChange = { password = it },
-                            label = { Text("Password") },
+                            label = { Text("Set Passcode") },
                             singleLine = true,
                             enabled = !isProcessing,
+                            shape = RoundedCornerShape(16.dp),
                             visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisibility = !passwordVisibility }) {
@@ -1201,9 +1205,9 @@ fun ChatScreen(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
                                 focusedLabelColor = Color(0xFF03DAC5),
-                                unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                unfocusedLabelColor = Color.Gray,
                                 focusedBorderColor = Color(0xFF03DAC5),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
                                 cursorColor = Color(0xFF03DAC5)
                             ),
                             modifier = Modifier.fillMaxWidth()
@@ -1212,70 +1216,81 @@ fun ChatScreen(
                         OutlinedTextField(
                             value = confirmPassword,
                             onValueChange = { confirmPassword = it },
-                            label = { Text("Confirm Password") },
+                            label = { Text("Confirm Passcode") },
                             singleLine = true,
                             enabled = !isProcessing,
-                            visualTransformation = if (confirmPasswordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { confirmPasswordVisibility = !confirmPasswordVisibility }) {
-                                    Icon(
-                                        imageVector = if (confirmPasswordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null,
-                                        tint = Color.Gray
-                                    )
-                                }
-                            },
+                            shape = RoundedCornerShape(16.dp),
+                            visualTransformation = PasswordVisualTransformation(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,
                                 focusedLabelColor = Color(0xFF03DAC5),
-                                unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                unfocusedLabelColor = Color.Gray,
                                 focusedBorderColor = Color(0xFF03DAC5),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
                                 cursorColor = Color(0xFF03DAC5)
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = !isProcessing) { enableBiometric = !enableBiometric }
-                        ) {
-                            Checkbox(
-                                checked = enableBiometric,
-                                onCheckedChange = { enableBiometric = it },
-                                enabled = !isProcessing,
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = Color(0xFF03DAC5),
-                                    checkmarkColor = Color.Black,
-                                    uncheckedColor = Color.White.copy(alpha = 0.4f)
-                                )
+                        Surface(
+                            onClick = { if (!isProcessing) enableBiometric = !enableBiometric },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (enableBiometric) Color(0xFF03DAC5).copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp, 
+                                if (enableBiometric) Color(0xFF03DAC5).copy(alpha = 0.5f) else Color.Transparent
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Enable Fingerprint Unlock", color = Color.White)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(12.dp).fillMaxWidth()
+                            ) {
+                                Checkbox(
+                                    checked = enableBiometric,
+                                    onCheckedChange = { enableBiometric = it },
+                                    enabled = !isProcessing,
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = Color(0xFF03DAC5),
+                                        checkmarkColor = Color.Black,
+                                        uncheckedColor = Color.White.copy(alpha = 0.4f)
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Column {
+                                    Text("Biometric Unlock", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                                    Text("Allow fingerprint to bypass passcode", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                                }
+                            }
                         }
                     }
                 },
                 confirmButton = {
-                    TextButton(
+                    Button(
                         enabled = password.isNotEmpty() && password == confirmPassword && !isProcessing,
                         onClick = {
                             isProcessing = true
-                            viewModel.lockSession(sessionToLock!!.id, password, enableBiometric, context) { success ->
+                            viewModel.lockSession(sessionToLock!!.id, password, enableBiometric, context) { success, mnemonic ->
                                 isProcessing = false
                                 if (success) {
-                                    Toast.makeText(context, "Vault Locked Successfully", Toast.LENGTH_SHORT).show()
+                                    sessionRecoveryMnemonic = mnemonic
+                                    showRecoveryPhraseDialog = true
                                     sessionToLock = null
                                 } else {
                                     Toast.makeText(context, "Locking failed", Toast.LENGTH_SHORT).show()
                                 }
                             }
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF03DAC5),
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         if (isProcessing) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF03DAC5), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
                         } else {
-                            Text("Lock", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                            Text("Seal Vault", fontWeight = FontWeight.Black)
                         }
                     }
                 },
@@ -1284,12 +1299,130 @@ fun ChatScreen(
                         enabled = !isProcessing,
                         onClick = { sessionToLock = null }
                     ) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                        Text("Cancel", color = Color.White.copy(alpha = 0.4f))
                     }
                 }
             )
         }
 
+
+        // Recovery Phrase Display Dialog (After Locking)
+        if (showRecoveryPhraseDialog && sessionRecoveryMnemonic != null) {
+            var confirmedWritten by remember { mutableStateOf(false) }
+
+            AlertDialog(
+                onDismissRequest = { }, // Force user to acknowledge
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+                containerColor = Color(0xFF16161A),
+                titleContentColor = Color.White,
+                textContentColor = Color.White.copy(alpha = 0.8f),
+                title = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Recovery Secret", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Surface(
+                            color = Color(0xFFFF9100).copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.2f))
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFFF9100), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    "If you lose your passcode, this phrase is the ONLY way to recover your data. Store it safely offline.",
+                                    color = Color(0xFFFF9100).copy(alpha = 0.9f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color.Black.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(20.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = sessionRecoveryMnemonic!!,
+                                    modifier = Modifier.padding(24.dp).align(Alignment.Center),
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 1.2.sp,
+                                        lineHeight = 30.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                    ),
+                                    color = Color(0xFF03DAC5),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                
+                                IconButton(
+                                    onClick = { 
+                                        clipboardManager.setText(AnnotatedString(sessionRecoveryMnemonic!!))
+                                        Toast.makeText(context, "Mnemonic Copied", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copy",
+                                        tint = Color(0xFF03DAC5).copy(alpha = 0.6f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Surface(
+                            onClick = { confirmedWritten = !confirmedWritten },
+                            color = Color.Transparent,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = confirmedWritten,
+                                    onCheckedChange = { confirmedWritten = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = Color(0xFF03DAC5))
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("I have secured my 12-word phrase", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        enabled = confirmedWritten,
+                        onClick = {
+                            showRecoveryPhraseDialog = false
+                            sessionRecoveryMnemonic = null
+                            Toast.makeText(context, "Neural Vault Secured", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF03DAC5),
+                            contentColor = Color.Black
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Finalize Encryption", fontWeight = FontWeight.Black)
+                    }
+                }
+            )
+        }
 
         // Export Password Dialog
         if (showExportPasswordDialog) {
@@ -1641,6 +1774,7 @@ fun LockedVaultScreen(
     hasBiometricKey: Boolean,
     onUnlockWithPassword: (String, (Boolean) -> Unit) -> Unit,
     onUnlockWithBiometrics: ((Boolean) -> Unit) -> Unit,
+    onRecoverWithMnemonic: (String, String, (Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var password by remember { mutableStateOf("") }
@@ -1649,104 +1783,216 @@ fun LockedVaultScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
+    var showRecoveryDialog by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
+
+    // Infinite transition for pulsing glowing rings behind the padlock
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale1 by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale1"
+    )
+    val pulseScale2 by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2500, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale2"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C0F)),
+            .background(Color(0xFF070709)),
         contentAlignment = Alignment.Center
     ) {
+        // Futuristic mesh radial glows
         Box(
             modifier = Modifier
-                .size(320.dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF03DAC5).copy(alpha = 0.1f), Color.Transparent)))
-                .blur(60.dp)
+                .size(450.dp)
+                .background(Brush.radialGradient(listOf(Color(0xFF03DAC5).copy(alpha = 0.12f), Color.Transparent)))
+                .blur(70.dp)
+        )
+        Box(
+            modifier = Modifier
+                .size(350.dp)
+                .background(Brush.radialGradient(listOf(Color(0xFF8B5CF6).copy(alpha = 0.08f), Color.Transparent)))
+                .blur(90.dp)
         )
 
+        // Glassmorphic Outer Card
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(28.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = Color(0xFF1E1E24).copy(alpha = 0.85f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                .padding(24.dp)
+                .graphicsLayer {
+                    shadowElevation = 8.dp.toPx()
+                    shape = RoundedCornerShape(32.dp)
+                    clip = true
+                }
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF03DAC5).copy(alpha = 0.3f),
+                            Color(0xFF8B5CF6).copy(alpha = 0.1f),
+                            Color(0xFF03DAC5).copy(alpha = 0.05f),
+                            Color(0xFF8B5CF6).copy(alpha = 0.3f)
+                        )
+                    ),
+                    shape = RoundedCornerShape(32.dp)
+                ),
+            shape = RoundedCornerShape(32.dp),
+            color = Color(0xFF111116).copy(alpha = 0.9f),
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(vertical = 36.dp, horizontal = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                // Padlock Centerpiece with Synaptic Concentric Rings
                 Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFF03DAC5).copy(alpha = 0.1f)),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(120.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = null,
-                        tint = Color(0xFF03DAC5),
-                        modifier = Modifier.size(28.dp)
+                    // Outer pulsing cyan halo
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(scaleX = pulseScale2, scaleY = pulseScale2)
+                            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.08f), CircleShape)
+                    )
+                    // Inner pulsing violet halo
+                    Box(
+                        modifier = Modifier
+                            .size(90.dp)
+                            .graphicsLayer(scaleX = pulseScale1, scaleY = pulseScale1)
+                            .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.15f), CircleShape)
+                    )
+                    // Locked Hub
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF03DAC5).copy(alpha = 0.15f),
+                                        Color(0xFF8B5CF6).copy(alpha = 0.05f)
+                                    )
+                                )
+                            )
+                            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color(0xFF03DAC5),
+                            modifier = Modifier.size(30.dp)
+                        )
+                    }
+                }
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
+                    Text(
+                        text = "COGNITIVE VAULT SEALED",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Black, 
+                            letterSpacing = 2.5.sp
+                        ),
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = title.uppercase(),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black, 
+                            letterSpacing = 1.sp,
+                            brush = Brush.linearGradient(
+                                colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                            )
+                        ),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
                 Text(
-                    text = "Vault Sealed",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
-                    color = Color.White
-                )
-
-                Text(
-                    text = "Conversation \"$title\" is secured with AES-256 encryption. Provide your passcode to access.",
+                    text = "This conversation is protected using AES-256 local-first cryptography. Please enter your passcode.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    lineHeight = 20.sp
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { 
-                        password = it
-                        errorMsg = null
-                    },
-                    label = { Text("Passcode") },
-                    singleLine = true,
-                    enabled = !isProcessing,
-                    visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisibility = !passwordVisibility }) {
-                            Icon(
-                                imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = null,
-                                tint = Color.Gray
-                            )
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        cursorColor = Color(0xFF03DAC5)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (errorMsg != null) {
-                    Text(
-                        text = errorMsg!!,
-                        color = Color(0xFFCF6679),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.align(Alignment.Start)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { 
+                            password = it
+                            errorMsg = null
+                        },
+                        label = { Text("Passcode Signature") },
+                        singleLine = true,
+                        enabled = !isProcessing,
+                        shape = RoundedCornerShape(16.dp),
+                        visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisibility = !passwordVisibility }) {
+                                Icon(
+                                    imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                    contentDescription = null,
+                                    tint = Color.Gray
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedLabelColor = Color(0xFF03DAC5),
+                            unfocusedLabelColor = Color.Gray,
+                            focusedBorderColor = Color(0xFF03DAC5),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                            cursorColor = Color(0xFF03DAC5)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
-                }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                    if (errorMsg != null) {
+                        Text(
+                            text = errorMsg!!,
+                            color = Color(0xFFCF6679),
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = "Forgot Passcode?",
+                            color = Color(0xFF03DAC5).copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier
+                                .clickable { if (!isProcessing) showRecoveryDialog = true }
+                                .padding(vertical = 4.dp, horizontal = 8.dp)
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1754,24 +2000,29 @@ fun LockedVaultScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (hasBiometricKey) {
-                        IconButton(
+                        Surface(
                             onClick = {
-                                onUnlockWithBiometrics { success ->
-                                    if (!success) {
-                                        Toast.makeText(context, "Biometrics verification failed", Toast.LENGTH_SHORT).show()
+                                if (!isProcessing) {
+                                    onUnlockWithBiometrics { success ->
+                                        if (!success) {
+                                            Toast.makeText(context, "Identity Verification Failed", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 }
                             },
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF03DAC5).copy(alpha = 0.1f))
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color.White.copy(alpha = 0.04f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                            modifier = Modifier.size(52.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Fingerprint,
-                                contentDescription = "Biometric Unlock",
-                                tint = Color(0xFF03DAC5)
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Fingerprint,
+                                    contentDescription = "Biometric Unlock",
+                                    tint = Color(0xFF03DAC5),
+                                    modifier = Modifier.size(26.dp)
+                                )
+                            }
                         }
                     }
 
@@ -1781,24 +2032,269 @@ fun LockedVaultScreen(
                             onUnlockWithPassword(password) { success ->
                                 isProcessing = false
                                 if (!success) {
-                                    errorMsg = "Incorrect passcode"
+                                    errorMsg = "Neural Signature Mismatch"
                                 }
                             }
                         },
                         enabled = password.isNotEmpty() && !isProcessing,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF03DAC5),
+                            containerColor = Color.Transparent,
                             contentColor = Color.Black
                         ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .weight(1f)
-                            .height(50.dp)
+                            .height(52.dp)
+                            .background(
+                                brush = Brush.linearGradient(
+                                    colors = if (password.isNotEmpty() && !isProcessing) {
+                                        listOf(Color(0xFF03DAC5), Color(0xFF8B5CF6))
+                                    } else {
+                                        listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f))
+                                    }
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                     ) {
                         if (isProcessing) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                         } else {
-                            Text("Unlock Vault", fontWeight = FontWeight.Bold)
+                            Text(
+                                "UNLOCK VAULT", 
+                                color = if (password.isNotEmpty() && !isProcessing) Color.Black else Color.White.copy(alpha = 0.3f),
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = FontWeight.Black, 
+                                    letterSpacing = 1.5.sp
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showRecoveryDialog) {
+        var mnemonic by remember { mutableStateOf("") }
+        var newPassword by remember { mutableStateOf("") }
+        var newPasswordVisibility by remember { mutableStateOf(false) }
+        var recoveryError by remember { mutableStateOf<String?>(null) }
+        var isRecovering by remember { mutableStateOf(false) }
+
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { if (!isRecovering) showRecoveryDialog = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF03DAC5).copy(alpha = 0.4f),
+                                Color(0xFF8B5CF6).copy(alpha = 0.4f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(28.dp)
+                    ),
+                color = Color(0xFF141418),
+                shape = RoundedCornerShape(28.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // Header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF03DAC5).copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = null,
+                                tint = Color(0xFF03DAC5),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "VAULT RECOVERY",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            ),
+                            color = Color.White
+                        )
+                    }
+
+                    // Warning Alert Box
+                    Surface(
+                        color = Color(0xFFFF9100).copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.25f))
+                    ) {
+                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = Color(0xFFFF9100),
+                                modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "Enter your offline 12-word mnemonic phrase. Correct entropy validation will securely rebuild your access keys and update your passcode.",
+                                color = Color(0xFFFF9100).copy(alpha = 0.9f),
+                                style = MaterialTheme.typography.bodySmall,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        OutlinedTextField(
+                            value = mnemonic,
+                            onValueChange = { 
+                                mnemonic = it
+                                recoveryError = null
+                            },
+                            label = { Text("12-Word Recovery Phrase") },
+                            placeholder = { Text("word1 word2 ... word12") },
+                            enabled = !isRecovering,
+                            shape = RoundedCornerShape(16.dp),
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { 
+                                        clipboardManager.getText()?.let { 
+                                            mnemonic = it.text
+                                            recoveryError = null
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentPaste,
+                                        contentDescription = "Paste",
+                                        tint = Color(0xFF03DAC5).copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedLabelColor = Color(0xFF03DAC5),
+                                unfocusedLabelColor = Color.Gray,
+                                focusedBorderColor = Color(0xFF03DAC5),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                                cursorColor = Color(0xFF03DAC5)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            label = { Text("Set New Passcode") },
+                            singleLine = true,
+                            enabled = !isRecovering,
+                            shape = RoundedCornerShape(16.dp),
+                            visualTransformation = if (newPasswordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { newPasswordVisibility = !newPasswordVisibility }) {
+                                    Icon(
+                                        imageVector = if (newPasswordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = null,
+                                        tint = Color.Gray
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedLabelColor = Color(0xFF03DAC5),
+                                unfocusedLabelColor = Color.Gray,
+                                focusedBorderColor = Color(0xFF03DAC5),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
+                                cursorColor = Color(0xFF03DAC5)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (recoveryError != null) {
+                            Text(
+                                text = recoveryError!!, 
+                                color = Color(0xFFCF6679), 
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+
+                    // Dialog Actions
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            enabled = !isRecovering,
+                            onClick = { showRecoveryDialog = false },
+                            modifier = Modifier.weight(1f).height(48.dp)
+                        ) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.5f))
+                        }
+
+                        Button(
+                            enabled = mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering,
+                            onClick = {
+                                isRecovering = true
+                                onRecoverWithMnemonic(mnemonic, newPassword) { success ->
+                                    isRecovering = false
+                                    if (success) {
+                                        showRecoveryDialog = false
+                                    } else {
+                                        recoveryError = "Mnemonic Verification Failed"
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.Transparent,
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(48.dp)
+                                .background(
+                                    brush = Brush.linearGradient(
+                                        colors = if (mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering) {
+                                            listOf(Color(0xFF03DAC5), Color(0xFF8B5CF6))
+                                        } else {
+                                            listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f))
+                                        }
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                        ) {
+                            if (isRecovering) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                            } else {
+                                Text(
+                                    "REBUILD KEY",
+                                    color = if (mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering) Color.Black else Color.White.copy(alpha = 0.3f),
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 1.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -1806,6 +2302,3 @@ fun LockedVaultScreen(
         }
     }
 }
-
-
-
