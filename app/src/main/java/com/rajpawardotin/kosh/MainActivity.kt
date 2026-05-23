@@ -13,12 +13,15 @@ import com.rajpawardotin.kosh.data.LiteRTModelProvider
 import com.rajpawardotin.kosh.data.SearchProviderImpl
 import com.rajpawardotin.kosh.data.SQLiteChatRepository
 import com.rajpawardotin.kosh.data.SharedPrefsSettingsProvider
+import com.rajpawardotin.kosh.data.TtsProvider
+import com.rajpawardotin.kosh.data.TtsProviderImpl
 import com.rajpawardotin.kosh.ui.chat.ChatScreen
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import com.rajpawardotin.kosh.ui.theme.KoshTheme
 
 class MainActivity : FragmentActivity() {
     private lateinit var chatViewModel: ChatViewModel
+    private lateinit var ttsProvider: TtsProvider
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,10 +40,11 @@ class MainActivity : FragmentActivity() {
         val searchProvider = SearchProviderImpl(applicationContext)
         val chatRepository = SQLiteChatRepository(applicationContext)
         val settingsProvider = SharedPrefsSettingsProvider(applicationContext)
+        ttsProvider = TtsProviderImpl(applicationContext)
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChatViewModel(aiProvider, searchProvider, chatRepository, settingsProvider) as T
+                return ChatViewModel(aiProvider, searchProvider, chatRepository, settingsProvider, ttsProvider) as T
             }
         }
 
@@ -61,6 +65,11 @@ class MainActivity : FragmentActivity() {
         if (::chatViewModel.isInitialized) {
             chatViewModel.lockAppOnBackground()
         }
+        ttsProvider.stop()
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        ttsProvider.shutdown()
     }
 }
-

@@ -226,6 +226,7 @@ fun ChatScreen(
     )
 
     val startVoiceInput = {
+        viewModel.stopTts() // Stop speaking when user wants to dictate
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Kosh...")
@@ -1047,8 +1048,12 @@ fun ChatScreen(
                                     }
 
                                     items(viewModel.chatMessages.reversed()) { message ->
+                                        val currentlySpeakingId by viewModel.currentlySpeakingMessageId.collectAsState()
                                         ChatBubble(
                                             message = message,
+                                            currentlySpeakingMessageId = currentlySpeakingId,
+                                            onPlayTts = { id, text -> viewModel.playTts(id, text) },
+                                            onStopTts = { viewModel.stopTts() },
                                             checkedItems = viewModel.checkedItems,
                                             onToggleChecklistItem = { index, checked ->
                                                 viewModel.toggleChecklistItem(message.id, index, checked)

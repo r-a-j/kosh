@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.Share
@@ -57,6 +59,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatBubble(
     message: ChatMessage,
+    currentlySpeakingMessageId: String? = null,
+    onPlayTts: ((String, String) -> Unit)? = null,
+    onStopTts: (() -> Unit)? = null,
     checkedItems: Map<String, Boolean>,
     onToggleChecklistItem: (Int, Boolean) -> Unit
 ) {
@@ -190,7 +195,13 @@ fun ChatBubble(
                         DocumentSourcesView(sourceDocuments = message.sourceDocuments)
                         Spacer(modifier = Modifier.height(4.dp))
                     }
-                    ResponseActionsRow(textToCopy = message.text)
+                    val isCurrentlySpeaking = currentlySpeakingMessageId == message.id
+                    ResponseActionsRow(
+                        textToCopy = message.text,
+                        isCurrentlySpeaking = isCurrentlySpeaking,
+                        onPlayTts = { onPlayTts?.invoke(message.id, message.text) },
+                        onStopTts = { onStopTts?.invoke() }
+                    )
                     Text(
                         text = "Neural OS is an AI and can make mistakes. Verify important info.",
                         style = MaterialTheme.typography.bodySmall.copy(
@@ -208,6 +219,9 @@ fun ChatBubble(
 @Composable
 fun ResponseActionsRow(
     textToCopy: String,
+    isCurrentlySpeaking: Boolean = false,
+    onPlayTts: () -> Unit = {},
+    onStopTts: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -305,6 +319,24 @@ fun ResponseActionsRow(
                 contentDescription = "More",
                 tint = Color.White.copy(alpha = 0.5f),
                 modifier = Modifier.size(16.dp)
+            )
+        }
+
+        IconButton(
+            onClick = {
+                if (isCurrentlySpeaking) {
+                    onStopTts()
+                } else {
+                    onPlayTts()
+                }
+            },
+            modifier = Modifier.size(36.dp)
+        ) {
+            Icon(
+                imageVector = if (isCurrentlySpeaking) Icons.Filled.Stop else Icons.Filled.VolumeUp,
+                contentDescription = if (isCurrentlySpeaking) "Stop speaking" else "Read aloud",
+                tint = if (isCurrentlySpeaking) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }

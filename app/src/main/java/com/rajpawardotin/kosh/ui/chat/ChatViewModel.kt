@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.rajpawardotin.kosh.data.Bip39Utils
 import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.domain.model.ChatMessage
+import com.rajpawardotin.kosh.data.TtsProvider
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.model.AttachedFile
 import com.rajpawardotin.kosh.domain.model.SessionDocument
@@ -38,6 +39,7 @@ class ChatViewModel(
     private val searchProvider: SearchProvider,
     private val chatRepository: ChatRepository,
     private val settingsProvider: SettingsProvider,
+    private val ttsProvider: TtsProvider,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -66,6 +68,19 @@ class ChatViewModel(
     var ramUsage by mutableStateOf(3.28)
     var tokensPerSecond by mutableStateOf(0f)
     var lastSearchQuery by mutableStateOf<String?>(null)
+    var showPasswordDialog by mutableStateOf(false)
+    var sessionToUnlock by mutableStateOf<String?>(null)
+
+    // TTS
+    val currentlySpeakingMessageId = ttsProvider.currentlySpeakingMessageId
+
+    fun playTts(messageId: String, text: String) {
+        ttsProvider.speak(messageId, text)
+    }
+
+    fun stopTts() {
+        ttsProvider.stop()
+    }
     
     val checkedItems = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
     val chatMessages = mutableStateListOf<ChatMessage>()
