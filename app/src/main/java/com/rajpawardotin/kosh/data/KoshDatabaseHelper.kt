@@ -493,5 +493,30 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             } while (cursor.moveToNext())
         }
     }
+
+    fun mergeFromAttachedDatabase(backupDbPath: String) {
+        val db = writableDatabase
+        try {
+            db.execSQL("ATTACH DATABASE ? AS backup_db", arrayOf(backupDbPath))
+            
+            db.beginTransaction()
+            try {
+                db.execSQL("INSERT OR IGNORE INTO sessions SELECT * FROM backup_db.sessions")
+                db.execSQL("INSERT OR IGNORE INTO messages SELECT * FROM backup_db.messages")
+                db.execSQL("INSERT OR IGNORE INTO checklist_states SELECT * FROM backup_db.checklist_states")
+                db.execSQL("INSERT OR IGNORE INTO session_documents SELECT * FROM backup_db.session_documents")
+                
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        } finally {
+            try {
+                db.execSQL("DETACH DATABASE backup_db")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 }
 

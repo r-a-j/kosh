@@ -52,5 +52,13 @@ class SQLiteChatRepository(context: Context) : ChatRepository {
     override fun searchSessionDocumentsFTS(sessionId: String, query: String): List<SessionDocument> {
         return dbHelper.searchSessionDocumentsFTS(sessionId, query)
     }
+
+    override fun closeDatabase() {
+        dbHelper.close()
+    }
+
+    override fun mergeDatabaseBackup(tempDecryptedDbPath: String) {
+        dbHelper.mergeFromAttachedDatabase(tempDecryptedDbPath)
+    }
 }
 

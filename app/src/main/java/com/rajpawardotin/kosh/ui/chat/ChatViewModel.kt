@@ -633,6 +633,11 @@ class ChatViewModel(
             biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
         } catch (e: Exception) {
             e.printStackTrace()
+            if (e is java.security.InvalidKeyException || e.javaClass.name.contains("KeyPermanentlyInvalidatedException")) {
+                showToast("Biometric key invalidated by restore. Please unlock with password.")
+            } else {
+                showToast("Biometric error: ${e.localizedMessage}")
+            }
             onResult(false)
         }
     }
@@ -760,12 +765,8 @@ class ChatViewModel(
             }
             
             try {
-                dbFile.delete()
-                File(dbFile.path + "-journal").delete()
-                File(dbFile.path + "-shm").delete()
-                File(dbFile.path + "-wal").delete()
-                
-                tempDecryptedFile.renameTo(dbFile)
+                // Seamlessly merge the backup instead of replacing the database
+                chatRepository.mergeDatabaseBackup(tempDecryptedFile.absolutePath)
                 
                 withContext(Dispatchers.Main) {
                     loadSavedSessions()

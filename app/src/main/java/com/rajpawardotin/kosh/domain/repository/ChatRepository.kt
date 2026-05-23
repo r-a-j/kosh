@@ -17,5 +17,7 @@ interface ChatRepository {
     fun saveSessionDocument(document: SessionDocument)
     fun getSessionDocuments(sessionId: String): List<SessionDocument>
     fun searchSessionDocumentsFTS(sessionId: String, query: String): List<SessionDocument>
+    fun closeDatabase()
+    fun mergeDatabaseBackup(tempDecryptedDbPath: String)
 }
 

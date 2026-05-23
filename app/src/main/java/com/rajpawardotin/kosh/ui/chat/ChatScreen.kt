@@ -1548,7 +1548,9 @@ fun ChatScreen(
                         onClick = {
                             backupPasswordToExport = password
                             showExportPasswordDialog = false
-                            exportBackupLauncher.launch("kosh_vault_backup.kosh")
+                            val versionName = try { context.packageManager.getPackageInfo(context.packageName, 0).versionName } catch (e: Exception) { "1.0" }
+                            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+                            exportBackupLauncher.launch("kosh_v${versionName}_${timestamp}.kosh")
                         }
                     ) {
                         Text("Export", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
