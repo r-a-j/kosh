@@ -8,7 +8,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,7 +29,7 @@ fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
-    onAddClick: () -> Unit,
+    onVoiceClick: () -> Unit,
     isInternetEnabled: Boolean,
     onInternetToggle: () -> Unit,
     enabled: Boolean,
@@ -66,8 +66,9 @@ fun ChatInput(
             IconButton(
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onAddClick()
+                    onVoiceClick()
                 },
+                enabled = enabled && !isGenerating,
                 modifier = Modifier
                     .padding(start = 4.dp)
                     .size(40.dp)
@@ -75,8 +76,8 @@ fun ChatInput(
                     .background(Color.White.copy(alpha = 0.05f))
             ) {
                 Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Options",
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice Input",
                     tint = Color(0xFF03DAC5)
                 )
             }

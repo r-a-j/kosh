@@ -3,6 +3,9 @@ package com.rajpawardotin.kosh.ui.chat
 import android.content.Context
 import android.net.Uri
 import android.widget.Toast
+import android.speech.RecognizerIntent
+import android.content.Intent
+import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -90,6 +93,30 @@ fun ChatScreen(
             }
         }
     )
+
+    val speechRecognizerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+                if (!spokenText.isNullOrBlank()) {
+                    viewModel.prompt = if (viewModel.prompt.isEmpty()) spokenText else "${viewModel.prompt} $spokenText"
+                }
+            }
+        }
+    )
+
+    val startVoiceInput = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak to Kosh...")
+        }
+        try {
+            speechRecognizerLauncher.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Voice input is not supported on this device", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(Unit) {
         val file = File(context.filesDir, "model.litertlm")
@@ -370,7 +397,7 @@ fun ChatScreen(
                         value = viewModel.prompt,
                         onValueChange = { viewModel.prompt = it },
                         onSend = { viewModel.sendMessage() },
-                        onAddClick = { showBottomSheet = true },
+                        onVoiceClick = { startVoiceInput() },
                         isInternetEnabled = viewModel.isInternetEnabled,
                         onInternetToggle = { viewModel.isInternetEnabled = !viewModel.isInternetEnabled },
                         enabled = viewModel.isEngineReady,
