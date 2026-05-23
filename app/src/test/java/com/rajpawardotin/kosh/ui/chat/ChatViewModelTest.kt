@@ -150,6 +150,63 @@ class ChatViewModelTest {
         assertTrue(viewModel.checkedItems["msg2_0"] == true)
     }
 
+    @Test
+    fun testSendMessageInTemporaryChatDoesNotSaveToRepository() = runTest(testDispatcher) {
+        viewModel.startNewChat(isTemporary = true)
+        assertTrue(viewModel.isTemporarySession)
+
+        viewModel.prompt = "Temporary Prompt"
+        viewModel.sendMessage()
+        testScheduler.advanceUntilIdle()
+
+        // 1. Session id should still be set in memory to manage UI checklist items, etc.
+        assertNotNull(viewModel.currentSessionId)
+
+        // 2. Chat messages must be added in memory
+        assertEquals(2, viewModel.chatMessages.size)
+        assertEquals("Temporary Prompt", viewModel.chatMessages[0].text)
+        assertEquals("Mock response from Kosh", viewModel.chatMessages[1].text)
+
+        // 3. BUT nothing should be saved in the database helper (FakeChatRepository)
+        assertTrue(fakeRepository.sessions.isEmpty())
+        assertTrue(fakeRepository.messages.isEmpty())
+    }
+
+    @Test
+    fun testStartNewChatResetsTemporaryFlag() = runTest(testDispatcher) {
+        viewModel.startNewChat(isTemporary = true)
+        assertTrue(viewModel.isTemporarySession)
+
+        viewModel.startNewChat(isTemporary = false)
+        assertFalse(viewModel.isTemporarySession)
+        assertNull(viewModel.currentSessionId)
+        assertTrue(viewModel.chatMessages.isEmpty())
+    }
+
+    @Test
+    fun testLoadSavedSessionResetsTemporaryFlag() = runTest(testDispatcher) {
+        val sessionId = "saved-session"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Saved Thread",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeRepository.saveSession(session)
+
+        viewModel.startNewChat(isTemporary = true)
+        assertTrue(viewModel.isTemporarySession)
+
+        // Loading a saved session should reset isTemporarySession to false
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.isTemporarySession)
+        assertEquals(sessionId, viewModel.currentSessionId)
+    }
+
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true
         override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {

@@ -96,7 +96,10 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(KEY_SESSION_MODEL_PATH, session.modelPath)
             put(KEY_SESSION_LAST_SEARCH_QUERY, session.lastSearchQuery)
         }
-        db.insertWithOnConflict(TABLE_SESSIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        val rowsUpdated = db.update(TABLE_SESSIONS, values, "$KEY_SESSION_ID = ?", arrayOf(session.id))
+        if (rowsUpdated == 0) {
+            db.insert(TABLE_SESSIONS, null, values)
+        }
     }
 
     fun renameSession(sessionId: String, newTitle: String) {
@@ -152,7 +155,10 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(KEY_MESSAGE_IS_SYSTEM, if (message.isSystemMessage) 1 else 0)
             put(KEY_MESSAGE_CREATED_AT, System.currentTimeMillis())
         }
-        db.insertWithOnConflict(TABLE_MESSAGES, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        val rowsUpdated = db.update(TABLE_MESSAGES, values, "$KEY_MESSAGE_ID = ?", arrayOf(message.id))
+        if (rowsUpdated == 0) {
+            db.insert(TABLE_MESSAGES, null, values)
+        }
     }
 
     fun getMessagesForSession(sessionId: String): List<ChatMessage> {

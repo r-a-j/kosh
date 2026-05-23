@@ -11,6 +11,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import androidx.compose.runtime.*
@@ -552,21 +555,102 @@ fun ChatScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = {
-                            viewModel.startNewChat()
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.05f))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "New Chat",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
+                        // Temporary Chat Button
+                        IconButton(
+                            onClick = {
+                                viewModel.startNewChat(isTemporary = true)
+                            },
+                            enabled = !viewModel.isGenerating,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (viewModel.isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.15f)
+                                    else Color.White.copy(alpha = 0.05f)
+                                )
+                                .graphicsLayer(alpha = if (viewModel.isTemporarySession) 1f else 0.6f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VisibilityOff,
+                                contentDescription = "Temporary Chat",
+                                tint = if (viewModel.isTemporarySession) Color(0xFFFF9100) else Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // New Saved Chat Button
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .clickable(enabled = !viewModel.isGenerating) {
+                                    viewModel.startNewChat(isTemporary = false)
+                                }
+                                .drawWithContent {
+                                    drawContent()
+                                    drawCircle(
+                                        brush = Brush.linearGradient(
+                                            colors = listOf(Color(0xFF03DAC5), Color(0xFF6200EE))
+                                        ),
+                                        radius = size.minDimension / 2f,
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "New Saved Chat",
+                                tint = Color(0xFF03DAC5),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Badge for Temporary Chat
+                AnimatedVisibility(
+                    visible = viewModel.isTemporarySession,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            color = Color(0xFFFF9100).copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF9100))
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "TEMPORARY VAULT (NOT SAVED)",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    ),
+                                    color = Color(0xFFFF9100)
+                                )
+                            }
+                        }
                     }
                 }
                 
@@ -623,13 +707,13 @@ fun ChatScreen(
                                 )
                                 Spacer(modifier = Modifier.height(24.dp))
                                 Text(
-                                    text = "What should we focus on?",
+                                    text = if (viewModel.isTemporarySession) "Temporary Vault: History is disabled." else "What should we focus on?",
                                     style = MaterialTheme.typography.headlineMedium.copy(
                                         fontWeight = FontWeight.Medium,
                                         letterSpacing = (-0.5).sp,
                                         fontSize = 26.sp
                                     ),
-                                    color = Color.White.copy(alpha = 0.9f),
+                                    color = if (viewModel.isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.9f),
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                             }

@@ -52,33 +52,69 @@ class ChatViewModel(
 
     var currentSessionId by mutableStateOf<String?>(null)
     val savedSessions = androidx.compose.runtime.mutableStateListOf<ChatSession>()
+    
+    var isTemporarySession by mutableStateOf(false)
+        private set
 
     init {
-        loadSavedSessions()
-        // Auto-load last active session if one exists
-        viewModelScope.launch(ioDispatcher) {
-            val sessions = chatRepository.getSessionsOrderedByLastActive()
-            sessions.firstOrNull()?.let { lastActive ->
-                withContext(Dispatchers.Main) {
-                    loadSession(lastActive.id)
-                }
-            }
-        }
-    }
-
-    fun loadSavedSessions() {
         viewModelScope.launch(ioDispatcher) {
             val sessions = chatRepository.getSessionsOrderedByLastActive()
             withContext(Dispatchers.Main) {
                 savedSessions.clear()
                 savedSessions.addAll(sessions)
             }
+            // Auto-load last active session if one exists
+            sessions.firstOrNull()?.let { lastActive ->
+                loadSessionInternal(lastActive.id)
+            }
         }
     }
 
-    fun startNewChat() {
+    private suspend fun loadSavedSessionsInternal() {
+        val sessions = chatRepository.getSessionsOrderedByLastActive()
+        withContext(Dispatchers.Main) {
+            savedSessions.clear()
+            savedSessions.addAll(sessions)
+        }
+    }
+
+    private suspend fun loadSessionInternal(sessionId: String) {
+        withContext(Dispatchers.Main) {
+            isTemporarySession = false
+        }
+        val sessions = chatRepository.getSessionsOrderedByLastActive()
+        val session = sessions.find { it.id == sessionId }
+        val messages = chatRepository.getMessagesForSession(sessionId)
+        val checklist = chatRepository.getChecklistStatesForSession(sessionId)
+        withContext(Dispatchers.Main) {
+            currentSessionId = sessionId
+            chatMessages.clear()
+            chatMessages.addAll(messages)
+            
+            checkedItems.clear()
+            checkedItems.putAll(checklist)
+            
+            lastSearchQuery = session?.lastSearchQuery
+        }
+        
+        // Update session last active time
+        session?.let {
+            val updated = it.copy(lastActive = System.currentTimeMillis())
+            chatRepository.saveSession(updated)
+        }
+        loadSavedSessionsInternal()
+    }
+
+    fun loadSavedSessions() {
+        viewModelScope.launch(ioDispatcher) {
+            loadSavedSessionsInternal()
+        }
+    }
+
+    fun startNewChat(isTemporary: Boolean = false) {
         if (isGenerating) return
         currentSessionId = null
+        isTemporarySession = isTemporary
         chatMessages.clear()
         checkedItems.clear()
         lastSearchQuery = null
@@ -88,27 +124,7 @@ class ChatViewModel(
     fun loadSession(sessionId: String) {
         if (isGenerating) return
         viewModelScope.launch(ioDispatcher) {
-            val sessions = chatRepository.getSessionsOrderedByLastActive()
-            val session = sessions.find { it.id == sessionId }
-            val messages = chatRepository.getMessagesForSession(sessionId)
-            val checklist = chatRepository.getChecklistStatesForSession(sessionId)
-            withContext(Dispatchers.Main) {
-                currentSessionId = sessionId
-                chatMessages.clear()
-                chatMessages.addAll(messages)
-                
-                checkedItems.clear()
-                checkedItems.putAll(checklist)
-                
-                lastSearchQuery = session?.lastSearchQuery
-                
-                // Update session last active time
-                session?.let {
-                    val updated = it.copy(lastActive = System.currentTimeMillis())
-                    chatRepository.saveSession(updated)
-                }
-                loadSavedSessions()
-            }
+            loadSessionInternal(sessionId)
         }
     }
 
@@ -119,8 +135,8 @@ class ChatViewModel(
                 if (currentSessionId == sessionId) {
                     startNewChat()
                 }
-                loadSavedSessions()
             }
+            loadSavedSessionsInternal()
         }
     }
 
@@ -128,16 +144,16 @@ class ChatViewModel(
         if (newTitle.isBlank()) return
         viewModelScope.launch(ioDispatcher) {
             chatRepository.renameSession(sessionId, newTitle)
-            withContext(Dispatchers.Main) {
-                loadSavedSessions()
-            }
+            loadSavedSessionsInternal()
         }
     }
 
     fun toggleChecklistItem(messageKey: String, itemIndex: Int, isChecked: Boolean) {
         checkedItems["${messageKey}_$itemIndex"] = isChecked
-        viewModelScope.launch(ioDispatcher) {
-            chatRepository.saveChecklistState(messageKey, itemIndex, isChecked)
+        if (!isTemporarySession) {
+            viewModelScope.launch(ioDispatcher) {
+                chatRepository.saveChecklistState(messageKey, itemIndex, isChecked)
+            }
         }
     }
 
@@ -275,23 +291,25 @@ class ChatViewModel(
 
         viewModelScope.launch(ioDispatcher) {
             try {
-                // If new session, save the session first (synchronously on the IO thread)
-                if (isNewSession) {
-                    val title = if (rawPrompt.length > 25) rawPrompt.take(25) + "..." else rawPrompt
-                    val newSession = ChatSession(
-                        id = sessionId!!,
-                        title = title,
-                        createdAt = System.currentTimeMillis(),
-                        lastActive = System.currentTimeMillis(),
-                        modelPath = modelPath,
-                        lastSearchQuery = null
-                    )
-                    chatRepository.saveSession(newSession)
-                    loadSavedSessions()
-                }
+                if (!isTemporarySession) {
+                    // If new session, save the session first (synchronously on the IO thread)
+                    if (isNewSession) {
+                        val title = if (rawPrompt.length > 25) rawPrompt.take(25) + "..." else rawPrompt
+                        val newSession = ChatSession(
+                            id = sessionId!!,
+                            title = title,
+                            createdAt = System.currentTimeMillis(),
+                            lastActive = System.currentTimeMillis(),
+                            modelPath = modelPath,
+                            lastSearchQuery = null
+                        )
+                        chatRepository.saveSession(newSession)
+                        loadSavedSessionsInternal()
+                    }
 
-                // Now save the message (guarantees that the session row already exists)
-                chatRepository.saveMessage(sessionId!!, userMessage)
+                    // Now save the message (guarantees that the session row already exists)
+                    chatRepository.saveMessage(sessionId!!, userMessage)
+                }
 
                 val shouldSearch = detectSearchRequirement(rawPrompt)
                 if (shouldSearch && !isInternetEnabled) {
@@ -361,9 +379,11 @@ class ChatViewModel(
                         currentResponseChunk += text
                     }
                     
-                    // Save response live chunk to the database
-                    val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
-                    chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                    if (!isTemporarySession) {
+                        // Save response live chunk to the database
+                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
+                        chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                    }
                 }
 
                 var assistantMessage: ChatMessage? = null
@@ -374,18 +394,20 @@ class ChatViewModel(
                     assistantMessage = msg
                 }
 
-                assistantMessage?.let { msg ->
-                    chatRepository.saveMessage(sessionId!!, msg)
-                    
-                    // Update session last active time and last search query
-                    val sessions = chatRepository.getSessionsOrderedByLastActive()
-                    sessions.find { it.id == sessionId }?.let {
-                        chatRepository.saveSession(it.copy(
-                            lastActive = System.currentTimeMillis(),
-                            lastSearchQuery = lastSearchQuery
-                        ))
+                if (!isTemporarySession) {
+                    assistantMessage?.let { msg ->
+                        chatRepository.saveMessage(sessionId!!, msg)
+                        
+                        // Update session last active time and last search query
+                        val sessions = chatRepository.getSessionsOrderedByLastActive()
+                        sessions.find { it.id == sessionId }?.let {
+                            chatRepository.saveSession(it.copy(
+                                lastActive = System.currentTimeMillis(),
+                                lastSearchQuery = lastSearchQuery
+                            ))
+                        }
+                        loadSavedSessionsInternal()
                     }
-                    loadSavedSessions()
                 }
             } catch (e: Exception) {
                 var errorMessage: ChatMessage? = null
@@ -395,8 +417,10 @@ class ChatViewModel(
                     chatMessages.add(msg)
                     errorMessage = msg
                 }
-                errorMessage?.let { msg ->
-                    chatRepository.saveMessage(sessionId!!, msg)
+                if (!isTemporarySession) {
+                    errorMessage?.let { msg ->
+                        chatRepository.saveMessage(sessionId!!, msg)
+                    }
                 }
             } finally {
                 withContext(Dispatchers.Main) {
