@@ -85,7 +85,7 @@ fun ChatScreen(
 
     val currentSessionId = viewModel.currentSessionId
     val currentSession = viewModel.savedSessions.find { it.id == currentSessionId }
-    val isLocked = currentSession != null && currentSession.passwordHash != null && !viewModel.activeSessionKeys.containsKey(currentSession.id)
+    val isLocked = currentSession != null && currentSession.encryptedKeyPassword != null && !viewModel.activeSessionKeys.containsKey(currentSession.id)
 
     var showSplash by remember { mutableStateOf(true) }
 
@@ -101,7 +101,7 @@ fun ChatScreen(
 
     LaunchedEffect(currentSessionId) {
         if (currentSessionId != null && currentSession != null) {
-            val isSessionLocked = currentSession.passwordHash != null && !viewModel.activeSessionKeys.containsKey(currentSessionId)
+            val isSessionLocked = currentSession.encryptedKeyPassword != null && !viewModel.activeSessionKeys.containsKey(currentSessionId)
             if (isSessionLocked && currentSession.encryptedKeyBiometric != null) {
                 viewModel.unlockSessionWithBiometrics(currentSessionId, context) { success ->
                     if (success) {
@@ -115,6 +115,12 @@ fun ChatScreen(
     LaunchedEffect(viewModel.isAppLocked) {
         if (viewModel.isAppLocked) {
             triggerAppBiometricUnlock(context, viewModel)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.toastMessage.collect { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -419,7 +425,7 @@ fun ChatScreen(
                                             .padding(horizontal = 12.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        val isEncrypted = session.passwordHash != null
+                                        val isEncrypted = session.encryptedKeyPassword != null
                                         val isUnlocked = viewModel.activeSessionKeys.containsKey(session.id)
                                         Icon(
                                             imageVector = if (isEncrypted) {
@@ -508,25 +514,123 @@ fun ChatScreen(
 
                     // Delete Confirmation Dialog
                     if (sessionToDelete != null) {
+                        val session = sessionToDelete!!
+                        val isEncrypted = session.encryptedKeyPassword != null
+                        var confirmPassword by remember { mutableStateOf("") }
+                        var passwordVisibility by remember { mutableStateOf(false) }
+                        var errorMsg by remember { mutableStateOf<String?>(null) }
+                        var isDeleting by remember { mutableStateOf(false) }
+                        
                         AlertDialog(
                             onDismissRequest = { sessionToDelete = null },
                             containerColor = Color(0xFF1E1E22),
                             titleContentColor = Color.White,
                             textContentColor = Color.White.copy(alpha = 0.8f),
                             title = { Text("Delete Cognitive Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
-                            text = { Text("Are you sure you want to permanently delete this chat history?") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text("Are you sure you want to permanently delete this chat history?")
+                                    
+                                    if (isEncrypted) {
+                                        Text(
+                                            text = "This vault is locked. Provide your passcode to authorize deletion.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.Gray
+                                        )
+                                        OutlinedTextField(
+                                            value = confirmPassword,
+                                            onValueChange = { 
+                                                confirmPassword = it
+                                                errorMsg = null
+                                            },
+                                            label = { Text("Passcode") },
+                                            singleLine = true,
+                                            visualTransformation = if (passwordVisibility) VisualTransformation.None else PasswordVisualTransformation(),
+                                            trailingIcon = {
+                                                IconButton(onClick = { passwordVisibility = !passwordVisibility }) {
+                                                    Icon(
+                                                        imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                                        contentDescription = null,
+                                                        tint = Color.Gray
+                                                    )
+                                                }
+                                            },
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedLabelColor = Color(0xFF03DAC5),
+                                                unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                                focusedBorderColor = Color(0xFF03DAC5),
+                                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                                cursorColor = Color(0xFF03DAC5)
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        
+                                        if (errorMsg != null) {
+                                            Text(
+                                                text = errorMsg!!,
+                                                color = Color(0xFFCF6679),
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                        
+                                        if (session.encryptedKeyBiometric != null) {
+                                            Button(
+                                                onClick = {
+                                                    viewModel.unlockSessionWithBiometrics(session.id, context) { success ->
+                                                        if (success) {
+                                                            viewModel.deleteSession(session.id)
+                                                            sessionToDelete = null
+                                                        } else {
+                                                            errorMsg = "Biometric authentication failed"
+                                                        }
+                                                    }
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFF03DAC5).copy(alpha = 0.1f),
+                                                    contentColor = Color(0xFF03DAC5)
+                                                ),
+                                                shape = RoundedCornerShape(12.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null)
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text("Verify with Fingerprint")
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             confirmButton = {
                                 TextButton(
                                     onClick = {
-                                        sessionToDelete?.let { viewModel.deleteSession(it.id) }
-                                        sessionToDelete = null
-                                    }
+                                        if (isEncrypted) {
+                                            isDeleting = true
+                                            viewModel.verifySessionPassword(session.id, confirmPassword) { success ->
+                                                isDeleting = false
+                                                if (success) {
+                                                    viewModel.deleteSession(session.id)
+                                                    sessionToDelete = null
+                                                } else {
+                                                    errorMsg = "Incorrect passcode"
+                                                }
+                                            }
+                                        } else {
+                                            viewModel.deleteSession(session.id)
+                                            sessionToDelete = null
+                                        }
+                                    },
+                                    enabled = !isDeleting && (!isEncrypted || confirmPassword.isNotEmpty())
                                 ) {
                                     Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
                                 }
                             },
                             dismissButton = {
-                                TextButton(onClick = { sessionToDelete = null }) {
+                                TextButton(
+                                    onClick = { sessionToDelete = null },
+                                    enabled = !isDeleting
+                                ) {
                                     Text("Cancel", color = Color.White.copy(alpha = 0.6f))
                                 }
                             }
@@ -660,7 +764,7 @@ fun ChatScreen(
                         if (viewModel.currentSessionId != null && !viewModel.isTemporarySession) {
                             val currentSession = viewModel.savedSessions.find { it.id == viewModel.currentSessionId }
                             if (currentSession != null) {
-                                val isEncrypted = currentSession.passwordHash != null
+                                val isEncrypted = currentSession.encryptedKeyPassword != null
                                 val isUnlocked = viewModel.activeSessionKeys.containsKey(currentSession.id)
                                 
                                 IconButton(

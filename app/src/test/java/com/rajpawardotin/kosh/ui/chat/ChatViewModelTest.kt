@@ -249,9 +249,9 @@ class ChatViewModelTest {
         
         val savedSession = fakeRepository.sessions.find { it.id == sessionId }
         assertNotNull(savedSession)
-        assertNotNull(savedSession!!.passwordHash)
+        assertNull(savedSession!!.passwordHash)
         assertNotNull(savedSession.salt)
-        assertNotNull(savedSession.validationToken)
+        assertNull(savedSession.validationToken)
         assertNotNull(savedSession.encryptedKeyPassword)
 
         val savedMessages = fakeRepository.getMessagesForSession(sessionId)

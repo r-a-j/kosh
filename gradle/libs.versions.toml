@@ -18,8 +18,10 @@ coil = "2.7.0"
 jsoup = "1.18.3"
 okhttp = "4.12.0"
 biometric = "1.2.0-alpha05"
+securityCrypto = "1.1.0-alpha06"
 
 [libraries]
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3-android", version.ref = "markdownRenderer" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

@@ -508,13 +508,35 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
         return results
     }
 
+    private fun isBannedIp(host: String?): Boolean {
+        if (host == null || host.isBlank()) return true
+        return try {
+            val addresses = java.net.InetAddress.getAllByName(host)
+            for (address in addresses) {
+                if (address.isLoopbackAddress || 
+                    address.isSiteLocalAddress || 
+                    address.isLinkLocalAddress || 
+                    address.isAnyLocalAddress) {
+                    return true
+                }
+            }
+            false
+        } catch (e: Exception) {
+            true
+        }
+    }
+
     private suspend fun crawlUrl(url: String, maxChars: Int, onStatusUpdate: (String) -> Unit): String = withContext(Dispatchers.IO) {
         try {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
                 return@withContext "Invalid URL"
             }
             val uri = java.net.URI(url)
-            val domain = uri.host ?: url
+            val host = uri.host
+            if (host == null || isBannedIp(host)) {
+                return@withContext "Access Denied: Local IP blocked"
+            }
+            val domain = host
             onStatusUpdate("Scraping: $domain...")
             
             val request = Request.Builder()

@@ -29,7 +29,7 @@ object CryptoUtils {
     
     // PBKDF2 Settings
     private const val PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA256"
-    private const val PBKDF2_ITERATIONS = 10000
+    private const val PBKDF2_ITERATIONS = 310000
     private const val PBKDF2_SALT_LENGTH = 16
 
     // Secure Random Generator
@@ -105,6 +105,9 @@ object CryptoUtils {
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(AES_KEY_SIZE)
                 .setUserAuthenticationRequired(true)
+                .setInvalidatedByBiometricEnrollment(true)
+                .setUserAuthenticationValidityDurationSeconds(-1)
+                .setUnlockedDeviceRequired(true)
                 .build()
             keyGenerator.init(spec)
             keyGenerator.generateKey()
@@ -219,6 +222,29 @@ object CryptoUtils {
         } catch (e: Exception) {
             e.printStackTrace()
             false
+        }
+    }
+
+    fun secureDelete(file: File) {
+        if (!file.exists()) return
+        val random = SecureRandom()
+        val buf = ByteArray(4096)
+        try {
+            FileOutputStream(file).use { fos ->
+                var remaining = file.length()
+                while (remaining > 0) {
+                    random.nextBytes(buf)
+                    val chunk = minOf(buf.size.toLong(), remaining).toInt()
+                    fos.write(buf, 0, chunk)
+                    remaining -= chunk
+                }
+                fos.flush()
+                fos.fd.sync()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            file.delete()
         }
     }
 }

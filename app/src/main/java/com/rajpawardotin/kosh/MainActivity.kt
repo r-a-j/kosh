@@ -18,8 +18,16 @@ import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import com.rajpawardotin.kosh.ui.theme.KoshTheme
 
 class MainActivity : FragmentActivity() {
+    private lateinit var chatViewModel: ChatViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
+
         enableEdgeToEdge()
         
         val aiProvider = LiteRTModelProvider(applicationContext)
@@ -33,14 +41,22 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        chatViewModel = ViewModelProvider(this, viewModelFactory)[ChatViewModel::class.java]
+
         setContent {
             KoshTheme(darkTheme = true) {
-                val chatViewModel: ChatViewModel = viewModel(factory = viewModelFactory)
                 ChatScreen(
                     viewModel = chatViewModel,
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::chatViewModel.isInitialized) {
+            chatViewModel.lockAppOnBackground()
         }
     }
 }
