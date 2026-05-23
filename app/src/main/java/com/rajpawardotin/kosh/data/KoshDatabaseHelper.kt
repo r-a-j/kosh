@@ -1,0 +1,221 @@
+package com.rajpawardotin.kosh.data
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import com.rajpawardotin.kosh.domain.model.ChatMessage
+import com.rajpawardotin.kosh.domain.model.ChatSession
+
+class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+
+    companion object {
+        private const val DATABASE_NAME = "kosh_vault.db"
+        private const val DATABASE_VERSION = 1
+
+        // Sessions Table
+        private const val TABLE_SESSIONS = "sessions"
+        private const val KEY_SESSION_ID = "id"
+        private const val KEY_SESSION_TITLE = "title"
+        private const val KEY_SESSION_CREATED_AT = "created_at"
+        private const val KEY_SESSION_LAST_ACTIVE = "last_active"
+        private const val KEY_SESSION_MODEL_PATH = "model_path"
+        private const val KEY_SESSION_LAST_SEARCH_QUERY = "last_search_query"
+
+        // Messages Table
+        private const val TABLE_MESSAGES = "messages"
+        private const val KEY_MESSAGE_ID = "id"
+        private const val KEY_MESSAGE_SESSION_ID = "session_id"
+        private const val KEY_MESSAGE_TEXT = "text"
+        private const val KEY_MESSAGE_IS_USER = "is_user"
+        private const val KEY_MESSAGE_IS_SYSTEM = "is_system"
+        private const val KEY_MESSAGE_CREATED_AT = "created_at"
+
+        // Checklist Table
+        private const val TABLE_CHECKLIST = "checklist_states"
+        private const val KEY_CHECKLIST_MESSAGE_ID = "message_id"
+        private const val KEY_CHECKLIST_ITEM_INDEX = "item_index"
+        private const val KEY_CHECKLIST_IS_CHECKED = "is_checked"
+    }
+
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        db.setForeignKeyConstraintsEnabled(true)
+    }
+
+    override fun onCreate(db: SQLiteDatabase) {
+        val createSessionsTable = """
+            CREATE TABLE $TABLE_SESSIONS (
+                $KEY_SESSION_ID TEXT PRIMARY KEY,
+                $KEY_SESSION_TITLE TEXT,
+                $KEY_SESSION_CREATED_AT INTEGER,
+                $KEY_SESSION_LAST_ACTIVE INTEGER,
+                $KEY_SESSION_MODEL_PATH TEXT,
+                $KEY_SESSION_LAST_SEARCH_QUERY TEXT
+            )
+        """.trimIndent()
+
+        val createMessagesTable = """
+            CREATE TABLE $TABLE_MESSAGES (
+                $KEY_MESSAGE_ID TEXT PRIMARY KEY,
+                $KEY_MESSAGE_SESSION_ID TEXT,
+                $KEY_MESSAGE_TEXT TEXT,
+                $KEY_MESSAGE_IS_USER INTEGER,
+                $KEY_MESSAGE_IS_SYSTEM INTEGER,
+                $KEY_MESSAGE_CREATED_AT INTEGER,
+                FOREIGN KEY($KEY_MESSAGE_SESSION_ID) REFERENCES $TABLE_SESSIONS($KEY_SESSION_ID) ON DELETE CASCADE
+            )
+        """.trimIndent()
+
+        val createChecklistTable = """
+            CREATE TABLE $TABLE_CHECKLIST (
+                $KEY_CHECKLIST_MESSAGE_ID TEXT,
+                $KEY_CHECKLIST_ITEM_INDEX INTEGER,
+                $KEY_CHECKLIST_IS_CHECKED INTEGER,
+                PRIMARY KEY($KEY_CHECKLIST_MESSAGE_ID, $KEY_CHECKLIST_ITEM_INDEX),
+                FOREIGN KEY($KEY_CHECKLIST_MESSAGE_ID) REFERENCES $TABLE_MESSAGES($KEY_MESSAGE_ID) ON DELETE CASCADE
+            )
+        """.trimIndent()
+
+        db.execSQL(createSessionsTable)
+        db.execSQL(createMessagesTable)
+        db.execSQL(createChecklistTable)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Version 1: No upgrade path needed yet
+    }
+
+    fun saveSession(session: ChatSession) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(KEY_SESSION_ID, session.id)
+            put(KEY_SESSION_TITLE, session.title)
+            put(KEY_SESSION_CREATED_AT, session.createdAt)
+            put(KEY_SESSION_LAST_ACTIVE, session.lastActive)
+            put(KEY_SESSION_MODEL_PATH, session.modelPath)
+            put(KEY_SESSION_LAST_SEARCH_QUERY, session.lastSearchQuery)
+        }
+        db.insertWithOnConflict(TABLE_SESSIONS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun renameSession(sessionId: String, newTitle: String) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(KEY_SESSION_TITLE, newTitle)
+        }
+        db.update(TABLE_SESSIONS, values, "$KEY_SESSION_ID = ?", arrayOf(sessionId))
+    }
+
+    fun deleteSession(sessionId: String) {
+        val db = writableDatabase
+        db.delete(TABLE_SESSIONS, "$KEY_SESSION_ID = ?", arrayOf(sessionId))
+    }
+
+    fun getSessionsOrderedByLastActive(): List<ChatSession> {
+        val sessionsList = mutableListOf<ChatSession>()
+        val db = readableDatabase
+        val query = "SELECT * FROM $TABLE_SESSIONS ORDER BY $KEY_SESSION_LAST_ACTIVE DESC"
+        db.rawQuery(query, null).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_ID)
+                val titleIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_TITLE)
+                val createdIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_CREATED_AT)
+                val activeIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_LAST_ACTIVE)
+                val modelIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_MODEL_PATH)
+                val searchIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_LAST_SEARCH_QUERY)
+
+                do {
+                    sessionsList.add(
+                        ChatSession(
+                            id = cursor.getString(idIdx),
+                            title = cursor.getString(titleIdx),
+                            createdAt = cursor.getLong(createdIdx),
+                            lastActive = cursor.getLong(activeIdx),
+                            modelPath = cursor.getString(modelIdx),
+                            lastSearchQuery = cursor.getString(searchIdx)
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        }
+        return sessionsList
+    }
+
+    fun saveMessage(sessionId: String, message: ChatMessage) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(KEY_MESSAGE_ID, message.id)
+            put(KEY_MESSAGE_SESSION_ID, sessionId)
+            put(KEY_MESSAGE_TEXT, message.text)
+            put(KEY_MESSAGE_IS_USER, if (message.isUser) 1 else 0)
+            put(KEY_MESSAGE_IS_SYSTEM, if (message.isSystemMessage) 1 else 0)
+            put(KEY_MESSAGE_CREATED_AT, System.currentTimeMillis())
+        }
+        db.insertWithOnConflict(TABLE_MESSAGES, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun getMessagesForSession(sessionId: String): List<ChatMessage> {
+        val messagesList = mutableListOf<ChatMessage>()
+        val db = readableDatabase
+        val query = "SELECT * FROM $TABLE_MESSAGES WHERE $KEY_MESSAGE_SESSION_ID = ? ORDER BY $KEY_MESSAGE_CREATED_AT ASC"
+        db.rawQuery(query, arrayOf(sessionId)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_ID)
+                val textIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_TEXT)
+                val userIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_USER)
+                val systemIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_SYSTEM)
+
+                do {
+                    messagesList.add(
+                        ChatMessage(
+                            id = cursor.getString(idIdx),
+                            text = cursor.getString(textIdx),
+                            isUser = cursor.getInt(userIdx) == 1,
+                            isSystemMessage = cursor.getInt(systemIdx) == 1,
+                            isStreaming = false
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        }
+        return messagesList
+    }
+
+    fun saveChecklistState(messageId: String, itemIndex: Int, isChecked: Boolean) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(KEY_CHECKLIST_MESSAGE_ID, messageId)
+            put(KEY_CHECKLIST_ITEM_INDEX, itemIndex)
+            put(KEY_CHECKLIST_IS_CHECKED, if (isChecked) 1 else 0)
+        }
+        db.insertWithOnConflict(TABLE_CHECKLIST, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun getChecklistStatesForSession(sessionId: String): Map<String, Boolean> {
+        val states = mutableMapOf<String, Boolean>()
+        val db = readableDatabase
+        val query = """
+            SELECT c.$KEY_CHECKLIST_MESSAGE_ID, c.$KEY_CHECKLIST_ITEM_INDEX, c.$KEY_CHECKLIST_IS_CHECKED 
+            FROM $TABLE_CHECKLIST c
+            JOIN $TABLE_MESSAGES m ON c.$KEY_CHECKLIST_MESSAGE_ID = m.$KEY_MESSAGE_ID
+            WHERE m.$KEY_MESSAGE_SESSION_ID = ?
+        """.trimIndent()
+        
+        db.rawQuery(query, arrayOf(sessionId)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val msgIdIdx = cursor.getColumnIndexOrThrow(KEY_CHECKLIST_MESSAGE_ID)
+                val itemIdxIdx = cursor.getColumnIndexOrThrow(KEY_CHECKLIST_ITEM_INDEX)
+                val isCheckedIdx = cursor.getColumnIndexOrThrow(KEY_CHECKLIST_IS_CHECKED)
+                
+                do {
+                    val messageId = cursor.getString(msgIdIdx)
+                    val itemIndex = cursor.getInt(itemIdxIdx)
+                    val isChecked = cursor.getInt(isCheckedIdx) == 1
+                    states["${messageId}_$itemIndex"] = isChecked
+                } while (cursor.moveToNext())
+            }
+        }
+        return states
+    }
+}
