@@ -13,6 +13,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -1180,7 +1182,9 @@ fun ChatScreen(
                 text = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier
+                            .padding(top = 8.dp)
+                            .verticalScroll(rememberScrollState())
                     ) {
                         Text("Secure this conversation with AES-256 encryption. This will mask the title and content in history.", style = MaterialTheme.typography.bodyMedium)
                         
@@ -1328,7 +1332,10 @@ fun ChatScreen(
                     }
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
                         Surface(
                             color = Color(0xFFFF9100).copy(alpha = 0.1f),
                             shape = RoundedCornerShape(12.dp),
@@ -1352,32 +1359,49 @@ fun ChatScreen(
                             shape = RoundedCornerShape(20.dp),
                             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                         ) {
-                            Box(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
                                 Text(
                                     text = sessionRecoveryMnemonic!!,
-                                    modifier = Modifier.padding(24.dp).align(Alignment.Center),
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         fontWeight = FontWeight.Black,
                                         letterSpacing = 1.2.sp,
-                                        lineHeight = 30.sp,
+                                        lineHeight = 28.sp,
                                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                                     ),
                                     color = Color(0xFF03DAC5),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
                                 )
                                 
-                                IconButton(
+                                Button(
                                     onClick = { 
                                         clipboardManager.setText(AnnotatedString(sessionRecoveryMnemonic!!))
                                         Toast.makeText(context, "Mnemonic Copied", Toast.LENGTH_SHORT).show()
                                     },
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF03DAC5).copy(alpha = 0.1f),
+                                        contentColor = Color(0xFF03DAC5)
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF03DAC5).copy(alpha = 0.25f)),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth().height(44.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
                                         contentDescription = "Copy",
-                                        tint = Color(0xFF03DAC5).copy(alpha = 0.6f),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        "COPY RECOVERY PHRASE",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Black,
+                                            letterSpacing = 1.sp
+                                        )
                                     )
                                 }
                             }
@@ -1807,12 +1831,26 @@ fun LockedVaultScreen(
         label = "pulseScale2"
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070709)),
+            .background(Color(0xFF070709))
+            .navigationBarsPadding()
+            .imePadding(),
         contentAlignment = Alignment.Center
     ) {
+        val maxHeight = this.maxHeight
+        val isCompact = maxHeight < 580.dp
+
+        val verticalPadding = if (isCompact) 14.dp else 28.dp
+        val horizontalPadding = if (isCompact) 20.dp else 24.dp
+        val itemSpacing = if (isCompact) 10.dp else 16.dp
+        val padlockSize = if (isCompact) 64.dp else 100.dp
+        val innerCircleSize = if (isCompact) 40.dp else 60.dp
+        val haloSize = if (isCompact) 52.dp else 76.dp
+        val iconSize = if (isCompact) 18.dp else 24.dp
+        val titleSpace = if (isCompact) 2.dp else 6.dp
+
         // Futuristic mesh radial glows
         Box(
             modifier = Modifier
@@ -1832,6 +1870,8 @@ fun LockedVaultScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(24.dp)
+                .heightIn(max = maxHeight - 48.dp)
+                .animateContentSize()
                 .graphicsLayer {
                     shadowElevation = 8.dp.toPx()
                     shape = RoundedCornerShape(32.dp)
@@ -1853,14 +1893,16 @@ fun LockedVaultScreen(
             color = Color(0xFF111116).copy(alpha = 0.9f),
         ) {
             Column(
-                modifier = Modifier.padding(vertical = 36.dp, horizontal = 28.dp),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = verticalPadding, horizontal = horizontalPadding),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(itemSpacing)
             ) {
                 // Padlock Centerpiece with Synaptic Concentric Rings
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(120.dp)
+                    modifier = Modifier.size(padlockSize)
                 ) {
                     // Outer pulsing cyan halo
                     Box(
@@ -1872,14 +1914,14 @@ fun LockedVaultScreen(
                     // Inner pulsing violet halo
                     Box(
                         modifier = Modifier
-                            .size(90.dp)
+                            .size(haloSize)
                             .graphicsLayer(scaleX = pulseScale1, scaleY = pulseScale1)
                             .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.15f), CircleShape)
                     )
                     // Locked Hub
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
+                            .size(innerCircleSize)
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
@@ -1896,7 +1938,7 @@ fun LockedVaultScreen(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Locked",
                             tint = Color(0xFF03DAC5),
-                            modifier = Modifier.size(30.dp)
+                            modifier = Modifier.size(iconSize)
                         )
                     }
                 }
@@ -1907,35 +1949,54 @@ fun LockedVaultScreen(
                 ) {
                     Text(
                         text = "COGNITIVE VAULT SEALED",
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = FontWeight.Black, 
-                            letterSpacing = 2.5.sp
-                        ),
+                        style = if (isCompact) {
+                            MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Black, 
+                                letterSpacing = 2.sp
+                            )
+                        } else {
+                            MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Black, 
+                                letterSpacing = 2.5.sp
+                            )
+                        },
                         color = Color.White.copy(alpha = 0.6f)
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(titleSpace))
                     Text(
                         text = title.uppercase(),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black, 
-                            letterSpacing = 1.sp,
-                            brush = Brush.linearGradient(
-                                colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                        style = if (isCompact) {
+                            MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Black, 
+                                letterSpacing = 0.5.sp,
+                                brush = Brush.linearGradient(
+                                    colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                                )
                             )
-                        ),
+                        } else {
+                            MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Black, 
+                                letterSpacing = 1.sp,
+                                brush = Brush.linearGradient(
+                                    colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                                )
+                            )
+                        },
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
-                Text(
-                    text = "This conversation is protected using AES-256 local-first cryptography. Please enter your passcode.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    lineHeight = 20.sp
-                )
+                if (!isCompact) {
+                    Text(
+                        text = "This conversation is protected using AES-256 local-first cryptography. Please enter your passcode.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        lineHeight = 20.sp
+                    )
+                }
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
@@ -2104,7 +2165,9 @@ fun LockedVaultScreen(
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     // Header
