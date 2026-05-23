@@ -215,13 +215,19 @@ class ChatViewModel(
         } else if (isEncrypted && isUnlocked) {
             val key = activeSessionKeys[sessionId]!!
             chatRepository.getMessagesForSession(sessionId).map { msg ->
-                try {
-                    val decryptedText = CryptoUtils.decryptMessage(msg.text, key)
-                    val decryptedSourceDocs = msg.sourceDocuments?.let { CryptoUtils.decryptMessage(it, key) }
-                    msg.copy(text = decryptedText, sourceDocuments = decryptedSourceDocs)
+                val decryptedText = try {
+                    CryptoUtils.decryptMessage(msg.text, key)
                 } catch (e: Exception) {
-                    msg.copy(text = "[Decryption Failed]", sourceDocuments = null)
+                    "[Decryption Failed]"
                 }
+                
+                val decryptedSourceDocs = try {
+                    msg.sourceDocuments?.let { CryptoUtils.decryptMessage(it, key) }
+                } catch (e: Exception) {
+                    msg.sourceDocuments // Fallback: it was unencrypted
+                }
+                
+                msg.copy(text = decryptedText, sourceDocuments = decryptedSourceDocs)
             }
         } else {
             chatRepository.getMessagesForSession(sessionId)
@@ -234,11 +240,11 @@ class ChatViewModel(
             val key = activeSessionKeys[sessionId]!!
             sessionDocs.map { doc ->
                 val decName = try { CryptoUtils.decryptMessage(doc.fileName, key) } catch (e: Exception) { doc.fileName }
-                val decText = try { CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) { "[Decryption Failed]" }
+                val decText = try { CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) { doc.chunkText }
                 doc.copy(fileName = decName, chunkText = decText)
             }
         } else {
-            emptyList()
+            sessionDocs
         }
 
         withContext(Dispatchers.Main) {
@@ -347,7 +353,17 @@ class ChatViewModel(
                 val messages = chatRepository.getMessagesForSession(sessionId).toList()
                 for (msg in messages) {
                     val encryptedText = CryptoUtils.encryptMessage(msg.text, sessionKey)
-                    chatRepository.saveMessage(sessionId, msg.copy(text = encryptedText))
+                    val encryptedSourceDocs = msg.sourceDocuments?.let { CryptoUtils.encryptMessage(it, sessionKey) }
+                    chatRepository.saveMessage(sessionId, msg.copy(text = encryptedText, sourceDocuments = encryptedSourceDocs))
+                }
+                
+                val docs = chatRepository.getSessionDocuments(sessionId).toList()
+                for (doc in docs) {
+                    if (!doc.isEncrypted) {
+                        val encName = CryptoUtils.encryptMessage(doc.fileName, sessionKey)
+                        val encText = CryptoUtils.encryptMessage(doc.chunkText, sessionKey)
+                        chatRepository.saveSessionDocument(doc.copy(fileName = encName, chunkText = encText, isEncrypted = true))
+                    }
                 }
                 
                 if (enableBiometric) {
@@ -617,11 +633,21 @@ class ChatViewModel(
                 
                 val messages = chatRepository.getMessagesForSession(sessionId).toList()
                 for (msg in messages) {
-                    try {
-                        val decryptedText = CryptoUtils.decryptMessage(msg.text, key)
-                        chatRepository.saveMessage(sessionId, msg.copy(text = decryptedText))
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    var newText = msg.text
+                    var newDocs = msg.sourceDocuments
+                    try { newText = CryptoUtils.decryptMessage(msg.text, key) } catch (e: Exception) {}
+                    try { newDocs = msg.sourceDocuments?.let { CryptoUtils.decryptMessage(it, key) } } catch (e: Exception) {}
+                    chatRepository.saveMessage(sessionId, msg.copy(text = newText, sourceDocuments = newDocs))
+                }
+                
+                val docs = chatRepository.getSessionDocuments(sessionId).toList()
+                for (doc in docs) {
+                    if (doc.isEncrypted) {
+                        var decName = doc.fileName
+                        var decText = doc.chunkText
+                        try { decName = CryptoUtils.decryptMessage(doc.fileName, key) } catch (e: Exception) {}
+                        try { decText = CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) {}
+                        chatRepository.saveSessionDocument(doc.copy(fileName = decName, chunkText = decText, isEncrypted = false))
                     }
                 }
                 
