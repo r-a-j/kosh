@@ -7,11 +7,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rajpawardotin.kosh.data.KoshDatabaseHelper
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.provider.AIProvider
 import com.rajpawardotin.kosh.domain.provider.SearchProvider
+import com.rajpawardotin.kosh.domain.provider.SettingsProvider
+import com.rajpawardotin.kosh.domain.repository.ChatRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -21,7 +23,9 @@ import java.io.File
 class ChatViewModel(
     private val aiProvider: AIProvider,
     private val searchProvider: SearchProvider,
-    private val context: Context
+    private val chatRepository: ChatRepository,
+    private val settingsProvider: SettingsProvider,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     var modelPath by mutableStateOf<String?>(null)
@@ -46,17 +50,14 @@ class ChatViewModel(
     val checkedItems = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
     val chatMessages = mutableStateListOf<ChatMessage>()
 
-    private val dbHelper = KoshDatabaseHelper(context)
     var currentSessionId by mutableStateOf<String?>(null)
     val savedSessions = androidx.compose.runtime.mutableStateListOf<ChatSession>()
-    
-    private val prefs = context.getSharedPreferences("neural_core_prefs", Context.MODE_PRIVATE)
 
     init {
         loadSavedSessions()
         // Auto-load last active session if one exists
-        viewModelScope.launch(Dispatchers.IO) {
-            val sessions = dbHelper.getSessionsOrderedByLastActive()
+        viewModelScope.launch(ioDispatcher) {
+            val sessions = chatRepository.getSessionsOrderedByLastActive()
             sessions.firstOrNull()?.let { lastActive ->
                 withContext(Dispatchers.Main) {
                     loadSession(lastActive.id)
@@ -66,8 +67,8 @@ class ChatViewModel(
     }
 
     fun loadSavedSessions() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val sessions = dbHelper.getSessionsOrderedByLastActive()
+        viewModelScope.launch(ioDispatcher) {
+            val sessions = chatRepository.getSessionsOrderedByLastActive()
             withContext(Dispatchers.Main) {
                 savedSessions.clear()
                 savedSessions.addAll(sessions)
@@ -86,11 +87,11 @@ class ChatViewModel(
 
     fun loadSession(sessionId: String) {
         if (isGenerating) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val sessions = dbHelper.getSessionsOrderedByLastActive()
+        viewModelScope.launch(ioDispatcher) {
+            val sessions = chatRepository.getSessionsOrderedByLastActive()
             val session = sessions.find { it.id == sessionId }
-            val messages = dbHelper.getMessagesForSession(sessionId)
-            val checklist = dbHelper.getChecklistStatesForSession(sessionId)
+            val messages = chatRepository.getMessagesForSession(sessionId)
+            val checklist = chatRepository.getChecklistStatesForSession(sessionId)
             withContext(Dispatchers.Main) {
                 currentSessionId = sessionId
                 chatMessages.clear()
@@ -104,7 +105,7 @@ class ChatViewModel(
                 // Update session last active time
                 session?.let {
                     val updated = it.copy(lastActive = System.currentTimeMillis())
-                    dbHelper.saveSession(updated)
+                    chatRepository.saveSession(updated)
                 }
                 loadSavedSessions()
             }
@@ -112,8 +113,8 @@ class ChatViewModel(
     }
 
     fun deleteSession(sessionId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            dbHelper.deleteSession(sessionId)
+        viewModelScope.launch(ioDispatcher) {
+            chatRepository.deleteSession(sessionId)
             withContext(Dispatchers.Main) {
                 if (currentSessionId == sessionId) {
                     startNewChat()
@@ -125,8 +126,8 @@ class ChatViewModel(
 
     fun renameSession(sessionId: String, newTitle: String) {
         if (newTitle.isBlank()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            dbHelper.renameSession(sessionId, newTitle)
+        viewModelScope.launch(ioDispatcher) {
+            chatRepository.renameSession(sessionId, newTitle)
             withContext(Dispatchers.Main) {
                 loadSavedSessions()
             }
@@ -135,31 +136,31 @@ class ChatViewModel(
 
     fun toggleChecklistItem(messageKey: String, itemIndex: Int, isChecked: Boolean) {
         checkedItems["${messageKey}_$itemIndex"] = isChecked
-        viewModelScope.launch(Dispatchers.IO) {
-            dbHelper.saveChecklistState(messageKey, itemIndex, isChecked)
+        viewModelScope.launch(ioDispatcher) {
+            chatRepository.saveChecklistState(messageKey, itemIndex, isChecked)
         }
     }
 
     var selectedBackend by mutableStateOf(
-        prefs.getString("selected_backend", "GPU") ?: "GPU"
+        settingsProvider.getString("selected_backend", "GPU")
     )
         private set
 
     fun selectBackend(backend: String) {
         selectedBackend = backend
-        prefs.edit().putString("selected_backend", backend).apply()
+        settingsProvider.putString("selected_backend", backend)
     }
 
     val backends = listOf("CPU", "GPU", "NPU (Qualcomm)")
 
     var selectedSearchEngine by mutableStateOf(
-        prefs.getString("selected_search_engine", "DuckDuckGo (Free)") ?: "DuckDuckGo (Free)"
+        settingsProvider.getString("selected_search_engine", "DuckDuckGo (Free)")
     )
         private set
 
     fun selectSearchEngine(engine: String) {
         selectedSearchEngine = engine
-        prefs.edit().putString("selected_search_engine", engine).apply()
+        settingsProvider.putString("selected_search_engine", engine)
     }
 
     val searchEngines = listOf(
@@ -172,23 +173,23 @@ class ChatViewModel(
     )
 
     var tavilyApiKey by mutableStateOf(
-        prefs.getString("tavily_api_key", "") ?: ""
+        settingsProvider.getString("tavily_api_key", "")
     )
         private set
 
     fun updateTavilyApiKey(key: String) {
         tavilyApiKey = key
-        prefs.edit().putString("tavily_api_key", key).apply()
+        settingsProvider.putString("tavily_api_key", key)
     }
 
     var braveApiKey by mutableStateOf(
-        prefs.getString("brave_api_key", "") ?: ""
+        settingsProvider.getString("brave_api_key", "")
     )
         private set
 
     fun updateBraveApiKey(key: String) {
         braveApiKey = key
-        prefs.edit().putString("brave_api_key", key).apply()
+        settingsProvider.putString("brave_api_key", key)
     }
 
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
@@ -200,7 +201,7 @@ class ChatViewModel(
 
     fun deleteModel() {
         modelPath?.let { path ->
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch(ioDispatcher) {
                 aiProvider.close()
                 File(path).delete()
                 withContext(Dispatchers.Main) {
@@ -215,7 +216,7 @@ class ChatViewModel(
     fun initializeEngine() {
         val path = modelPath ?: return
         isInitializing = true
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             val result = aiProvider.initialize(path, selectedBackend)
             withContext(Dispatchers.Main) {
                 isInitializing = false
@@ -272,7 +273,7 @@ class ChatViewModel(
             ramUsage = 3.25 + random.nextFloat() * 0.05
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             try {
                 // If new session, save the session first (synchronously on the IO thread)
                 if (isNewSession) {
@@ -285,12 +286,12 @@ class ChatViewModel(
                         modelPath = modelPath,
                         lastSearchQuery = null
                     )
-                    dbHelper.saveSession(newSession)
+                    chatRepository.saveSession(newSession)
                     loadSavedSessions()
                 }
 
                 // Now save the message (guarantees that the session row already exists)
-                dbHelper.saveMessage(sessionId!!, userMessage)
+                chatRepository.saveMessage(sessionId!!, userMessage)
 
                 val shouldSearch = detectSearchRequirement(rawPrompt)
                 if (shouldSearch && !isInternetEnabled) {
@@ -350,6 +351,8 @@ class ChatViewModel(
                 delay(400)
                 withContext(Dispatchers.Main) { isThinking = false }
 
+                val assistantMessageId = java.util.UUID.randomUUID().toString()
+
                 aiProvider.sendMessage(finalPrompt).collect { text ->
                     withContext(Dispatchers.Main) {
                         if (currentResponseChunk.isEmpty()) {
@@ -357,23 +360,27 @@ class ChatViewModel(
                         }
                         currentResponseChunk += text
                     }
+                    
+                    // Save response live chunk to the database
+                    val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
+                    chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
                 }
 
                 var assistantMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
-                    val msg = ChatMessage(text = currentResponseChunk, isUser = false)
+                    val msg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
                     chatMessages.add(msg)
                     currentResponseChunk = ""
                     assistantMessage = msg
                 }
 
                 assistantMessage?.let { msg ->
-                    dbHelper.saveMessage(sessionId!!, msg)
+                    chatRepository.saveMessage(sessionId!!, msg)
                     
                     // Update session last active time and last search query
-                    val sessions = dbHelper.getSessionsOrderedByLastActive()
+                    val sessions = chatRepository.getSessionsOrderedByLastActive()
                     sessions.find { it.id == sessionId }?.let {
-                        dbHelper.saveSession(it.copy(
+                        chatRepository.saveSession(it.copy(
                             lastActive = System.currentTimeMillis(),
                             lastSearchQuery = lastSearchQuery
                         ))
@@ -389,7 +396,7 @@ class ChatViewModel(
                     errorMessage = msg
                 }
                 errorMessage?.let { msg ->
-                    dbHelper.saveMessage(sessionId!!, msg)
+                    chatRepository.saveMessage(sessionId!!, msg)
                 }
             } finally {
                 withContext(Dispatchers.Main) {
@@ -468,7 +475,6 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         aiProvider.close()
-        dbHelper.close()
         isEngineReady = aiProvider.isInitialized
     }
 }

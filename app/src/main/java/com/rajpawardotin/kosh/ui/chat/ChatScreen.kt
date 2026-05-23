@@ -552,12 +552,9 @@ fun ChatScreen(
                         )
                     }
 
-                    // Right: New Chat / Sparkle button
                     IconButton(
                         onClick = {
-                            viewModel.chatMessages.clear()
-                            viewModel.checkedItems.clear()
-                            viewModel.prompt = ""
+                            viewModel.startNewChat()
                         },
                         modifier = Modifier
                             .size(40.dp)

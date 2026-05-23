@@ -11,6 +11,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rajpawardotin.kosh.data.LiteRTModelProvider
 import com.rajpawardotin.kosh.data.SearchProviderImpl
+import com.rajpawardotin.kosh.data.SQLiteChatRepository
+import com.rajpawardotin.kosh.data.SharedPrefsSettingsProvider
 import com.rajpawardotin.kosh.ui.chat.ChatScreen
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import com.rajpawardotin.kosh.ui.theme.KoshTheme
@@ -22,10 +24,12 @@ class MainActivity : ComponentActivity() {
         
         val aiProvider = LiteRTModelProvider(applicationContext)
         val searchProvider = SearchProviderImpl(applicationContext)
+        val chatRepository = SQLiteChatRepository(applicationContext)
+        val settingsProvider = SharedPrefsSettingsProvider(applicationContext)
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChatViewModel(aiProvider, searchProvider, applicationContext) as T
+                return ChatViewModel(aiProvider, searchProvider, chatRepository, settingsProvider) as T
             }
         }
 
