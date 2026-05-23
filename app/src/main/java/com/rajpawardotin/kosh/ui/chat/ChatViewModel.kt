@@ -156,7 +156,7 @@ class ChatViewModel(
         val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
         val processedSessions = sessions.map { session ->
             if (session.encryptedKeyPassword != null && !activeSessionKeys.containsKey(session.id)) {
-                session.copy(title = "Sealed Vault", lastSearchQuery = null)
+                session.copy(lastSearchQuery = null)
             } else {
                 session
             }
@@ -171,11 +171,6 @@ class ChatViewModel(
         val isEncrypted = session.encryptedKeyPassword != null
         val key = activeSessionKeys[session.id]
         return if (isEncrypted && key != null) {
-            val decryptedTitle = try {
-                CryptoUtils.decryptMessage(session.title, key)
-            } catch (e: Exception) {
-                session.title
-            }
             val decryptedLastSearchQuery = session.lastSearchQuery?.let {
                 try {
                     CryptoUtils.decryptMessage(it, key)
@@ -183,7 +178,7 @@ class ChatViewModel(
                     null
                 }
             }
-            session.copy(title = decryptedTitle, lastSearchQuery = decryptedLastSearchQuery)
+            session.copy(lastSearchQuery = decryptedLastSearchQuery)
         } else {
             session
         }
@@ -192,11 +187,6 @@ class ChatViewModel(
     private fun saveSessionEncrypted(session: ChatSession) {
         val key = activeSessionKeys[session.id]
         if (session.encryptedKeyPassword != null && key != null) {
-            val encryptedTitle = try {
-                CryptoUtils.encryptMessage(session.title, key)
-            } catch (e: Exception) {
-                session.title
-            }
             val encryptedLastSearchQuery = session.lastSearchQuery?.let {
                 try {
                     CryptoUtils.encryptMessage(it, key)
@@ -204,7 +194,7 @@ class ChatViewModel(
                     it
                 }
             }
-            chatRepository.saveSession(session.copy(title = encryptedTitle, lastSearchQuery = encryptedLastSearchQuery))
+            chatRepository.saveSession(session.copy(lastSearchQuery = encryptedLastSearchQuery))
         } else {
             chatRepository.saveSession(session)
         }
