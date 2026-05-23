@@ -5,15 +5,13 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Exclude sensitive local intelligence vaults and API key settings from cloud backup -->
+        <exclude domain="database" path="kosh_vault.db" />
+        <exclude domain="sharedpref" path="neural_core_prefs.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- Exclude sensitive local intelligence vaults and API key settings from device transfer -->
+        <exclude domain="database" path="kosh_vault.db" />
+        <exclude domain="sharedpref" path="neural_core_prefs.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

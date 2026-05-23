@@ -1,12 +1,15 @@
 package com.rajpawardotin.kosh.ui.chat
 
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.provider.AIProvider
@@ -19,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import javax.crypto.SecretKey
 
 class ChatViewModel(
     private val aiProvider: AIProvider,
@@ -56,6 +60,21 @@ class ChatViewModel(
     var isTemporarySession by mutableStateOf(false)
         private set
 
+    var isAppLockEnabled by mutableStateOf(settingsProvider.getString("app_lock_enabled", "false") == "true")
+        private set
+    var isAppLocked by mutableStateOf(isAppLockEnabled)
+    
+    val activeSessionKeys = mutableStateMapOf<String, SecretKey>()
+
+    fun toggleAppLock(enabled: Boolean) {
+        isAppLockEnabled = enabled
+        settingsProvider.putString("app_lock_enabled", enabled.toString())
+    }
+
+    fun unlockApp() {
+        isAppLocked = false
+    }
+
     init {
         viewModelScope.launch(ioDispatcher) {
             val sessions = chatRepository.getSessionsOrderedByLastActive()
@@ -84,7 +103,25 @@ class ChatViewModel(
         }
         val sessions = chatRepository.getSessionsOrderedByLastActive()
         val session = sessions.find { it.id == sessionId }
-        val messages = chatRepository.getMessagesForSession(sessionId)
+        
+        val isEncrypted = session?.passwordHash != null
+        val isUnlocked = activeSessionKeys.containsKey(sessionId)
+        
+        val messages = if (isEncrypted && !isUnlocked) {
+            emptyList()
+        } else if (isEncrypted && isUnlocked) {
+            val key = activeSessionKeys[sessionId]!!
+            chatRepository.getMessagesForSession(sessionId).map { msg ->
+                try {
+                    msg.copy(text = CryptoUtils.decryptMessage(msg.text, key))
+                } catch (e: Exception) {
+                    msg.copy(text = "[Decryption Failed]")
+                }
+            }
+        } else {
+            chatRepository.getMessagesForSession(sessionId)
+        }
+        
         val checklist = chatRepository.getChecklistStatesForSession(sessionId)
         withContext(Dispatchers.Main) {
             currentSessionId = sessionId
@@ -140,11 +177,326 @@ class ChatViewModel(
         }
     }
 
-    fun renameSession(sessionId: String, newTitle: String) {
+        fun renameSession(sessionId: String, newTitle: String) {
         if (newTitle.isBlank()) return
         viewModelScope.launch(ioDispatcher) {
             chatRepository.renameSession(sessionId, newTitle)
             loadSavedSessionsInternal()
+        }
+    }
+
+    fun lockSession(
+        sessionId: String, 
+        password: String, 
+        enableBiometric: Boolean, 
+        context: Context, 
+        onResult: (Boolean) -> Unit
+    ) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val salt = CryptoUtils.generateSalt()
+                val derivedKey = CryptoUtils.deriveKeyFromPassword(password, salt)
+                val sessionKey = CryptoUtils.generateRandomSessionKey()
+                
+                val sessionKeyEncodedBase64 = java.util.Base64.getEncoder().encodeToString(sessionKey.encoded)
+                val encryptedKeyPassword = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, derivedKey)
+                val passwordHash = java.util.Base64.getEncoder().encodeToString(derivedKey.encoded)
+                val validationToken = CryptoUtils.encryptMessage("KOSH_VAL", sessionKey)
+                
+                val messages = chatRepository.getMessagesForSession(sessionId).toList()
+                for (msg in messages) {
+                    val encryptedText = CryptoUtils.encryptMessage(msg.text, sessionKey)
+                    chatRepository.saveMessage(sessionId, msg.copy(text = encryptedText))
+                }
+                
+                if (enableBiometric) {
+                    withContext(Dispatchers.Main) {
+                        try {
+                            val cipher = CryptoUtils.getBiometricCipherForEncryption()
+                            val biometricPrompt = androidx.biometric.BiometricPrompt(
+                                context as androidx.fragment.app.FragmentActivity,
+                                androidx.core.content.ContextCompat.getMainExecutor(context),
+                                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                        super.onAuthenticationSucceeded(result)
+                                        viewModelScope.launch(ioDispatcher) {
+                                            try {
+                                                val cryptoCipher = result.cryptoObject?.cipher ?: cipher
+                                                val encryptedKeyBiometric = CryptoUtils.wrapSessionKey(sessionKey, cryptoCipher)
+                                                
+                                                val session = chatRepository.getSessionsOrderedByLastActive().find { it.id == sessionId }
+                                                if (session != null) {
+                                                     val updatedSession = session.copy(
+                                                         passwordHash = passwordHash,
+                                                         salt = java.util.Base64.getEncoder().encodeToString(salt),
+                                                         validationToken = validationToken,
+                                                         encryptedKeyPassword = encryptedKeyPassword,
+                                                         encryptedKeyBiometric = encryptedKeyBiometric
+                                                     )
+                                                     chatRepository.saveSession(updatedSession)
+                                                     activeSessionKeys[sessionId] = sessionKey
+                                                     loadSavedSessionsInternal()
+                                                     withContext(Dispatchers.Main) { onResult(true) }
+                                                } else {
+                                                     withContext(Dispatchers.Main) { onResult(false) }
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                                withContext(Dispatchers.Main) { onResult(false) }
+                                            }
+                                        }
+                                    }
+                                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                        super.onAuthenticationError(errorCode, errString)
+                                        onResult(false)
+                                    }
+                                    override fun onAuthenticationFailed() {
+                                        super.onAuthenticationFailed()
+                                    }
+                                }
+                            )
+                            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                .setTitle("Confirm Fingerprint")
+                                .setSubtitle("Authorize biometric lock for this chat")
+                                .setNegativeButtonText("Cancel")
+                                .build()
+                            biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            onResult(false)
+                        }
+                    }
+                } else {
+                    val session = chatRepository.getSessionsOrderedByLastActive().find { it.id == sessionId }
+                    if (session != null) {
+                        val updatedSession = session.copy(
+                            passwordHash = passwordHash,
+                            salt = java.util.Base64.getEncoder().encodeToString(salt),
+                            validationToken = validationToken,
+                            encryptedKeyPassword = encryptedKeyPassword,
+                            encryptedKeyBiometric = null
+                        )
+                        chatRepository.saveSession(updatedSession)
+                        activeSessionKeys[sessionId] = sessionKey
+                        loadSavedSessionsInternal()
+                        withContext(Dispatchers.Main) { onResult(true) }
+                    } else {
+                        withContext(Dispatchers.Main) { onResult(false) }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) { onResult(false) }
+            }
+        }
+    }
+
+    fun unlockSessionWithPassword(sessionId: String, password: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val sessions = chatRepository.getSessionsOrderedByLastActive()
+                val session = sessions.find { it.id == sessionId }
+                if (session == null || session.passwordHash == null || session.salt == null || session.validationToken == null || session.encryptedKeyPassword == null) {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                    return@launch
+                }
+                
+                val salt = java.util.Base64.getDecoder().decode(session.salt)
+                val derivedKey = CryptoUtils.deriveKeyFromPassword(password, salt)
+                
+                val sessionKeyBase64 = CryptoUtils.decryptMessage(session.encryptedKeyPassword, derivedKey)
+                val sessionKeyBytes = java.util.Base64.getDecoder().decode(sessionKeyBase64)
+                val sessionKey = javax.crypto.spec.SecretKeySpec(sessionKeyBytes, "AES")
+                
+                val decryptedToken = CryptoUtils.decryptMessage(session.validationToken, sessionKey)
+                if (decryptedToken == "KOSH_VAL") {
+                    activeSessionKeys[sessionId] = sessionKey
+                    loadSessionInternal(sessionId)
+                    withContext(Dispatchers.Main) { onResult(true) }
+                } else {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) { onResult(false) }
+            }
+        }
+    }
+
+    fun unlockSessionWithBiometrics(sessionId: String, context: Context, onResult: (Boolean) -> Unit) {
+        val session = savedSessions.find { it.id == sessionId }
+        if (session == null || session.encryptedKeyBiometric == null) {
+            onResult(false)
+            return
+        }
+        
+        try {
+            val combined = java.util.Base64.getDecoder().decode(session.encryptedKeyBiometric)
+            if (combined.size < 12) {
+                onResult(false)
+                return
+            }
+            val iv = ByteArray(12)
+            System.arraycopy(combined, 0, iv, 0, 12)
+            
+            val cipher = CryptoUtils.getBiometricCipherForDecryption(iv)
+            val biometricPrompt = androidx.biometric.BiometricPrompt(
+                context as androidx.fragment.app.FragmentActivity,
+                androidx.core.content.ContextCompat.getMainExecutor(context),
+                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        viewModelScope.launch(ioDispatcher) {
+                            try {
+                                val cryptoCipher = result.cryptoObject?.cipher ?: cipher
+                                val sessionKey = CryptoUtils.unwrapSessionKey(session.encryptedKeyBiometric, cryptoCipher)
+                                
+                                activeSessionKeys[sessionId] = sessionKey
+                                loadSessionInternal(sessionId)
+                                withContext(Dispatchers.Main) { onResult(true) }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                withContext(Dispatchers.Main) { onResult(false) }
+                            }
+                        }
+                    }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        onResult(false)
+                    }
+                    override fun onAuthenticationFailed() {
+                        super.onAuthenticationFailed()
+                    }
+                }
+            )
+            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock Vault")
+                .setSubtitle("Confirm biometrics to unlock this chat")
+                .setNegativeButtonText("Cancel")
+                .build()
+            biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onResult(false)
+        }
+    }
+
+    fun removeSessionLock(sessionId: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val key = activeSessionKeys[sessionId]
+                if (key == null) {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                    return@launch
+                }
+                
+                val messages = chatRepository.getMessagesForSession(sessionId).toList()
+                for (msg in messages) {
+                    try {
+                        val decryptedText = CryptoUtils.decryptMessage(msg.text, key)
+                        chatRepository.saveMessage(sessionId, msg.copy(text = decryptedText))
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                
+                val session = chatRepository.getSessionsOrderedByLastActive().find { it.id == sessionId }
+                if (session != null) {
+                    val updatedSession = session.copy(
+                        passwordHash = null,
+                        salt = null,
+                        validationToken = null,
+                        encryptedKeyPassword = null,
+                        encryptedKeyBiometric = null
+                    )
+                    chatRepository.saveSession(updatedSession)
+                    activeSessionKeys.remove(sessionId)
+                    loadSessionInternal(sessionId)
+                    withContext(Dispatchers.Main) { onResult(true) }
+                } else {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) { onResult(false) }
+            }
+        }
+    }
+
+    fun exportBackup(context: Context, destUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            val dbFile = context.getDatabasePath("kosh_vault.db")
+            if (!dbFile.exists()) {
+                withContext(Dispatchers.Main) { onError("Database does not exist.") }
+                return@launch
+            }
+            
+            val tempFile = File(context.cacheDir, "kosh_backup_temp.db")
+            val success = CryptoUtils.encryptDatabaseBackup(dbFile, tempFile, password)
+            if (!success) {
+                withContext(Dispatchers.Main) { onError("Encryption failed.") }
+                return@launch
+            }
+            
+            try {
+                context.contentResolver.openOutputStream(destUri)?.use { output ->
+                    tempFile.inputStream().use { input ->
+                        input.copyTo(output)
+                    }
+                }
+                tempFile.delete()
+                withContext(Dispatchers.Main) { onSuccess() }
+            } catch (e: Exception) {
+                tempFile.delete()
+                withContext(Dispatchers.Main) { onError(e.localizedMessage ?: "Unknown error") }
+            }
+        }
+    }
+
+    fun importBackup(context: Context, srcUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(ioDispatcher) {
+            val tempBackupFile = File(context.cacheDir, "kosh_backup_import_temp.db")
+            try {
+                context.contentResolver.openInputStream(srcUri)?.use { input ->
+                    tempBackupFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError("Failed to read backup file.") }
+                return@launch
+            }
+            
+            val dbFile = context.getDatabasePath("kosh_vault.db")
+            val tempDecryptedFile = File(context.cacheDir, "kosh_decrypted_temp.db")
+            
+            val success = CryptoUtils.decryptDatabaseBackup(tempBackupFile, tempDecryptedFile, password)
+            tempBackupFile.delete()
+            
+            if (!success) {
+                tempDecryptedFile.delete()
+                withContext(Dispatchers.Main) { onError("Invalid password or corrupted backup.") }
+                return@launch
+            }
+            
+            try {
+                dbFile.delete()
+                File(dbFile.path + "-journal").delete()
+                File(dbFile.path + "-shm").delete()
+                File(dbFile.path + "-wal").delete()
+                
+                tempDecryptedFile.renameTo(dbFile)
+                
+                withContext(Dispatchers.Main) {
+                    loadSavedSessions()
+                    startNewChat()
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { onError(e.localizedMessage ?: "Failed to restore database.") }
+            } finally {
+                tempDecryptedFile.delete()
+            }
         }
     }
 
@@ -308,7 +660,13 @@ class ChatViewModel(
                     }
 
                     // Now save the message (guarantees that the session row already exists)
-                    chatRepository.saveMessage(sessionId!!, userMessage)
+                    val key = activeSessionKeys[sessionId!!]
+                    val userMsgToSave = if (key != null) {
+                        userMessage.copy(text = CryptoUtils.encryptMessage(userMessage.text, key))
+                    } else {
+                        userMessage
+                    }
+                    chatRepository.saveMessage(sessionId!!, userMsgToSave)
                 }
 
                 val shouldSearch = detectSearchRequirement(rawPrompt)
@@ -381,7 +739,9 @@ class ChatViewModel(
                     
                     if (!isTemporarySession) {
                         // Save response live chunk to the database
-                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
+                        val key = activeSessionKeys[sessionId!!]
+                        val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
+                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false)
                         chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
                     }
                 }
@@ -396,7 +756,9 @@ class ChatViewModel(
 
                 if (!isTemporarySession) {
                     assistantMessage?.let { msg ->
-                        chatRepository.saveMessage(sessionId!!, msg)
+                        val key = activeSessionKeys[sessionId!!]
+                        val msgToSave = if (key != null) msg.copy(text = CryptoUtils.encryptMessage(msg.text, key)) else msg
+                        chatRepository.saveMessage(sessionId!!, msgToSave)
                         
                         // Update session last active time and last search query
                         val sessions = chatRepository.getSessionsOrderedByLastActive()
@@ -419,7 +781,9 @@ class ChatViewModel(
                 }
                 if (!isTemporarySession) {
                     errorMessage?.let { msg ->
-                        chatRepository.saveMessage(sessionId!!, msg)
+                        val key = activeSessionKeys[sessionId!!]
+                        val msgToSave = if (key != null) msg.copy(text = CryptoUtils.encryptMessage(msg.text, key)) else msg
+                        chatRepository.saveMessage(sessionId!!, msgToSave)
                     }
                 }
             } finally {

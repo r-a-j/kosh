@@ -1,5 +1,6 @@
 package com.rajpawardotin.kosh.ui.chat
 
+import android.content.Context
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.provider.AIProvider
@@ -13,6 +14,7 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.mockito.kotlin.mock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
@@ -205,6 +207,87 @@ class ChatViewModelTest {
 
         assertFalse(viewModel.isTemporarySession)
         assertEquals(sessionId, viewModel.currentSessionId)
+    }
+
+    @Test
+    fun testAppLockSettingToggles() {
+        assertFalse(viewModel.isAppLockEnabled)
+        viewModel.toggleAppLock(true)
+        assertTrue(viewModel.isAppLockEnabled)
+        assertEquals("true", fakeSettings.getString("app_lock_enabled", "false"))
+        
+        viewModel.toggleAppLock(false)
+        assertFalse(viewModel.isAppLockEnabled)
+        assertEquals("false", fakeSettings.getString("app_lock_enabled", "false"))
+    }
+
+    @Test
+    fun testLockAndUnlockSessionWithPassword() = runTest(testDispatcher) {
+        val sessionId = "vault-1"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Secret Vault",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeRepository.saveSession(session)
+        val msg1 = ChatMessage(id = "m1", text = "This is a secret message", isUser = true)
+        val msg2 = ChatMessage(id = "m2", text = "AI response about secrets", isUser = false)
+        fakeRepository.saveMessage(sessionId, msg1)
+        fakeRepository.saveMessage(sessionId, msg2)
+
+        var lockSuccess = false
+        val dummyContext = mock<Context>()
+        viewModel.lockSession(sessionId, "strong_password_123", enableBiometric = false, context = dummyContext) { success ->
+            lockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(lockSuccess)
+        
+        val savedSession = fakeRepository.sessions.find { it.id == sessionId }
+        assertNotNull(savedSession)
+        assertNotNull(savedSession!!.passwordHash)
+        assertNotNull(savedSession.salt)
+        assertNotNull(savedSession.validationToken)
+        assertNotNull(savedSession.encryptedKeyPassword)
+
+        val savedMessages = fakeRepository.getMessagesForSession(sessionId)
+        assertNotEquals("This is a secret message", savedMessages[0].text)
+        assertNotEquals("AI response about secrets", savedMessages[1].text)
+        
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+        assertEquals(2, viewModel.chatMessages.size)
+        assertEquals("This is a secret message", viewModel.chatMessages[0].text)
+        assertEquals("AI response about secrets", viewModel.chatMessages[1].text)
+
+        viewModel.activeSessionKeys.clear()
+        
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+        assertTrue(viewModel.chatMessages.isEmpty())
+
+        var incorrectUnlockSuccess = true
+        viewModel.unlockSessionWithPassword(sessionId, "wrong_pass") { success ->
+            incorrectUnlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        assertFalse(incorrectUnlockSuccess)
+        assertTrue(viewModel.chatMessages.isEmpty())
+
+        var correctUnlockSuccess = false
+        viewModel.unlockSessionWithPassword(sessionId, "strong_password_123") { success ->
+            correctUnlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        assertTrue(correctUnlockSuccess)
+        
+        assertEquals(2, viewModel.chatMessages.size)
+        assertEquals("This is a secret message", viewModel.chatMessages[0].text)
+        assertEquals("AI response about secrets", viewModel.chatMessages[1].text)
     }
 
     class FakeAIProvider : AIProvider {

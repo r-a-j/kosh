@@ -54,6 +54,10 @@ fun ModelConfigCard(
     searchEngines: List<String>,
     tavilyApiKey: String = "",
     braveApiKey: String = "",
+    isAppLockEnabled: Boolean = false,
+    onToggleAppLock: (Boolean) -> Unit = {},
+    onExportBackup: () -> Unit = {},
+    onImportBackup: () -> Unit = {},
     onTavilyApiKeyChange: (String) -> Unit = {},
     onBraveApiKeyChange: (String) -> Unit = {},
     onPickModel: () -> Unit,
@@ -345,6 +349,69 @@ fun ModelConfigCard(
                             Text("Ignite Neural Engine", fontWeight = FontWeight.Bold)
                         }
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Security & Data",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.Gray,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "App Lock on Startup",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Switch(
+                    checked = isAppLockEnabled,
+                    onCheckedChange = onToggleAppLock,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFF03DAC5),
+                        checkedTrackColor = Color(0xFF03DAC5).copy(alpha = 0.2f),
+                        checkedBorderColor = Color(0xFF03DAC5),
+                        uncheckedThumbColor = Color.Gray,
+                        uncheckedTrackColor = Color.White.copy(alpha = 0.05f),
+                        uncheckedBorderColor = Color.White.copy(alpha = 0.15f)
+                    ),
+                    modifier = Modifier.scale(0.8f)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onExportBackup,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                ) {
+                    Text("Export Vault", style = MaterialTheme.typography.labelMedium)
+                }
+                
+                OutlinedButton(
+                    onClick = onImportBackup,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                ) {
+                    Text("Import Vault", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
