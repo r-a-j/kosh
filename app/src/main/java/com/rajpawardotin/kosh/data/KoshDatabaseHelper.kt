@@ -11,7 +11,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
 
 
         // Sessions Table
@@ -39,6 +39,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         private const val KEY_MESSAGE_IS_USER = "is_user"
         private const val KEY_MESSAGE_IS_SYSTEM = "is_system"
         private const val KEY_MESSAGE_CREATED_AT = "created_at"
+        private const val KEY_MESSAGE_SOURCE_DOCUMENTS = "source_documents"
 
         // Checklist Table
         private const val TABLE_CHECKLIST = "checklist_states"
@@ -78,6 +79,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $KEY_MESSAGE_IS_USER INTEGER,
                 $KEY_MESSAGE_IS_SYSTEM INTEGER,
                 $KEY_MESSAGE_CREATED_AT INTEGER,
+                $KEY_MESSAGE_SOURCE_DOCUMENTS TEXT,
                 FOREIGN KEY($KEY_MESSAGE_SESSION_ID) REFERENCES $TABLE_SESSIONS($KEY_SESSION_ID) ON DELETE CASCADE
             )
         """.trimIndent()
@@ -200,6 +202,9 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 END
             """.trimIndent())
         }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $KEY_MESSAGE_SOURCE_DOCUMENTS TEXT")
+        }
     }
 
 
@@ -289,6 +294,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(KEY_MESSAGE_IS_USER, if (message.isUser) 1 else 0)
             put(KEY_MESSAGE_IS_SYSTEM, if (message.isSystemMessage) 1 else 0)
             put(KEY_MESSAGE_CREATED_AT, System.currentTimeMillis())
+            put(KEY_MESSAGE_SOURCE_DOCUMENTS, message.sourceDocuments)
         }
         val rowsUpdated = db.update(TABLE_MESSAGES, values, "$KEY_MESSAGE_ID = ?", arrayOf(message.id))
         if (rowsUpdated == 0) {
@@ -306,15 +312,18 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 val textIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_TEXT)
                 val userIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_USER)
                 val systemIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_SYSTEM)
+                val sourceDocsIdx = cursor.getColumnIndex(KEY_MESSAGE_SOURCE_DOCUMENTS)
 
                 do {
+                    val sourceDocs = if (sourceDocsIdx != -1 && !cursor.isNull(sourceDocsIdx)) cursor.getString(sourceDocsIdx) else null
                     messagesList.add(
                         ChatMessage(
                             id = cursor.getString(idIdx),
                             text = cursor.getString(textIdx),
                             isUser = cursor.getInt(userIdx) == 1,
                             isSystemMessage = cursor.getInt(systemIdx) == 1,
-                            isStreaming = false
+                            isStreaming = false,
+                            sourceDocuments = sourceDocs
                         )
                     )
                 } while (cursor.moveToNext())

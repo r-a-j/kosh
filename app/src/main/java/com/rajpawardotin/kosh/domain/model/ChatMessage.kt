@@ -5,6 +5,7 @@ data class ChatMessage(
     val text: String,
     val isUser: Boolean,
     val isStreaming: Boolean = false,
-    val isSystemMessage: Boolean = false
+    val isSystemMessage: Boolean = false,
+    val sourceDocuments: String? = null
 )
 

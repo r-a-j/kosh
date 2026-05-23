@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.ThumbDown
 import androidx.compose.material.icons.outlined.Share
@@ -185,6 +186,10 @@ fun ChatBubble(
                 }
 
                 if (!message.isSystemMessage) {
+                    if (!message.sourceDocuments.isNullOrBlank()) {
+                        DocumentSourcesView(sourceDocuments = message.sourceDocuments)
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                     ResponseActionsRow(textToCopy = message.text)
                     Text(
                         text = "Neural OS is an AI and can make mistakes. Verify important info.",
@@ -603,4 +608,55 @@ fun parseMarkdownToAnnotatedString(text: String): AnnotatedString {
     return builder.toAnnotatedString()
 }
 
-
+@Composable
+fun DocumentSourcesView(sourceDocuments: String) {
+    val documents = sourceDocuments.split(",").map { it.trim() }
+    
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = null,
+                tint = Color(0xFF03DAC5),
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "REFERENCED DOCUMENTS",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                ),
+                color = Color(0xFF03DAC5)
+            )
+        }
+        
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            documents.forEach { docName ->
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF1E1E1E),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = docName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White.copy(alpha = 0.8f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}

@@ -216,9 +216,11 @@ class ChatViewModel(
             val key = activeSessionKeys[sessionId]!!
             chatRepository.getMessagesForSession(sessionId).map { msg ->
                 try {
-                    msg.copy(text = CryptoUtils.decryptMessage(msg.text, key))
+                    val decryptedText = CryptoUtils.decryptMessage(msg.text, key)
+                    val decryptedSourceDocs = msg.sourceDocuments?.let { CryptoUtils.decryptMessage(it, key) }
+                    msg.copy(text = decryptedText, sourceDocuments = decryptedSourceDocs)
                 } catch (e: Exception) {
-                    msg.copy(text = "[Decryption Failed]")
+                    msg.copy(text = "[Decryption Failed]", sourceDocuments = null)
                 }
             }
         } else {
@@ -989,7 +991,9 @@ class ChatViewModel(
                 }
 
                 // local RAG retrieval
-                val documentContext = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
+                val (documentContext, sourceDocs) = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
+                val sourceDocumentsString = if (sourceDocs.isNotEmpty()) sourceDocs.joinToString(", ") else null
+                
                 val basePrompt = if (documentContext.isNotEmpty()) {
                     "$documentContext\n\nUSER QUERY: $rawPrompt"
                 } else {
@@ -1068,14 +1072,16 @@ class ChatViewModel(
                         // Save response live chunk to the database
                         val key = activeSessionKeys[sessionId!!]
                         val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
-                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false)
+                        val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
+                        
+                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
                         chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
                     }
                 }
 
                 var assistantMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
-                    val msg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false)
+                    val msg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false, sourceDocuments = sourceDocumentsString)
                     chatMessages.add(msg)
                     currentResponseChunk = ""
                     assistantMessage = msg
@@ -1084,7 +1090,12 @@ class ChatViewModel(
                 if (!isTemporarySession) {
                     assistantMessage?.let { msg ->
                         val key = activeSessionKeys[sessionId!!]
-                        val msgToSave = if (key != null) msg.copy(text = CryptoUtils.encryptMessage(msg.text, key)) else msg
+                        val msgToSave = if (key != null) {
+                            msg.copy(
+                                text = CryptoUtils.encryptMessage(msg.text, key),
+                                sourceDocuments = msg.sourceDocuments?.let { CryptoUtils.encryptMessage(it, key) }
+                            )
+                        } else msg
                         chatRepository.saveMessage(sessionId!!, msgToSave)
                         
                         // Update session last active time and last search query
@@ -1202,7 +1213,7 @@ class ChatViewModel(
         return chunks
     }
 
-    private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): String {
+    private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): Pair<String, List<String>> {
         val isEncrypted = activeSessionKeys.containsKey(sessionId)
         val relevantDocs = if (isEncrypted) {
             val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
@@ -1248,17 +1259,19 @@ class ChatViewModel(
             }
         }
 
-        if (relevantDocs.isEmpty()) return ""
+        if (relevantDocs.isEmpty()) return Pair("", emptyList())
 
         val sb = StringBuilder()
         sb.append("Answer the user query using ONLY the following document context:\n")
         sb.append("--- START DOCUMENT CONTEXT ---\n")
+        val sourceNames = mutableSetOf<String>()
         for (doc in relevantDocs) {
             sb.append("[File: ${doc.fileName}]\n")
             sb.append("${doc.chunkText}\n\n")
+            sourceNames.add(doc.fileName)
         }
         sb.append("--- END DOCUMENT CONTEXT ---")
-        return sb.toString()
+        return Pair(sb.toString(), sourceNames.toList())
     }
 
     override fun onCleared() {
