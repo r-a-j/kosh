@@ -35,7 +35,8 @@ You want to use AI to reflect on your daily life, but your thoughts are strictly
 
 ### 📚 Local Document RAG (Retrieval-Augmented Generation)
 - **Chat with your Documents**: Import PDFs, Markdown, and Text files directly into a chat. Kosh chunks the text and builds a semantic index using SQLite FTS4.
-- **Smart Context**: Ask "What does this document say about X?" and Kosh will intelligently retrieve the exact paragraphs needed to answer your question, all without an internet connection.
+- **Smart Context & Citations**: Ask "What does this document say about X?" and Kosh will intelligently retrieve the exact paragraphs needed to answer your question. The UI dynamically renders **Document Citations** inside the assistant's chat bubbles, showing you exactly which files were referenced.
+- **Advanced Fallbacks**: Includes custom stop-word filtration and recency fallbacks for FTS queries to ensure the model always has the most relevant context, even for highly complex natural language queries.
 
 ### 🌐 Hybrid Web-Augmented Search
 - **Live Internet Scraping**: Need real-time information? Tap the globe icon. Kosh will dynamically scrape DuckDuckGo, Bing, or Google to fetch live data, then inject that context into the local offline model to give you an accurate, up-to-date answer.
@@ -54,6 +55,7 @@ For the developers and tinkerers:
 - **UI Framework**: Modern declarative UI built completely in [Jetpack Compose](https://developer.android.com/jetpack/compose).
 - **AI Engine**: [LiteRT (TensorFlow Lite)](https://ai.google.dev/edge/litert) running `.litertlm` or `.bin` models via native Hexagon DSPs (`libcdsprpc.so`).
 - **Database**: Native SQLite implementing complex `FTS4` virtual tables with custom stop-words filtration and cascading relational triggers.
+- **Encryption Parity**: End-to-end cryptographic synchronization. Both chat text and massive binary document chunks are dynamically wrapped in AES-256-GCM when vault sessions are sealed.
 - **Concurrency**: Kotlin Coroutines and asynchronous `Flow` streams for real-time token generation and UI state updates.
 
 ---
