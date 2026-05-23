@@ -230,31 +230,15 @@ class ChatViewModel(
 
         // 1. Resolve Session ID
         var sessionId = currentSessionId
-        if (sessionId == null) {
+        val isNewSession = sessionId == null
+        if (isNewSession) {
             sessionId = java.util.UUID.randomUUID().toString()
             currentSessionId = sessionId
-            val title = if (rawPrompt.length > 25) rawPrompt.take(25) + "..." else rawPrompt
-            val newSession = ChatSession(
-                id = sessionId,
-                title = title,
-                createdAt = System.currentTimeMillis(),
-                lastActive = System.currentTimeMillis(),
-                modelPath = modelPath,
-                lastSearchQuery = null
-            )
-            viewModelScope.launch(Dispatchers.IO) {
-                dbHelper.saveSession(newSession)
-                loadSavedSessions()
-            }
         }
 
-        // 2. Add and Save User Message
+        // 2. Add User Message in memory
         val userMessage = ChatMessage(text = rawPrompt, isUser = true)
         chatMessages.add(userMessage)
-        
-        viewModelScope.launch(Dispatchers.IO) {
-            dbHelper.saveMessage(sessionId!!, userMessage)
-        }
 
         prompt = ""
         isGenerating = true
@@ -290,6 +274,24 @@ class ChatViewModel(
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // If new session, save the session first (synchronously on the IO thread)
+                if (isNewSession) {
+                    val title = if (rawPrompt.length > 25) rawPrompt.take(25) + "..." else rawPrompt
+                    val newSession = ChatSession(
+                        id = sessionId!!,
+                        title = title,
+                        createdAt = System.currentTimeMillis(),
+                        lastActive = System.currentTimeMillis(),
+                        modelPath = modelPath,
+                        lastSearchQuery = null
+                    )
+                    dbHelper.saveSession(newSession)
+                    loadSavedSessions()
+                }
+
+                // Now save the message (guarantees that the session row already exists)
+                dbHelper.saveMessage(sessionId!!, userMessage)
+
                 val shouldSearch = detectSearchRequirement(rawPrompt)
                 if (shouldSearch && !isInternetEnabled) {
                     withContext(Dispatchers.Main) {
@@ -357,34 +359,37 @@ class ChatViewModel(
                     }
                 }
 
+                var assistantMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
-                    val assistantMessage = ChatMessage(text = currentResponseChunk, isUser = false)
-                    chatMessages.add(assistantMessage)
+                    val msg = ChatMessage(text = currentResponseChunk, isUser = false)
+                    chatMessages.add(msg)
                     currentResponseChunk = ""
+                    assistantMessage = msg
+                }
+
+                assistantMessage?.let { msg ->
+                    dbHelper.saveMessage(sessionId!!, msg)
                     
-                    viewModelScope.launch(Dispatchers.IO) {
-                        dbHelper.saveMessage(sessionId!!, assistantMessage)
-                        
-                        // Update session last active time and last search query
-                        val sessions = dbHelper.getSessionsOrderedByLastActive()
-                        sessions.find { it.id == sessionId }?.let {
-                            dbHelper.saveSession(it.copy(
-                                lastActive = System.currentTimeMillis(),
-                                lastSearchQuery = lastSearchQuery
-                            ))
-                        }
-                        loadSavedSessions()
+                    // Update session last active time and last search query
+                    val sessions = dbHelper.getSessionsOrderedByLastActive()
+                    sessions.find { it.id == sessionId }?.let {
+                        dbHelper.saveSession(it.copy(
+                            lastActive = System.currentTimeMillis(),
+                            lastSearchQuery = lastSearchQuery
+                        ))
                     }
+                    loadSavedSessions()
                 }
             } catch (e: Exception) {
+                var errorMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
                     isThinking = false
-                    val errorMessage = ChatMessage(text = "Error: ${e.localizedMessage}", isUser = false)
-                    chatMessages.add(errorMessage)
-                    
-                    viewModelScope.launch(Dispatchers.IO) {
-                        dbHelper.saveMessage(sessionId!!, errorMessage)
-                    }
+                    val msg = ChatMessage(text = "Error: ${e.localizedMessage}", isUser = false)
+                    chatMessages.add(msg)
+                    errorMessage = msg
+                }
+                errorMessage?.let { msg ->
+                    dbHelper.saveMessage(sessionId!!, msg)
                 }
             } finally {
                 withContext(Dispatchers.Main) {

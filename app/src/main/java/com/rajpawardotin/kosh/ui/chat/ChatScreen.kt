@@ -139,6 +139,10 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(viewModel.currentSessionId) {
+        scrollState.scrollToItem(0)
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
