@@ -4,12 +4,14 @@ import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.SessionDocument
 import com.rajpawardotin.kosh.domain.provider.AIProvider
 import com.rajpawardotin.kosh.domain.provider.SearchProvider
-import com.rajpawardotin.kosh.domain.repository.ChatRepository
+import com.rajpawardotin.kosh.domain.repository.SessionRepository
+import com.rajpawardotin.kosh.domain.repository.DocumentRepository
 
 class LlmUseCase(
     private val aiProvider: AIProvider,
     private val searchProvider: SearchProvider,
-    private val chatRepository: ChatRepository
+    private val sessionRepository: SessionRepository,
+    private val documentRepository: DocumentRepository
 ) {
 
     fun detectSearchRequirement(prompt: String, isInternetEnabled: Boolean): Boolean {
@@ -118,7 +120,7 @@ class LlmUseCase(
                 }
             }
         } else {
-            val docs = chatRepository.searchSessionDocumentsFTS(sessionId, query)
+            val docs = documentRepository.searchSessionDocumentsFTS(sessionId, query)
             if (docs.isEmpty() && justAttached) {
                 emptyList()
             } else {

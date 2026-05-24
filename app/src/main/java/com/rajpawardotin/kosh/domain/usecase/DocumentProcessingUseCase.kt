@@ -6,11 +6,11 @@ import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.data.DocumentParser
 import com.rajpawardotin.kosh.domain.model.AttachedFile
 import com.rajpawardotin.kosh.domain.model.SessionDocument
-import com.rajpawardotin.kosh.domain.repository.ChatRepository
+import com.rajpawardotin.kosh.domain.repository.DocumentRepository
 import javax.crypto.SecretKey
 
 class DocumentProcessingUseCase(
-    private val chatRepository: ChatRepository
+    private val documentRepository: DocumentRepository
 ) {
     fun chunkText(text: String, chunkSize: Int = 1000, overlap: Int = 200): List<String> {
         if (text.isBlank()) return emptyList()
@@ -59,7 +59,8 @@ class DocumentProcessingUseCase(
                     isEncrypted = isEncrypted,
                     createdAt = System.currentTimeMillis()
                 )
-                chatRepository.saveSessionDocument(docChunk)
+                documentRepository.saveSessionDocument(docChunk)
+                processedDocs.add(docChunk)
             }
             
             if (isTemporarySession || (isEncrypted && key != null)) {

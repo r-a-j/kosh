@@ -21,7 +21,9 @@ import com.rajpawardotin.kosh.domain.provider.AIProvider
 
 import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import com.rajpawardotin.kosh.domain.provider.SettingsProvider
-import com.rajpawardotin.kosh.domain.repository.ChatRepository
+import com.rajpawardotin.kosh.domain.repository.MessageRepository
+import com.rajpawardotin.kosh.domain.repository.SessionRepository
+import com.rajpawardotin.kosh.domain.repository.DocumentRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -40,15 +42,17 @@ import java.util.concurrent.CancellationException
 class ChatViewModel(
     private val aiProvider: AIProvider,
     private val searchProvider: SearchProvider,
-    private val chatRepository: ChatRepository,
+    private val sessionRepository: SessionRepository,
+    private val messageRepository: MessageRepository,
+    private val documentRepository: DocumentRepository,
     private val settingsProvider: SettingsProvider,
     private val ttsProvider: TtsProvider,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
-    private val chatSessionUseCase = com.rajpawardotin.kosh.domain.usecase.ChatSessionUseCase(chatRepository)
-    private val llmUseCase = com.rajpawardotin.kosh.domain.usecase.LlmUseCase(aiProvider, searchProvider, chatRepository)
-    private val documentProcessingUseCase = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase(chatRepository)
+    private val chatSessionUseCase = com.rajpawardotin.kosh.domain.usecase.ChatSessionUseCase(sessionRepository)
+    private val llmUseCase = com.rajpawardotin.kosh.domain.usecase.LlmUseCase(aiProvider, searchProvider, sessionRepository, documentRepository)
+    private val documentProcessingUseCase = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase(documentRepository)
 
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         if (exception is CancellationException) return@CoroutineExceptionHandler
@@ -185,7 +189,7 @@ class ChatViewModel(
     }
 
     private suspend fun loadSavedSessionsInternal() {
-        val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
+        val sessions = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
         val processedSessions = sessions.map { session ->
             if (session.encryptedKeyPassword != null && !activeSessionKeys.containsKey(session.id)) {
                 session.copy(lastSearchQuery = null)
@@ -211,7 +215,7 @@ class ChatViewModel(
         withContext(Dispatchers.Main) {
             isTemporarySession = false
         }
-        val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
+        val sessions = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
         val session = sessions.find { it.id == sessionId }
         
         val isEncrypted = session?.encryptedKeyPassword != null
@@ -221,7 +225,7 @@ class ChatViewModel(
             emptyList()
         } else if (isEncrypted && isUnlocked) {
             val key = activeSessionKeys[sessionId]!!
-            chatRepository.getMessagesForSession(sessionId).map { msg ->
+            messageRepository.getMessagesForSession(sessionId).map { msg ->
                 val decryptedText = try {
                     CryptoUtils.decryptMessage(msg.text, key)
                 } catch (e: Exception) {
@@ -237,12 +241,12 @@ class ChatViewModel(
                 msg.copy(text = decryptedText, sourceDocuments = decryptedSourceDocs)
             }
         } else {
-            chatRepository.getMessagesForSession(sessionId)
+            messageRepository.getMessagesForSession(sessionId)
         }
         
-        val checklist = chatRepository.getChecklistStatesForSession(sessionId)
+        val checklist = messageRepository.getChecklistStatesForSession(sessionId)
         
-        val sessionDocs = chatRepository.getSessionDocuments(sessionId)
+        val sessionDocs = documentRepository.getSessionDocuments(sessionId)
         val decryptedDocs = if (isEncrypted && isUnlocked) {
             val key = activeSessionKeys[sessionId]!!
             sessionDocs.map { doc ->
@@ -307,7 +311,7 @@ class ChatViewModel(
 
     fun deleteSession(sessionId: String) {
         viewModelScope.launch(safeIoDispatcher) {
-            chatRepository.deleteSession(sessionId)
+            sessionRepository.deleteSession(sessionId)
             withContext(Dispatchers.Main) {
                 if (currentSessionId == sessionId) {
                     startNewChat()
@@ -321,13 +325,13 @@ class ChatViewModel(
     fun renameSession(sessionId: String, newTitle: String) {
         if (newTitle.isBlank()) return
         viewModelScope.launch(safeIoDispatcher) {
-            val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
+            val sessions = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
             val session = sessions.find { it.id == sessionId }
             if (session != null) {
                 val updated = session.copy(title = newTitle)
                 saveSessionEncrypted(updated)
             } else {
-                chatRepository.renameSession(sessionId, newTitle)
+                sessionRepository.renameSession(sessionId, newTitle)
             }
             loadSavedSessionsInternal()
             withContext(Dispatchers.Main) {
@@ -357,19 +361,19 @@ class ChatViewModel(
                 val encryptedKeyPassword = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, derivedKey)
                 val encryptedKeyRecovery = CryptoUtils.encryptMessage(sessionKeyEncodedBase64, recoveryKey)
                 
-                val messages = chatRepository.getMessagesForSession(sessionId).toList()
+                val messages = messageRepository.getMessagesForSession(sessionId).toList()
                 for (msg in messages) {
                     val encryptedText = CryptoUtils.encryptMessage(msg.text, sessionKey)
                     val encryptedSourceDocs = msg.sourceDocuments?.let { CryptoUtils.encryptMessage(it, sessionKey) }
-                    chatRepository.saveMessage(sessionId, msg.copy(text = encryptedText, sourceDocuments = encryptedSourceDocs))
+                    messageRepository.saveMessage(sessionId, msg.copy(text = encryptedText, sourceDocuments = encryptedSourceDocs))
                 }
                 
-                val docs = chatRepository.getSessionDocuments(sessionId).toList()
+                val docs = documentRepository.getSessionDocuments(sessionId).toList()
                 for (doc in docs) {
                     if (!doc.isEncrypted) {
                         val encName = CryptoUtils.encryptMessage(doc.fileName, sessionKey)
                         val encText = CryptoUtils.encryptMessage(doc.chunkText, sessionKey)
-                        chatRepository.saveSessionDocument(doc.copy(fileName = encName, chunkText = encText, isEncrypted = true))
+                        documentRepository.saveSessionDocument(doc.copy(fileName = encName, chunkText = encText, isEncrypted = true))
                     }
                 }
                 
@@ -388,7 +392,7 @@ class ChatViewModel(
                                                 val cryptoCipher = result.cryptoObject?.cipher ?: cipher
                                                 val encryptedKeyBiometric = CryptoUtils.wrapSessionKey(sessionKey, cryptoCipher)
                                                 
-                                                val session = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
+                                                val session = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
                                                 if (session != null) {
                                                      activeSessionKeys[sessionId] = sessionKey
                                                      val updatedSession = session.copy(
@@ -435,7 +439,7 @@ class ChatViewModel(
                         }
                     }
                 } else {
-                    val session = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
+                    val session = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
                     if (session != null) {
                         activeSessionKeys[sessionId] = sessionKey
                         val updatedSession = session.copy(
@@ -476,7 +480,7 @@ class ChatViewModel(
                 val recoveryKeyBytes = MessageDigest.getInstance("SHA-256").digest(entropy)
                 val recoveryKey = SecretKeySpec(recoveryKeyBytes, "AES")
 
-                val sessions = chatRepository.getSessionsOrderedByLastActive()
+                val sessions = sessionRepository.getSessionsOrderedByLastActive()
                 val session = sessions.find { it.id == sessionId }
                 if (session == null || session.encryptedKeyRecovery == null) {
                     withContext(Dispatchers.Main) { onResult(false) }
@@ -519,7 +523,7 @@ class ChatViewModel(
     fun unlockSessionWithPassword(sessionId: String, password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch(safeIoDispatcher) {
             try {
-                val sessions = chatRepository.getSessionsOrderedByLastActive()
+                val sessions = sessionRepository.getSessionsOrderedByLastActive()
                 val session = sessions.find { it.id == sessionId }
                 if (session == null || session.salt == null || session.encryptedKeyPassword == null) {
                     withContext(Dispatchers.Main) { onResult(false) }
@@ -552,7 +556,7 @@ class ChatViewModel(
     fun verifySessionPassword(sessionId: String, password: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch(safeIoDispatcher) {
             try {
-                val sessions = chatRepository.getSessionsOrderedByLastActive()
+                val sessions = sessionRepository.getSessionsOrderedByLastActive()
                 val session = sessions.find { it.id == sessionId }
                 if (session == null || session.salt == null || session.encryptedKeyPassword == null) {
                     withContext(Dispatchers.Main) { onResult(false) }
@@ -643,27 +647,27 @@ class ChatViewModel(
                     return@launch
                 }
                 
-                val messages = chatRepository.getMessagesForSession(sessionId).toList()
+                val messages = messageRepository.getMessagesForSession(sessionId).toList()
                 for (msg in messages) {
                     var newText = msg.text
                     var newDocs = msg.sourceDocuments
                     try { newText = CryptoUtils.decryptMessage(msg.text, key) } catch (e: Exception) {}
                     try { newDocs = msg.sourceDocuments?.let { CryptoUtils.decryptMessage(it, key) } } catch (e: Exception) {}
-                    chatRepository.saveMessage(sessionId, msg.copy(text = newText, sourceDocuments = newDocs))
+                    messageRepository.saveMessage(sessionId, msg.copy(text = newText, sourceDocuments = newDocs))
                 }
                 
-                val docs = chatRepository.getSessionDocuments(sessionId).toList()
+                val docs = documentRepository.getSessionDocuments(sessionId).toList()
                 for (doc in docs) {
                     if (doc.isEncrypted) {
                         var decName = doc.fileName
                         var decText = doc.chunkText
                         try { decName = CryptoUtils.decryptMessage(doc.fileName, key) } catch (e: Exception) {}
                         try { decText = CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) {}
-                        chatRepository.saveSessionDocument(doc.copy(fileName = decName, chunkText = decText, isEncrypted = false))
+                        documentRepository.saveSessionDocument(doc.copy(fileName = decName, chunkText = decText, isEncrypted = false))
                     }
                 }
                 
-                val session = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
+                val session = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }.find { it.id == sessionId }
                 if (session != null) {
                     val updatedSession = session.copy(
                         passwordHash = null,
@@ -672,7 +676,7 @@ class ChatViewModel(
                         encryptedKeyPassword = null,
                         encryptedKeyBiometric = null
                     )
-                    chatRepository.saveSession(updatedSession)
+                    sessionRepository.saveSession(updatedSession)
                     val removedKey = activeSessionKeys[sessionId]
                     if (removedKey != null) {
                         try {
@@ -730,7 +734,7 @@ class ChatViewModel(
         checkedItems["${messageKey}_$itemIndex"] = isChecked
         if (!isTemporarySession) {
             viewModelScope.launch(safeIoDispatcher) {
-                chatRepository.saveChecklistState(messageKey, itemIndex, isChecked)
+                messageRepository.saveChecklistState(messageKey, itemIndex, isChecked)
             }
         }
     }
@@ -933,7 +937,7 @@ class ChatViewModel(
                             modelPath = modelPath,
                             lastSearchQuery = null
                         )
-                        chatRepository.saveSession(newSession)
+                        sessionRepository.saveSession(newSession)
                         loadSavedSessionsInternal()
                     }
                 }
@@ -967,7 +971,7 @@ class ChatViewModel(
                     } else {
                         userMessage
                     }
-                    chatRepository.saveMessage(sessionId!!, userMsgToSave)
+                    messageRepository.saveMessage(sessionId!!, userMsgToSave)
                 }
 
                 // local RAG retrieval
@@ -1055,7 +1059,7 @@ class ChatViewModel(
                         val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
                         
                         val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
-                        chatRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                        messageRepository.saveMessage(sessionId!!, liveAssistantMsg)
                     }
                 }
 
@@ -1076,10 +1080,10 @@ class ChatViewModel(
                                 sourceDocuments = msg.sourceDocuments?.let { CryptoUtils.encryptMessage(it, key) }
                             )
                         } else msg
-                        chatRepository.saveMessage(sessionId!!, msgToSave)
+                        messageRepository.saveMessage(sessionId!!, msgToSave)
                         
                         // Update session last active time and last search query
-                        val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
+                        val sessions = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
                         sessions.find { it.id == sessionId }?.let {
                             saveSessionEncrypted(it.copy(
                                 lastActive = System.currentTimeMillis(),
@@ -1102,7 +1106,7 @@ class ChatViewModel(
                     errorMessage?.let { msg ->
                         val key = activeSessionKeys[sessionId!!]
                         val msgToSave = if (key != null) msg.copy(text = CryptoUtils.encryptMessage(msg.text, key)) else msg
-                        chatRepository.saveMessage(sessionId!!, msgToSave)
+                        messageRepository.saveMessage(sessionId!!, msgToSave)
                     }
                 }
             } finally {

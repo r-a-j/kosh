@@ -4,14 +4,14 @@ import android.content.Context
 import android.net.Uri
 import com.rajpawardotin.kosh.data.CryptoUtils
 import com.rajpawardotin.kosh.domain.model.ChatSession
-import com.rajpawardotin.kosh.domain.repository.ChatRepository
+import com.rajpawardotin.kosh.domain.repository.SessionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.crypto.SecretKey
 
 class ChatSessionUseCase(
-    private val chatRepository: ChatRepository
+    private val sessionRepository: SessionRepository
 ) {
     fun decryptSession(session: ChatSession, activeSessionKeys: Map<String, SecretKey>): ChatSession {
         val isEncrypted = session.encryptedKeyPassword != null
@@ -40,9 +40,9 @@ class ChatSessionUseCase(
                     it
                 }
             }
-            chatRepository.saveSession(session.copy(lastSearchQuery = encryptedLastSearchQuery))
+            sessionRepository.saveSession(session.copy(lastSearchQuery = encryptedLastSearchQuery))
         } else {
-            chatRepository.saveSession(session)
+            sessionRepository.saveSession(session)
         }
     }
 
@@ -96,7 +96,7 @@ class ChatSessionUseCase(
         }
         
         try {
-            chatRepository.mergeDatabaseBackup(tempDecryptedFile.absolutePath)
+            sessionRepository.mergeDatabaseBackup(tempDecryptedFile.absolutePath)
             true
         } catch (e: Exception) {
             throw Exception(e.localizedMessage ?: "Failed to restore database.")
