@@ -21,7 +21,10 @@ class ChatViewModelTest {
  
     private val testDispatcher = StandardTestDispatcher()
     private val context = mock<Context>()
-    private lateinit var fakeRepository: FakeChatRepository
+    private lateinit var fakeSessionRepo: FakeSessionRepository
+    private lateinit var fakeMessageRepo: FakeMessageRepository
+    private lateinit var fakeDocumentRepo: FakeDocumentRepository
+    private lateinit var fakeTts: FakeTtsProvider
     private lateinit var fakeSettings: FakeSettingsProvider
     private lateinit var fakeAI: FakeAIProvider
     private lateinit var fakeSearch: FakeSearchProvider
@@ -30,11 +33,14 @@ class ChatViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        fakeRepository = FakeChatRepository()
+        fakeSessionRepo = FakeSessionRepository()
+        fakeMessageRepo = FakeMessageRepository()
+        fakeDocumentRepo = FakeDocumentRepository()
+        fakeTts = FakeTtsProvider()
         fakeSettings = FakeSettingsProvider()
         fakeAI = FakeAIProvider()
         fakeSearch = FakeSearchProvider()
-        viewModel = ChatViewModel(fakeAI, fakeSearch, fakeRepository, fakeSettings, testDispatcher)
+        viewModel = ChatViewModel(fakeAI, fakeSearch, fakeSessionRepo, fakeMessageRepo, fakeDocumentRepo, fakeSettings, fakeTts, testDispatcher)
     }
  
     @After
@@ -62,12 +68,12 @@ class ChatViewModelTest {
         val sessionId = viewModel.currentSessionId!!
 
         // 2. Session title must be generated based on prompt
-        val sessions = fakeRepository.sessions
+        val sessions = fakeSessionRepo.sessions
         assertEquals(1, sessions.size)
         assertEquals("Hello AI", sessions[0].title)
 
         // 3. User and Assistant messages must be saved in repository
-        val messages = fakeRepository.messages[sessionId]
+        val messages = fakeMessageRepo.messages[sessionId]
         assertNotNull(messages)
         assertEquals(2, messages!!.size)
         
@@ -93,7 +99,7 @@ class ChatViewModelTest {
         
         testScheduler.advanceUntilIdle()
 
-        val sessions = fakeRepository.sessions
+        val sessions = fakeSessionRepo.sessions
         assertEquals(1, sessions.size)
         assertEquals("This is an extremely long...", sessions[0].title)
     }
@@ -124,7 +130,7 @@ class ChatViewModelTest {
         assertNotEquals(firstSessionId, secondSessionId)
 
         // Verify both sessions exist in repository
-        assertEquals(2, fakeRepository.sessions.size)
+        assertEquals(2, fakeSessionRepo.sessions.size)
     }
 
     @Test
@@ -138,13 +144,13 @@ class ChatViewModelTest {
             modelPath = null,
             lastSearchQuery = null
         )
-        fakeRepository.saveSession(session)
+        fakeSessionRepo.saveSession(session)
 
         val msg1 = ChatMessage(id = "msg1", text = "Hello", isUser = true)
         val msg2 = ChatMessage(id = "msg2", text = "Hi there", isUser = false)
-        fakeRepository.saveMessage(sessionId, msg1)
-        fakeRepository.saveMessage(sessionId, msg2)
-        fakeRepository.saveChecklistState("msg2", 0, true)
+        fakeMessageRepo.saveMessage(sessionId, msg1)
+        fakeMessageRepo.saveMessage(sessionId, msg2)
+        fakeMessageRepo.saveChecklistState("msg2", 0, true)
 
         // Load the session
         viewModel.loadSession(sessionId)
@@ -176,8 +182,8 @@ class ChatViewModelTest {
         assertEquals("Mock response from Kosh", viewModel.chatMessages[1].text)
 
         // 3. BUT nothing should be saved in the database helper (FakeChatRepository)
-        assertTrue(fakeRepository.sessions.isEmpty())
-        assertTrue(fakeRepository.messages.isEmpty())
+        assertTrue(fakeSessionRepo.sessions.isEmpty())
+        assertTrue(fakeMessageRepo.messages.isEmpty())
     }
 
     @Test
@@ -202,7 +208,7 @@ class ChatViewModelTest {
             modelPath = null,
             lastSearchQuery = null
         )
-        fakeRepository.saveSession(session)
+        fakeSessionRepo.saveSession(session)
 
         viewModel.startNewChat(isTemporary = true)
         assertTrue(viewModel.isTemporarySession)
@@ -238,11 +244,11 @@ class ChatViewModelTest {
             modelPath = null,
             lastSearchQuery = null
         )
-        fakeRepository.saveSession(session)
+        fakeSessionRepo.saveSession(session)
         val msg1 = ChatMessage(id = "m1", text = "This is a secret message", isUser = true)
         val msg2 = ChatMessage(id = "m2", text = "AI response about secrets", isUser = false)
-        fakeRepository.saveMessage(sessionId, msg1)
-        fakeRepository.saveMessage(sessionId, msg2)
+        fakeMessageRepo.saveMessage(sessionId, msg1)
+        fakeMessageRepo.saveMessage(sessionId, msg2)
 
         var lockSuccess = false
         var recoveryMnemonic: String? = null
@@ -266,14 +272,14 @@ class ChatViewModelTest {
         assertNotNull(recoveryMnemonic)
         assertEquals(12, recoveryMnemonic!!.split(" ").size)
         
-        val savedSession = fakeRepository.sessions.find { it.id == sessionId }
+        val savedSession = fakeSessionRepo.sessions.find { it.id == sessionId }
         assertNotNull(savedSession)
         assertNull(savedSession!!.passwordHash)
         assertNotNull(savedSession.salt)
         assertNull(savedSession.validationToken)
         assertNotNull(savedSession.encryptedKeyPassword)
 
-        val savedMessages = fakeRepository.getMessagesForSession(sessionId)
+        val savedMessages = fakeMessageRepo.getMessagesForSession(sessionId)
         assertNotEquals("This is a secret message", savedMessages[0].text)
         assertNotEquals("AI response about secrets", savedMessages[1].text)
         
@@ -320,7 +326,7 @@ class ChatViewModelTest {
             modelPath = null,
             lastSearchQuery = null
         )
-        fakeRepository.saveSession(session)
+        fakeSessionRepo.saveSession(session)
         
         val mockContext = mock<Context>()
         val mockAssets = mock<android.content.res.AssetManager>()
@@ -392,12 +398,13 @@ class ChatViewModelTest {
 
     @Test
     fun testTextChunkingSlidingWindow() {
-        val method = ChatViewModel::class.java.getDeclaredMethod("chunkText", String::class.java, Int::class.java, Int::class.java)
+        val usecase = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase(fakeDocumentRepo)
+        val method = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase::class.java.getDeclaredMethod("chunkText", String::class.java, Int::class.java, Int::class.java)
         method.isAccessible = true
         
         val longText = "a".repeat(1800)
         @Suppress("UNCHECKED_CAST")
-        val chunks = method.invoke(viewModel, longText, 1000, 200) as List<String>
+        val chunks = method.invoke(usecase, longText, 1000, 200) as List<String>
         
         assertEquals(2, chunks.size)
         assertEquals(1000, chunks[0].length)
@@ -430,7 +437,7 @@ class ChatViewModelTest {
         
         // Load another session -> activeSessionDocuments must be cleared
         val mockSession = ChatSession(id = "sess2", title = "Sess 2", createdAt = 0L, lastActive = 0L, modelPath = null, lastSearchQuery = null)
-        fakeRepository.saveSession(mockSession)
+        fakeSessionRepo.saveSession(mockSession)
         
         viewModel.loadSession("sess2")
         testScheduler.advanceUntilIdle()
@@ -457,4 +464,12 @@ class ChatViewModelTest {
             onStatusUpdate: (String) -> Unit
         ): String = "Mock search results"
     }
+
+    class FakeTtsProvider : com.rajpawardotin.kosh.data.TtsProvider {
+        override val currentlySpeakingMessageId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+        override fun speak(messageId: String, text: String) {}
+        override fun stop() {}
+        override fun shutdown() {}
+    }
+
 }
