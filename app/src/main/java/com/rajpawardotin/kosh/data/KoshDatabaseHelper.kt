@@ -7,7 +7,33 @@ import android.database.sqlite.SQLiteOpenHelper
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.domain.model.ChatSession
 
-class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+import android.database.DatabaseErrorHandler
+
+class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION, KoshDatabaseErrorHandler(context)) {
+
+    private class KoshDatabaseErrorHandler(private val context: Context) : DatabaseErrorHandler {
+        override fun onCorruption(dbObj: SQLiteDatabase?) {
+            val path = dbObj?.path ?: context.getDatabasePath(DATABASE_NAME).absolutePath
+            val originalFile = java.io.File(path)
+            
+            if (originalFile.exists()) {
+                val backupFile = java.io.File(path + ".corrupt")
+                try {
+                    // Try to backup the corrupted DB for manual recovery. 
+                    // Fails safely if disk is full.
+                    originalFile.copyTo(backupFile, overwrite = true)
+                } catch (e: Exception) {
+                    // Swallow exception. If disk is full, we must prioritize deleting the DB to unbrick the app.
+                }
+                
+                try {
+                    SQLiteDatabase.deleteDatabase(originalFile)
+                } catch (e: Exception) {
+                    // Ignore deletion errors
+                }
+            }
+        }
+    }
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"

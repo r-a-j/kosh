@@ -241,8 +241,13 @@ fun ChatScreen(
     LaunchedEffect(Unit) {
         val file = File(context.filesDir, "model.litertlm")
         if (file.exists()) {
-            viewModel.setModel(file.absolutePath)
-            viewModel.initializeEngine()
+            if (file.length() > 10 * 1024 * 1024) { // At least 10MB for a valid LLM
+                viewModel.setModel(file.absolutePath)
+                viewModel.initializeEngine()
+            } else {
+                // Delete corrupted or partial model file
+                file.delete()
+            }
         }
     }
 
@@ -1203,6 +1208,41 @@ fun ChatScreen(
                     }
                 }
             }
+        }
+
+        // Crash Recovery Dialog
+        if (viewModel.showCrashRecoveryDialog) {
+            AlertDialog(
+                onDismissRequest = { /* Force explicit choice */ },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, Color(0xFFCF6679).copy(alpha = 0.5f), RoundedCornerShape(28.dp)),
+                containerColor = Color(0xFF1E1E1E),
+                titleContentColor = Color.White,
+                textContentColor = Color.White.copy(alpha = 0.8f),
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Color(0xFFCF6679), modifier = Modifier.size(24.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Critical Error Detected", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    }
+                },
+                text = {
+                    Text("Kosh shut down unexpectedly while loading this model. If this happens repeatedly, the model file may be corrupted or unsupported by your device.", fontSize = 16.sp)
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.onCrashRecoveryDecision(tryAgain = true) }) {
+                        Text("Try Again", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.onCrashRecoveryDecision(tryAgain = false) }) {
+                        Text("Disable Model", color = Color(0xFFCF6679), fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
         }
 
         // Lock Chat Dialog

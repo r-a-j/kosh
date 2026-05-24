@@ -34,6 +34,9 @@ import java.security.MessageDigest
 import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
+import kotlinx.coroutines.CoroutineExceptionHandler
+import java.util.concurrent.CancellationException
+
 class ChatViewModel(
     private val aiProvider: AIProvider,
     private val searchProvider: SearchProvider,
@@ -42,6 +45,16 @@ class ChatViewModel(
     private val ttsProvider: TtsProvider,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
+
+    private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
+        if (exception is CancellationException) return@CoroutineExceptionHandler
+        if (exception is OutOfMemoryError) throw exception // Let OOM crash to prevent zombie state
+        
+        exception.printStackTrace()
+        showToast("Background process failed: ${exception.localizedMessage}")
+    }
+    
+    private val safeIoDispatcher = ioDispatcher + exceptionHandler
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage = _toastMessage.asSharedFlow()
@@ -162,7 +175,7 @@ class ChatViewModel(
     }
 
     init {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             loadSavedSessionsInternal()
         }
     }
@@ -286,7 +299,7 @@ class ChatViewModel(
     }
 
     fun loadSavedSessions() {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             loadSavedSessionsInternal()
         }
     }
@@ -308,13 +321,13 @@ class ChatViewModel(
 
     fun loadSession(sessionId: String) {
         if (isGenerating) return
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             loadSessionInternal(sessionId)
         }
     }
 
     fun deleteSession(sessionId: String) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             chatRepository.deleteSession(sessionId)
             withContext(Dispatchers.Main) {
                 if (currentSessionId == sessionId) {
@@ -328,7 +341,7 @@ class ChatViewModel(
 
     fun renameSession(sessionId: String, newTitle: String) {
         if (newTitle.isBlank()) return
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             val sessions = chatRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
             val session = sessions.find { it.id == sessionId }
             if (session != null) {
@@ -351,7 +364,7 @@ class ChatViewModel(
         context: Context, 
         onResult: (Boolean, String?) -> Unit
     ) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 val (mnemonic, entropy) = Bip39Utils.generateMnemonic(context)
                 val recoveryKeyBytes = MessageDigest.getInstance("SHA-256").digest(entropy)
@@ -391,7 +404,7 @@ class ChatViewModel(
                                 object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
                                     override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
                                         super.onAuthenticationSucceeded(result)
-                                        viewModelScope.launch(ioDispatcher) {
+                                        viewModelScope.launch(safeIoDispatcher) {
                                             try {
                                                 val cryptoCipher = result.cryptoObject?.cipher ?: cipher
                                                 val encryptedKeyBiometric = CryptoUtils.wrapSessionKey(sessionKey, cryptoCipher)
@@ -478,7 +491,7 @@ class ChatViewModel(
         context: Context,
         onResult: (Boolean) -> Unit
     ) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 val entropy = Bip39Utils.mnemonicToEntropy(mnemonic, context)
                 val recoveryKeyBytes = MessageDigest.getInstance("SHA-256").digest(entropy)
@@ -525,7 +538,7 @@ class ChatViewModel(
     }
 
     fun unlockSessionWithPassword(sessionId: String, password: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 val sessions = chatRepository.getSessionsOrderedByLastActive()
                 val session = sessions.find { it.id == sessionId }
@@ -558,7 +571,7 @@ class ChatViewModel(
     }
 
     fun verifySessionPassword(sessionId: String, password: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 val sessions = chatRepository.getSessionsOrderedByLastActive()
                 val session = sessions.find { it.id == sessionId }
@@ -599,7 +612,7 @@ class ChatViewModel(
                 object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
                     override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
                         super.onAuthenticationSucceeded(result)
-                        viewModelScope.launch(ioDispatcher) {
+                        viewModelScope.launch(safeIoDispatcher) {
                             try {
                                 val cryptoCipher = result.cryptoObject?.cipher ?: cipher
                                 val sessionKey = CryptoUtils.unwrapSessionKey(session.encryptedKeyBiometric, cryptoCipher)
@@ -643,7 +656,7 @@ class ChatViewModel(
     }
 
     fun removeSessionLock(sessionId: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 val key = activeSessionKeys[sessionId]
                 if (key == null) {
@@ -709,7 +722,7 @@ class ChatViewModel(
     }
 
     fun exportBackup(context: Context, destUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             val dbFile = context.getDatabasePath("kosh_vault.db")
             if (!dbFile.exists()) {
                 withContext(Dispatchers.Main) { onError("Database does not exist.") }
@@ -739,7 +752,7 @@ class ChatViewModel(
     }
 
     fun importBackup(context: Context, srcUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             val tempBackupFile = File(context.cacheDir, "kosh_backup_import_temp.db")
             try {
                 context.contentResolver.openInputStream(srcUri)?.use { input ->
@@ -784,7 +797,7 @@ class ChatViewModel(
     fun toggleChecklistItem(messageKey: String, itemIndex: Int, isChecked: Boolean) {
         checkedItems["${messageKey}_$itemIndex"] = isChecked
         if (!isTemporarySession) {
-            viewModelScope.launch(ioDispatcher) {
+            viewModelScope.launch(safeIoDispatcher) {
                 chatRepository.saveChecklistState(messageKey, itemIndex, isChecked)
             }
         }
@@ -844,13 +857,13 @@ class ChatViewModel(
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
         private set
 
-    fun setModel(path: String) {
+    fun setModel(path: String?) {
         modelPath = path
     }
 
     fun deleteModel() {
         modelPath?.let { path ->
-            viewModelScope.launch(ioDispatcher) {
+            viewModelScope.launch(safeIoDispatcher) {
                 aiProvider.close()
                 File(path).delete()
                 withContext(Dispatchers.Main) {
@@ -862,11 +875,46 @@ class ChatViewModel(
         }
     }
 
-    fun initializeEngine() {
+    var showCrashRecoveryDialog by mutableStateOf(false)
+        private set
+
+    fun onCrashRecoveryDecision(tryAgain: Boolean) {
+        showCrashRecoveryDialog = false
+        if (tryAgain) {
+            settingsProvider.putBoolean("engine_crashed", false)
+            initializeEngine(bypassSentinel = true)
+        } else {
+            settingsProvider.putBoolean("engine_crashed", false)
+            val path = modelPath
+            if (path != null) {
+                try {
+                    val file = java.io.File(path)
+                    if (file.exists()) file.delete()
+                } catch (e: Exception) {}
+            }
+            setModel(null)
+            showToast("Model disabled.")
+        }
+    }
+
+    fun initializeEngine(bypassSentinel: Boolean = false) {
         val path = modelPath ?: return
+        
+        if (!bypassSentinel && settingsProvider.getBoolean("engine_crashed", false)) {
+            showCrashRecoveryDialog = true
+            return
+        }
+
         isInitializing = true
-        viewModelScope.launch(ioDispatcher) {
+        
+        // Write sentinel synchronously
+        settingsProvider.commitBoolean("engine_crashed", true)
+        
+        viewModelScope.launch(safeIoDispatcher) {
             val result = aiProvider.initialize(path, selectedBackend)
+            // Clear sentinel on success or graceful failure
+            settingsProvider.commitBoolean("engine_crashed", false)
+            
             withContext(Dispatchers.Main) {
                 isInitializing = false
                 isEngineReady = aiProvider.isInitialized
@@ -939,7 +987,7 @@ class ChatViewModel(
             ramUsage = 3.25 + random.nextFloat() * 0.05
         }
 
-        viewModelScope.launch(ioDispatcher) {
+        viewModelScope.launch(safeIoDispatcher) {
             try {
                 if (!isTemporarySession) {
                     // If new session, save the session first (synchronously on the IO thread)

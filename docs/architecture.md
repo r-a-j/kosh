@@ -2,6 +2,16 @@
 
 Kosh is an offline-first, strictly private AI cognitive vault designed to operate entirely locally on an Android device. This document outlines the core architecture and feature modules of Kosh v1.1.0.
 
+## Core Components
+
+- **Repository (`ChatRepository`):** Central source of truth coordinating SQLite storage, Tink encryption, search indexing, and LiteRT memory. Handles seamless cross-database merging for backup imports.
+- **Provider Interfaces:**
+  - `AIProvider`: Agnostic wrapper around LiteRT (`LiteRTModelProvider`) and potentially ONNX/GGUF in the future. Isolated to prevent native crashes from affecting core app stability.
+  - `SearchProvider`: Handles FTS4 and document chunking for local RAG.
+  - `SettingsProvider`: Encrypted Tink storage for Keystore items and crash sentinels.
+  - `TtsProvider`: Abstraction over Android TTS.
+- **Resilience Architecture:** See [resilience.md](resilience.md) for details on our Native Crash Sentinel, JNI Fault Tolerance, SQLite Error Handlers, and Global Coroutine Handlers.
+
 ## 1. UI Layer (Jetpack Compose)
 - **Declarative UX**: The entire user interface is built using Jetpack Compose, emphasizing a fluid, glassmorphic dark theme (`KoshTheme`).
 - **Reactive State**: The UI consumes state from `ChatViewModel` via `StateFlow` and `mutableStateOf`. 
