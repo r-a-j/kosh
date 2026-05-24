@@ -46,6 +46,10 @@ class ChatViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
+    private val chatSessionUseCase = com.rajpawardotin.kosh.domain.usecase.ChatSessionUseCase(chatRepository)
+    private val llmUseCase = com.rajpawardotin.kosh.domain.usecase.LlmUseCase(aiProvider, searchProvider, chatRepository)
+    private val documentProcessingUseCase = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase(chatRepository)
+
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         if (exception is CancellationException) return@CoroutineExceptionHandler
         if (exception is OutOfMemoryError) throw exception // Let OOM crash to prevent zombie state
@@ -196,36 +200,11 @@ class ChatViewModel(
     }
 
     private fun decryptSession(session: ChatSession): ChatSession {
-        val isEncrypted = session.encryptedKeyPassword != null
-        val key = activeSessionKeys[session.id]
-        return if (isEncrypted && key != null) {
-            val decryptedLastSearchQuery = session.lastSearchQuery?.let {
-                try {
-                    CryptoUtils.decryptMessage(it, key)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            session.copy(lastSearchQuery = decryptedLastSearchQuery)
-        } else {
-            session
-        }
+        return chatSessionUseCase.decryptSession(session, activeSessionKeys)
     }
 
     private fun saveSessionEncrypted(session: ChatSession) {
-        val key = activeSessionKeys[session.id]
-        if (session.encryptedKeyPassword != null && key != null) {
-            val encryptedLastSearchQuery = session.lastSearchQuery?.let {
-                try {
-                    CryptoUtils.encryptMessage(it, key)
-                } catch (e: Exception) {
-                    it
-                }
-            }
-            chatRepository.saveSession(session.copy(lastSearchQuery = encryptedLastSearchQuery))
-        } else {
-            chatRepository.saveSession(session)
-        }
+        chatSessionUseCase.saveSessionEncrypted(session, activeSessionKeys)
     }
 
     private suspend fun loadSessionInternal(sessionId: String) {
@@ -723,29 +702,10 @@ class ChatViewModel(
 
     fun exportBackup(context: Context, destUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(safeIoDispatcher) {
-            val dbFile = context.getDatabasePath("kosh_vault.db")
-            if (!dbFile.exists()) {
-                withContext(Dispatchers.Main) { onError("Database does not exist.") }
-                return@launch
-            }
-            
-            val tempFile = File(context.cacheDir, "kosh_backup_temp.db")
-            val success = CryptoUtils.encryptDatabaseBackup(dbFile, tempFile, password)
-            if (!success) {
-                withContext(Dispatchers.Main) { onError("Encryption failed.") }
-                return@launch
-            }
-            
             try {
-                context.contentResolver.openOutputStream(destUri)?.use { output ->
-                    tempFile.inputStream().use { input ->
-                        input.copyTo(output)
-                    }
-                }
-                CryptoUtils.secureDelete(tempFile)
+                chatSessionUseCase.exportBackup(context, destUri, password)
                 withContext(Dispatchers.Main) { onSuccess() }
             } catch (e: Exception) {
-                CryptoUtils.secureDelete(tempFile)
                 withContext(Dispatchers.Main) { onError(e.localizedMessage ?: "Unknown error") }
             }
         }
@@ -753,34 +713,8 @@ class ChatViewModel(
 
     fun importBackup(context: Context, srcUri: Uri, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(safeIoDispatcher) {
-            val tempBackupFile = File(context.cacheDir, "kosh_backup_import_temp.db")
             try {
-                context.contentResolver.openInputStream(srcUri)?.use { input ->
-                    tempBackupFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) { onError("Failed to read backup file.") }
-                return@launch
-            }
-            
-            val dbFile = context.getDatabasePath("kosh_vault.db")
-            val tempDecryptedFile = File(context.cacheDir, "kosh_decrypted_temp.db")
-            
-            val success = CryptoUtils.decryptDatabaseBackup(tempBackupFile, tempDecryptedFile, password)
-            CryptoUtils.secureDelete(tempBackupFile)
-            
-            if (!success) {
-                CryptoUtils.secureDelete(tempDecryptedFile)
-                withContext(Dispatchers.Main) { onError("Invalid password or corrupted backup.") }
-                return@launch
-            }
-            
-            try {
-                // Seamlessly merge the backup instead of replacing the database
-                chatRepository.mergeDatabaseBackup(tempDecryptedFile.absolutePath)
-                
+                chatSessionUseCase.importBackup(context, srcUri, password)
                 withContext(Dispatchers.Main) {
                     loadSavedSessions()
                     startNewChat()
@@ -788,8 +722,6 @@ class ChatViewModel(
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { onError(e.localizedMessage ?: "Failed to restore database.") }
-            } finally {
-                CryptoUtils.secureDelete(tempDecryptedFile)
             }
         }
     }
@@ -1009,58 +941,16 @@ class ChatViewModel(
                 // Process attached files (if any)
                 for (file in filesToProcess) {
                     try {
-                        val uri = Uri.parse(file.uriString)
-                        val extractedText = DocumentParser.extractText(context, uri, file.fileName)
-                        val chunks = chunkText(extractedText)
-                        
-                        val isEncrypted = activeSessionKeys.containsKey(sessionId!!) || isTemporarySession
-                        val key = activeSessionKeys[sessionId!!]
-                        
-                        chunks.forEachIndexed { index, chunkText ->
-                            val chunkId = java.util.UUID.randomUUID().toString()
-                            
-                            if (!isTemporarySession) {
-                                val storedName = if (isEncrypted && key != null) CryptoUtils.encryptMessage(file.fileName, key) else file.fileName
-                                val storedText = if (isEncrypted && key != null) CryptoUtils.encryptMessage(chunkText, key) else chunkText
-                                
-                                val docChunk = SessionDocument(
-                                    id = chunkId,
-                                    sessionId = sessionId!!,
-                                    fileName = storedName,
-                                    fileType = file.fileType,
-                                    fileSize = file.fileSize,
-                                    chunkIndex = index,
-                                    chunkText = storedText,
-                                    isEncrypted = isEncrypted,
-                                    createdAt = System.currentTimeMillis()
-                                )
-                                chatRepository.saveSessionDocument(docChunk)
-                            }
-                            
-                            // For encrypted or temporary sessions, keep chunks in RAM
-                            if (isTemporarySession || (isEncrypted && key != null)) {
-                                val docChunkDecrypted = SessionDocument(
-                                    id = chunkId,
-                                    sessionId = sessionId!!,
-                                    fileName = file.fileName,
-                                    fileType = file.fileType,
-                                    fileSize = file.fileSize,
-                                    chunkIndex = index,
-                                    chunkText = chunkText,
-                                    isEncrypted = isEncrypted,
-                                    createdAt = System.currentTimeMillis()
-                                )
-                                withContext(Dispatchers.Main) {
-                                    activeSessionDocuments.add(docChunkDecrypted)
-                                }
-                            }
+                        val processedDocs = documentProcessingUseCase.processDocument(
+                            context, file, sessionId!!, isTemporarySession, activeSessionKeys
+                        )
+                        withContext(Dispatchers.Main) {
+                            activeSessionDocuments.addAll(processedDocs)
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
                         withContext(Dispatchers.Main) {
                             showToast("Failed to process ${file.fileName}: ${e.localizedMessage}")
-                        }
-                        withContext(Dispatchers.Main) {
                             isGenerating = false
                             isThinking = false
                             agenticStateLabel = "Neural Standby"
@@ -1226,142 +1116,24 @@ class ChatViewModel(
     }
 
     private fun detectSearchRequirement(prompt: String): Boolean {
-        if (isInternetEnabled) return true
-        
-        val lowercasePrompt = prompt.lowercase()
-        val searchKeywords = listOf(
-            "search web", "search internet", "search online", "google", "bing", "duckduckgo",
-            "lookup", "look up", "find on web", "browse", "website", "realtime", "real-time",
-            "latest news", "today's headlines", "todays headlines", "weather today", "current price"
-        )
-        val hasUrl = prompt.contains("http://") || prompt.contains("https://") || prompt.contains("www.")
-        
-        return hasUrl || searchKeywords.any { lowercasePrompt.contains(it) }
+        return llmUseCase.detectSearchRequirement(prompt, isInternetEnabled)
     }
 
     private fun determineSearchQuery(rawPrompt: String): String {
-        val metaKeywords = listOf("search", "find", "look", "research", "tell me more")
-        val isMetaQuery = rawPrompt.lowercase().trim().split(" ").size <= 4 &&
-                metaKeywords.any { rawPrompt.contains(it, ignoreCase = true) }
-
-        val baseQuery = if (isMetaQuery) {
-            chatMessages.reversed().firstOrNull { it.isUser && it.text != rawPrompt }?.text ?: rawPrompt
-        } else {
-            rawPrompt
-        }
-
-        val lastQuery = lastSearchQuery
-        if (!lastQuery.isNullOrBlank()) {
-            val lowercasePrompt = baseQuery.lowercase()
-            val contextIndicators = listOf(
-                "he", "him", "his", "she", "her", "it", "its", "they", "them", "their",
-                "this", "that", "these", "those", "who", "why", "what", "where", "how",
-                "experiences", "experience", "education", "works", "work", "job", "career",
-                "background", "projects", "project", "details", "info", "information",
-                "website", "site", "page", "author", "creator", "owner"
-            )
-            val isFollowUp = contextIndicators.any { word ->
-                "\\b$word\\b".toRegex().containsMatchIn(lowercasePrompt)
-            }
-            if (isFollowUp) {
-                var cleanPrompt = baseQuery
-                val prefixesToRemove = listOf(
-                    "what are", "what is", "who is", "tell me about", "give me", "show me",
-                    "what does", "how does", "where is", "can you", "please", "how is",
-                    "what was", "who was", "where was", "how was", "do you know", "tell me"
-                )
-                for (prefix in prefixesToRemove) {
-                    cleanPrompt = cleanPrompt.replace("(?i)^\\s*$prefix\\s+".toRegex(), "").trim()
-                }
-                return "$lastQuery $cleanPrompt".trim()
-            }
-        }
-        return baseQuery
+        return llmUseCase.determineSearchQuery(rawPrompt, chatMessages, lastSearchQuery)
     }
 
     private fun buildSystemPrompt(query: String, data: String, userPrompt: String): String {
-        return "You have access to the web search results below to answer the user's query.\n\n" +
-                "SEARCH RESULTS:\n" +
-                "$data\n\n" +
-                "USER QUERY: $userPrompt\n\n" +
-                "INSTRUCTION: Answer the user's query using the SEARCH RESULTS above. " +
-                "Provide a direct, concise, and helpful answer. " +
-                "Do not state that you cannot browse the internet or access real-time information since the search results are already provided to you above."
+        return llmUseCase.buildSystemPrompt(query, data, userPrompt)
     }
 
     private fun chunkText(text: String, chunkSize: Int = 1000, overlap: Int = 200): List<String> {
-        if (text.isBlank()) return emptyList()
-        val chunks = mutableListOf<String>()
-        var start = 0
-        while (start < text.length) {
-            val end = minOf(start + chunkSize, text.length)
-            val chunk = text.substring(start, end)
-            chunks.add(chunk)
-            if (end == text.length) break
-            start += (chunkSize - overlap)
-        }
-        return chunks
+        return documentProcessingUseCase.chunkText(text, chunkSize, overlap)
     }
 
     private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): Pair<String, List<String>> {
         val isEncrypted = activeSessionKeys.containsKey(sessionId)
-        val relevantDocs = if (isEncrypted) {
-            val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
-            val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
-            val terms = sanitizedQuery.split(Regex("\\s+")).filter { it.isNotBlank() && !stopWords.contains(it) }
-            
-            if (terms.isEmpty() || justAttached) {
-                activeSessionDocuments.takeLast(3).reversed()
-            } else {
-                val matches = activeSessionDocuments
-                    .map { doc ->
-                        val text = doc.chunkText.lowercase()
-                        var score = 0
-                        for (term in terms) {
-                            var index = 0
-                            while (true) {
-                                index = text.indexOf(term, index)
-                                if (index == -1) break
-                                score++
-                                index += term.length
-                            }
-                        }
-                        doc to score
-                    }
-                    .filter { it.second > 0 }
-                    .sortedByDescending { it.second }
-                    .map { it.first }
-                    .take(3)
-                
-                if (matches.isEmpty()) {
-                    activeSessionDocuments.takeLast(3).reversed()
-                } else {
-                    matches
-                }
-            }
-        } else {
-            val docs = chatRepository.searchSessionDocumentsFTS(sessionId, query)
-            if (docs.isEmpty() && justAttached) {
-                // As a secondary fallback if FTS and recent fallback both somehow failed
-                emptyList()
-            } else {
-                docs.take(3)
-            }
-        }
-
-        if (relevantDocs.isEmpty()) return Pair("", emptyList())
-
-        val sb = StringBuilder()
-        sb.append("Answer the user query using ONLY the following document context:\n")
-        sb.append("--- START DOCUMENT CONTEXT ---\n")
-        val sourceNames = mutableSetOf<String>()
-        for (doc in relevantDocs) {
-            sb.append("[File: ${doc.fileName}]\n")
-            sb.append("${doc.chunkText}\n\n")
-            sourceNames.add(doc.fileName)
-        }
-        sb.append("--- END DOCUMENT CONTEXT ---")
-        return Pair(sb.toString(), sourceNames.toList())
+        return llmUseCase.retrieveContext(sessionId, query, isEncrypted, activeSessionDocuments, justAttached)
     }
 
     override fun onCleared() {
