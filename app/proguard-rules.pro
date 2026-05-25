@@ -1,24 +1,23 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# --- Kosh Production Proguard Rules ---
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# 1. Protect LiteRT (TensorFlow Lite) Native Libraries
+-keep class com.google.ai.edge.litertlm.** { *; }
+-keep class com.google.ai.edge.litert.** { *; }
+-keepnames class com.google.ai.edge.litertlm.**
+-keepnames class com.google.ai.edge.litert.**
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 2. Prevent shrinking of JNI / Native symbols required for NPU access
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# 3. Maintain Metadata for Document Parsing (PDFBox/Jsoup)
+-keep class com.tom_roush.pdfbox.** { *; }
+-keep class org.jsoup.** { *; }
+
+# 4. Standard Android Library Protections
 -dontwarn com.gemalto.jp2.**
 -dontwarn org.bouncycastle.**
-
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**
+-keepattributes Signature,AnnotationDefault,EnclosingMethod,InnerClasses
