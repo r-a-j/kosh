@@ -30,11 +30,17 @@ import java.io.File
 
 @Composable
 fun ChatTopBar(
-    viewModel: ChatViewModel,
+    isEngineReady: Boolean,
+    modelPath: String?,
+    currentSession: ChatSession?,
+    isCurrentSessionUnlocked: Boolean,
+    isTemporarySession: Boolean,
+    isGenerating: Boolean,
     onMenuClick: () -> Unit,
     onCoreSelectorClick: () -> Unit,
     onLockSettingsClick: (ChatSession) -> Unit,
     onManageLockClick: () -> Unit,
+    onNewChatClick: (isTemporary: Boolean) -> Unit,
     onSettingsClick: () -> Unit
 ) {
     Row(
@@ -74,8 +80,8 @@ fun ChatTopBar(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Text(
-                text = if (viewModel.isEngineReady) {
-                    viewModel.modelPath?.let {
+                text = if (isEngineReady) {
+                    modelPath?.let {
                         File(it).name
                             .replace(".litertlm", "")
                             .replace(".bin", "")
@@ -106,57 +112,54 @@ fun ChatTopBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Chat Lock Management Button
-            if (viewModel.currentSessionId != null && !viewModel.isTemporarySession) {
-                val currentSession = viewModel.savedSessions.find { it.id == viewModel.currentSessionId }
-                if (currentSession != null) {
-                    val isEncrypted = currentSession.encryptedKeyPassword != null
-                    val isUnlocked = viewModel.activeSessionKeys.containsKey(currentSession.id)
+            if (currentSession != null && !isTemporarySession) {
+                val isEncrypted = currentSession.encryptedKeyPassword != null
+                val isUnlocked = isCurrentSessionUnlocked
 
-                    IconButton(
-                        onClick = {
-                            if (!isEncrypted) {
-                                onLockSettingsClick(currentSession)
-                            } else if (isUnlocked) {
-                                onManageLockClick()
-                            }
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isEncrypted) Color(0xFF03DAC5).copy(alpha = 0.15f)
-                                else Color.White.copy(alpha = 0.05f)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                            contentDescription = "Vault Lock Settings",
-                            tint = if (isEncrypted) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(18.dp)
+                IconButton(
+                    onClick = {
+                        if (!isEncrypted) {
+                            onLockSettingsClick(currentSession)
+                        } else if (isUnlocked) {
+                            onManageLockClick()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isEncrypted) Color(0xFF03DAC5).copy(alpha = 0.15f)
+                            else Color.White.copy(alpha = 0.05f)
                         )
-                    }
+                ) {
+                    Icon(
+                        imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
+                        contentDescription = "Vault Lock Settings",
+                        tint = if (isEncrypted) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 
             // Temporary Chat Button
             IconButton(
                 onClick = {
-                    viewModel.startNewChat(isTemporary = true)
+                    onNewChatClick(true)
                 },
-                enabled = !viewModel.isGenerating,
+                enabled = !isGenerating,
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(
-                        if (viewModel.isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.15f)
+                        if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.15f)
                         else Color.White.copy(alpha = 0.05f)
                     )
-                    .graphicsLayer(alpha = if (viewModel.isTemporarySession) 1f else 0.6f)
+                    .graphicsLayer(alpha = if (isTemporarySession) 1f else 0.6f)
             ) {
                 Icon(
                     imageVector = Icons.Default.VisibilityOff,
                     contentDescription = "Temporary Chat",
-                    tint = if (viewModel.isTemporarySession) Color(0xFFFF9100) else Color.White,
+                    tint = if (isTemporarySession) Color(0xFFFF9100) else Color.White,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -167,8 +170,8 @@ fun ChatTopBar(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.05f))
-                    .clickable(enabled = !viewModel.isGenerating) {
-                        viewModel.startNewChat(isTemporary = false)
+                    .clickable(enabled = !isGenerating) {
+                        onNewChatClick(false)
                     }
                     .drawWithContent {
                         drawContent()

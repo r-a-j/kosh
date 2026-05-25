@@ -352,11 +352,17 @@ fun ChatScreen(
             ) {
                 // Header (Stays at the very top)
                 com.rajpawardotin.kosh.ui.chat.components.ChatTopBar(
-                    viewModel = viewModel,
+                    isEngineReady = viewModel.isEngineReady,
+                    modelPath = viewModel.modelPath,
+                    currentSession = viewModel.savedSessions.find { it.id == viewModel.currentSessionId },
+                    isCurrentSessionUnlocked = viewModel.currentSessionId?.let { viewModel.activeSessionKeys.containsKey(it) } ?: false,
+                    isTemporarySession = viewModel.isTemporarySession,
+                    isGenerating = viewModel.isGenerating,
                     onMenuClick = { scope.launch { drawerState.open() } },
-                    onCoreSelectorClick = { showBottomSheet = true },
+                    onCoreSelectorClick = { if (!viewModel.isGenerating) showBottomSheet = true },
                     onLockSettingsClick = { session -> sessionToLock = session },
                     onManageLockClick = { showManageLockDialog = true },
+                    onNewChatClick = { isTemp -> viewModel.startNewChat(isTemporary = isTemp) },
                     onSettingsClick = { showBottomSheet = true }
                 )
 
