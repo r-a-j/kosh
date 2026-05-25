@@ -574,13 +574,17 @@ fun ChatScreen(
         if (sessionToLock != null) {
             com.rajpawardotin.kosh.ui.chat.dialogs.LockVaultDialog(
                 session = sessionToLock!!,
-                viewModel = viewModel,
-                context = context,
                 onDismiss = { sessionToLock = null },
-                onSuccess = { mnemonic ->
-                    sessionRecoveryMnemonic = mnemonic
-                    showRecoveryPhraseDialog = true
-                    sessionToLock = null
+                onLockSubmit = { password, enableBiometric ->
+                    viewModel.lockSession(sessionToLock!!.id, password, enableBiometric, context) { success, mnemonic ->
+                        if (success && mnemonic != null) {
+                            sessionRecoveryMnemonic = mnemonic
+                            showRecoveryPhraseDialog = true
+                            sessionToLock = null
+                        } else {
+                            android.widget.Toast.makeText(context, "Locking failed", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
             )
         }

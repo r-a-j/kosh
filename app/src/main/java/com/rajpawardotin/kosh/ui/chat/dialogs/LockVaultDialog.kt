@@ -28,10 +28,8 @@ import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 @Composable
 fun LockVaultDialog(
     session: ChatSession,
-    viewModel: ChatViewModel,
-    context: Context,
     onDismiss: () -> Unit,
-    onSuccess: (String) -> Unit
+    onLockSubmit: (password: String, enableBiometric: Boolean) -> Unit
 ) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -151,14 +149,7 @@ fun LockVaultDialog(
                 enabled = password.isNotEmpty() && password == confirmPassword && !isProcessing,
                 onClick = {
                     isProcessing = true
-                    viewModel.lockSession(session.id, password, enableBiometric, context) { success, mnemonic ->
-                        isProcessing = false
-                        if (success && mnemonic != null) {
-                            onSuccess(mnemonic)
-                        } else {
-                            Toast.makeText(context, "Locking failed", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                    onLockSubmit(password, enableBiometric)
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF03DAC5),
