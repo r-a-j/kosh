@@ -247,6 +247,9 @@ class ChatViewModel(
     var isAppLockEnabled by mutableStateOf(settingsProvider.getString("app_lock_enabled", "false") == "true")
         private set
     var isAppLocked by mutableStateOf(isAppLockEnabled)
+
+    var isScreenshotEnabled by mutableStateOf(settingsProvider.getBoolean("screenshot_enabled", false))
+        private set
     
     val activeSessionKeys = mutableStateMapOf<String, SecretKey>()
 
@@ -293,6 +296,16 @@ class ChatViewModel(
             showToast("App Lock on Startup enabled")
         } else {
             showToast("App Lock on Startup disabled")
+        }
+    }
+
+    fun toggleScreenshot(enabled: Boolean) {
+        isScreenshotEnabled = enabled
+        settingsProvider.putBoolean("screenshot_enabled", enabled)
+        if (enabled) {
+            showToast("Screenshots allowed")
+        } else {
+            showToast("Screenshots blocked (Privacy Mode)")
         }
     }
 

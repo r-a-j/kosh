@@ -21,6 +21,7 @@ import com.rajpawardotin.kosh.data.TtsProviderImpl
 import com.rajpawardotin.kosh.ui.chat.ChatScreen
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import com.rajpawardotin.kosh.ui.theme.KoshTheme
+import androidx.compose.runtime.LaunchedEffect
 
 class MainActivity : FragmentActivity() {
     private lateinit var chatViewModel: ChatViewModel
@@ -29,11 +30,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
-        )
-
         enableEdgeToEdge()
         
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
@@ -60,6 +56,15 @@ class MainActivity : FragmentActivity() {
 
         setContent {
             KoshTheme(darkTheme = true) {
+                val isScreenshotEnabled = chatViewModel.isScreenshotEnabled
+                LaunchedEffect(isScreenshotEnabled) {
+                    if (isScreenshotEnabled) {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    } else {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
+
                 ChatScreen(
                     viewModel = chatViewModel,
                     modifier = Modifier.fillMaxSize()
