@@ -128,8 +128,8 @@ fun ChatScreen(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             uri?.let {
+                viewModel.isCopyingModel = true // Set immediately for instant feedback
                 scope.launch {
-                    viewModel.isCopyingModel = true
                     try {
                         val contentResolver = context.contentResolver
                         var fileName = "model.litertlm"
@@ -141,9 +141,8 @@ fun ChatScreen(
                         }
                         viewModel.importModel(context, it, fileName)
                     } catch (e: Exception) {
-                        Toast.makeText(context, "Failed to copy: ${e.message}", Toast.LENGTH_SHORT).show()
-                    } finally {
                         viewModel.isCopyingModel = false
+                        Toast.makeText(context, "Failed to copy: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -250,9 +249,8 @@ fun ChatScreen(
         if (file.exists()) {
             if (file.length() > 10 * 1024 * 1024) { // At least 10MB for a valid LLM
                 viewModel.setModel(file.absolutePath)
-                viewModel.initializeEngine()
+                // Removed auto-initializeEngine() here to wait for user confirmation
             } else {
-                // Delete corrupted or partial model file
                 file.delete()
             }
         }

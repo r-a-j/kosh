@@ -373,12 +373,20 @@ fun ModelConfigCard(
                     fontWeight = FontWeight.Bold
                 )
                 TextButton(
-                    onClick = onPickModel,
-                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF03DAC5))
+                    onClick = { if (!isCopyingModel) onPickModel() },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF03DAC5)),
+                    enabled = !isCopyingModel
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    if (isCopyingModel) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color(0xFF03DAC5), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Import", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        text = if (isCopyingModel) "Importing..." else "Import",
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))

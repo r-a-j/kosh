@@ -76,24 +76,29 @@ class ChatViewModel(
     val models = androidx.compose.runtime.mutableStateListOf<com.rajpawardotin.kosh.data.ModelProfile>()
 
     fun refreshModelsList() {
-        models.clear()
-        models.addAll(modelLibraryManager.getModels())
-        
-        if (modelPath == null) {
-            val generalModel = modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
-            if (generalModel != null) {
-                modelPath = generalModel.filePath
+        viewModelScope.launch(safeIoDispatcher) {
+            val allModels = modelLibraryManager.getModels()
+            withContext(Dispatchers.Main) {
+                models.clear()
+                models.addAll(allModels)
+                
+                if (modelPath == null) {
+                    val generalModel = allModels.find { it.tag == com.rajpawardotin.kosh.data.ModelTag.GENERAL }
+                        ?: allModels.firstOrNull()
+                    if (generalModel != null) {
+                        modelPath = generalModel.filePath
+                    }
+                }
             }
         }
     }
 
     fun selectModel(path: String) {
-        modelPath = path
         viewModelScope.launch(safeIoDispatcher) {
-            aiProvider.close()
+            aiProvider.close() // Purge current engine from RAM
             withContext(Dispatchers.Main) {
-                isEngineReady = aiProvider.isInitialized
-                initializeEngine()
+                modelPath = path
+                isEngineReady = false
             }
         }
     }
@@ -104,27 +109,53 @@ class ChatViewModel(
     }
 
     fun importModel(context: Context, uri: android.net.Uri, originalFileName: String) {
+        isCopyingModel = true
         viewModelScope.launch(safeIoDispatcher) {
             try {
-                val input = context.contentResolver.openInputStream(uri) ?: throw Exception("Failed to open stream")
-                val result = modelLibraryManager.importModel(input, originalFileName)
+                val contentResolver = context.contentResolver
+                val fileSize = contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (cursor.moveToFirst() && sizeIndex != -1) cursor.getLong(sizeIndex) else -1L
+                } ?: -1L
+
+                val input = contentResolver.openInputStream(uri) ?: throw Exception("Failed to open stream")
+                
+                // Root cause fix: If fileSize is -1, the provider is broken, but we try to import anyway.
+                // However, ModelLibraryManager will now ensure bytesCopied is verified if fileSize > 0.
+                val result = modelLibraryManager.importModel(input, originalFileName, fileSize)
+                
                 withContext(Dispatchers.Main) {
                     result.fold(
                         onSuccess = { profile ->
-                            refreshModelsList()
-                            if (modelPath == null) {
-                                modelPath = profile.filePath
-                                initializeEngine()
+                            // Force immediate refresh of the models list
+                            val allModels = modelLibraryManager.getModels()
+                            models.clear()
+                            models.addAll(allModels)
+
+                            if (modelPath != profile.filePath) {
+                                viewModelScope.launch(safeIoDispatcher) {
+                                    aiProvider.close() // Purge previous model
+                                    withContext(Dispatchers.Main) {
+                                        modelPath = profile.filePath
+                                        isEngineReady = false
+                                        isCopyingModel = false
+                                        showToast("Core ${profile.name} ready for ignition")
+                                    }
+                                }
+                            } else {
+                                isCopyingModel = false
+                                showToast("Model ${profile.name} is already in library")
                             }
-                            showToast("Model ${profile.name} imported successfully")
                         },
                         onFailure = { err ->
+                            isCopyingModel = false
                             showToast("Import failed: ${err.localizedMessage}")
                         }
                     )
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
+                    isCopyingModel = false
                     showToast("Import failed: ${e.localizedMessage}")
                 }
             }
@@ -147,10 +178,7 @@ class ChatViewModel(
                         if (wasActive) {
                             val general = modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
                             modelPath = general?.filePath
-                            isEngineReady = aiProvider.isInitialized
-                            if (modelPath != null) {
-                                initializeEngine()
-                            }
+                            isEngineReady = false // Stay in standby on fallback
                         }
                         showToast("Model deleted")
                     } else {
@@ -939,12 +967,14 @@ class ChatViewModel(
 
     fun deleteModel() {
         modelPath?.let { path ->
+            val fileName = File(path).name
             viewModelScope.launch(safeIoDispatcher) {
                 aiProvider.close()
-                File(path).delete()
+                modelLibraryManager.deleteModel(fileName)
                 withContext(Dispatchers.Main) {
                     modelPath = null
                     isEngineReady = aiProvider.isInitialized
+                    refreshModelsList()
                     startNewChat()
                 }
             }
@@ -961,15 +991,10 @@ class ChatViewModel(
             initializeEngine(bypassSentinel = true)
         } else {
             settingsProvider.putBoolean("engine_crashed", false)
-            val path = modelPath
-            if (path != null) {
-                try {
-                    val file = java.io.File(path)
-                    if (file.exists()) file.delete()
-                } catch (e: Exception) {}
-            }
+            // Do NOT delete the file here; simply unload it to allow user to try another backend
             setModel(null)
-            showToast("Model disabled.")
+            isEngineReady = false
+            showToast("Model disabled to prevent further crashes.")
         }
     }
 
