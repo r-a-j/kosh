@@ -40,7 +40,26 @@ class ChatViewModelTest {
         fakeSettings = FakeSettingsProvider()
         fakeAI = FakeAIProvider()
         fakeSearch = FakeSearchProvider()
-        viewModel = ChatViewModel(fakeAI, fakeSearch, fakeSessionRepo, fakeMessageRepo, fakeDocumentRepo, fakeSettings, fakeTts, testDispatcher)
+        
+        val mockLibraryManager = mock<com.rajpawardotin.kosh.data.ModelLibraryManager>()
+        org.mockito.kotlin.whenever(mockLibraryManager.getModels()).thenReturn(emptyList())
+        org.mockito.kotlin.whenever(mockLibraryManager.getModelByTag(org.mockito.kotlin.any())).thenReturn(null)
+        
+        val mockModelRouter = mock<com.rajpawardotin.kosh.domain.usecase.ModelRouter>()
+        org.mockito.kotlin.whenever(mockModelRouter.detectIntent(org.mockito.kotlin.any(), org.mockito.kotlin.any())).thenReturn(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
+        
+        viewModel = ChatViewModel(
+            fakeAI, 
+            fakeSearch, 
+            fakeSessionRepo, 
+            fakeMessageRepo, 
+            fakeDocumentRepo, 
+            fakeSettings, 
+            fakeTts, 
+            mockLibraryManager, 
+            mockModelRouter, 
+            testDispatcher
+        )
     }
  
     @After

@@ -131,8 +131,15 @@ fun ChatScreen(
                 scope.launch {
                     viewModel.isCopyingModel = true
                     try {
-                        val path = copyFileToInternalStorage(context, it)
-                        viewModel.setModel(path)
+                        val contentResolver = context.contentResolver
+                        var fileName = "model.litertlm"
+                        contentResolver.query(it, null, null, null, null)?.use { cursor ->
+                            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (cursor.moveToFirst() && nameIndex != -1) {
+                                fileName = cursor.getString(nameIndex)
+                            }
+                        }
+                        viewModel.importModel(context, it, fileName)
                     } catch (e: Exception) {
                         Toast.makeText(context, "Failed to copy: ${e.message}", Toast.LENGTH_SHORT).show()
                     } finally {
@@ -555,7 +562,11 @@ fun ChatScreen(
                         onSelectBackend = { viewModel.selectBackend(it) },
                         onSelectSearchEngine = { viewModel.selectSearchEngine(it) },
                         onStartEngine = { viewModel.initializeEngine() },
-                        onToggleInternet = { viewModel.isInternetEnabled = it }
+                        onToggleInternet = { viewModel.isInternetEnabled = it },
+                        models = viewModel.models,
+                        onSelectModel = { viewModel.selectModel(it.filePath) },
+                        onSetModelTag = { name, tag -> viewModel.setModelTag(name, tag) },
+                        onDeleteModelFile = { viewModel.deleteModelFile(it) }
                     )
                 }
             }

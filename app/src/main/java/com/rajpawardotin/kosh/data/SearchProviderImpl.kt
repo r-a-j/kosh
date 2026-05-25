@@ -93,13 +93,18 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
             val memoryInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memoryInfo)
-            val freeRamGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
             
-            when {
-                freeRamGb > 6.0 -> Pair(5, 6000)
-                freeRamGb > 3.0 -> Pair(3, 4000)
-                else -> Pair(2, 2000)
+            val freeRamGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
+            if (freeRamGb.isNaN() || freeRamGb.isInfinite() || freeRamGb <= 0.0) {
+                return Pair(2, 2000)
             }
+            
+            // Allocate up to 90% of free system RAM resources for context crawling depth,
+            // with safe clamping bounds to protect JVM heap and model context window limits.
+            val scaledPages = (freeRamGb * 0.9).toInt().coerceIn(2, 8)
+            val scaledCharsPerPage = ((freeRamGb * 1000.0) * 0.9).toInt().coerceIn(1000, 10000)
+            
+            Pair(scaledPages, scaledCharsPerPage)
         } catch (e: Exception) {
             Pair(2, 2000)
         }

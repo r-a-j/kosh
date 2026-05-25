@@ -116,6 +116,16 @@ fun Step1LoadModel(
     isCopyingModel: Boolean,
     onPickModel: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val openUrl = { url: String ->
+        try {
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "Cannot open browser", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22).copy(alpha = 0.8f)),
@@ -138,13 +148,71 @@ fun Step1LoadModel(
             )
 
             Text(
-                text = "The system requires a LiteRT LLM model file (.litertlm) to initialize local NPU / GPU cognitive pathways.",
+                text = "Kosh operates 100% locally. To get started, load a compatible LiteRT (.litertlm / .bin) model file into your secure vault library.",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                 color = Color.Gray,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+
+            Text(
+                text = "TRUSTED MODEL SOURCES",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                ),
+                color = Color(0xFF03DAC5)
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Kaggle Gemma
+                OutlinedButton(
+                    onClick = { openUrl("https://www.kaggle.com/models/google/gemma/tfLite") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = null,
+                        tint = Color(0xFF03DAC5),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start, modifier = Modifier.weight(1f)) {
+                        Text("Google Gemma Models (Kaggle)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text("Official Google local models (.bin / .litertlm)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                }
+
+                // Hugging Face
+                OutlinedButton(
+                    onClick = { openUrl("https://huggingface.co/models?search=litert") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = null,
+                        tint = Color(0xFFBB86FC),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(horizontalAlignment = Alignment.Start, modifier = Modifier.weight(1f)) {
+                        Text("Hugging Face Hub (LiteRT)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text("Meta Llama 3.2, Qwen & community models", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Button(
                 onClick = onPickModel,

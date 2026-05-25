@@ -39,6 +39,8 @@ class MainActivity : FragmentActivity() {
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
         
         val aiProvider = LiteRTModelProvider(applicationContext)
+        val modelLibraryManager = com.rajpawardotin.kosh.data.ModelLibraryManager(applicationContext)
+        val modelRouter = com.rajpawardotin.kosh.domain.usecase.ModelRouter()
 
         val searchProvider = SearchProviderImpl(applicationContext)
         val dbHelper = KoshDatabaseHelper(applicationContext)
@@ -50,7 +52,7 @@ class MainActivity : FragmentActivity() {
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChatViewModel(aiProvider, searchProvider, sessionRepository, messageRepository, documentRepository, settingsProvider, ttsProvider) as T
+                return ChatViewModel(aiProvider, searchProvider, sessionRepository, messageRepository, documentRepository, settingsProvider, ttsProvider, modelLibraryManager, modelRouter) as T
             }
         }
 

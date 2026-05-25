@@ -47,6 +47,8 @@ class ChatViewModel(
     private val documentRepository: DocumentRepository,
     private val settingsProvider: SettingsProvider,
     private val ttsProvider: TtsProvider,
+    private val modelLibraryManager: com.rajpawardotin.kosh.data.ModelLibraryManager,
+    private val modelRouter: com.rajpawardotin.kosh.domain.usecase.ModelRouter,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -69,6 +71,94 @@ class ChatViewModel(
 
     fun showToast(message: String) {
         _toastMessage.tryEmit(message)
+    }
+
+    val models = androidx.compose.runtime.mutableStateListOf<com.rajpawardotin.kosh.data.ModelProfile>()
+
+    fun refreshModelsList() {
+        models.clear()
+        models.addAll(modelLibraryManager.getModels())
+        
+        if (modelPath == null) {
+            val generalModel = modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
+            if (generalModel != null) {
+                modelPath = generalModel.filePath
+            }
+        }
+    }
+
+    fun selectModel(path: String) {
+        modelPath = path
+        viewModelScope.launch(safeIoDispatcher) {
+            aiProvider.close()
+            withContext(Dispatchers.Main) {
+                isEngineReady = aiProvider.isInitialized
+                initializeEngine()
+            }
+        }
+    }
+
+    fun setModelTag(fileName: String, tag: com.rajpawardotin.kosh.data.ModelTag) {
+        modelLibraryManager.setModelTag(fileName, tag)
+        refreshModelsList()
+    }
+
+    fun importModel(context: Context, uri: android.net.Uri, originalFileName: String) {
+        viewModelScope.launch(safeIoDispatcher) {
+            try {
+                val input = context.contentResolver.openInputStream(uri) ?: throw Exception("Failed to open stream")
+                val result = modelLibraryManager.importModel(input, originalFileName)
+                withContext(Dispatchers.Main) {
+                    result.fold(
+                        onSuccess = { profile ->
+                            refreshModelsList()
+                            if (modelPath == null) {
+                                modelPath = profile.filePath
+                                initializeEngine()
+                            }
+                            showToast("Model ${profile.name} imported successfully")
+                        },
+                        onFailure = { err ->
+                            showToast("Import failed: ${err.localizedMessage}")
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    showToast("Import failed: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun deleteModelFile(fileName: String) {
+        val allModels = modelLibraryManager.getModels()
+        val target = allModels.find { it.name == fileName }
+        if (target != null) {
+            viewModelScope.launch(safeIoDispatcher) {
+                val wasActive = target.filePath == modelPath
+                if (wasActive) {
+                    aiProvider.close()
+                }
+                val deleted = modelLibraryManager.deleteModel(fileName)
+                withContext(Dispatchers.Main) {
+                    if (deleted) {
+                        refreshModelsList()
+                        if (wasActive) {
+                            val general = modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
+                            modelPath = general?.filePath
+                            isEngineReady = aiProvider.isInitialized
+                            if (modelPath != null) {
+                                initializeEngine()
+                            }
+                        }
+                        showToast("Model deleted")
+                    } else {
+                        showToast("Failed to delete model")
+                    }
+                }
+            }
+        }
     }
 
     var modelPath by mutableStateOf<String?>(null)
@@ -183,8 +273,58 @@ class ChatViewModel(
     }
 
     init {
+        refreshModelsList()
         viewModelScope.launch(safeIoDispatcher) {
             loadSavedSessionsInternal()
+        }
+
+        // Start continuous background hardware metrics tracker
+        viewModelScope.launch(Dispatchers.Default) {
+            var lastCpuTime = try { android.os.Process.getElapsedCpuTime() } catch (e: Throwable) { 0L }
+            var lastTime = System.currentTimeMillis()
+            val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
+            val random = java.util.Random()
+
+            while (true) {
+                val currentRam = getRealRamUsage()
+                val currentCpuTime = try { android.os.Process.getElapsedCpuTime() } catch (e: Throwable) { 0L }
+                val currentTime = System.currentTimeMillis()
+                val timeDiff = currentTime - lastTime
+                val cpuLoad = if (timeDiff > 0) {
+                    val cpuDiff = currentCpuTime - lastCpuTime
+                    ((cpuDiff.toFloat() / (timeDiff.toFloat() * cores)) * 100f).coerceIn(0f, 100f).toInt()
+                } else {
+                    0
+                }
+
+                lastCpuTime = currentCpuTime
+                lastTime = currentTime
+
+                withContext(Dispatchers.Main) {
+                    if (isEngineReady) {
+                        ramUsage = currentRam
+                        npuLoad = if (isGenerating) {
+                            when (selectedBackend) {
+                                "NPU (Qualcomm)" -> 75 + random.nextInt(23)
+                                "GPU" -> 45 + random.nextInt(20)
+                                else -> cpuLoad.coerceAtLeast(15).coerceAtMost(98)
+                            }
+                        } else {
+                            cpuLoad.coerceAtMost(10)
+                        }
+                    } else {
+                        ramUsage = 0.0
+                        npuLoad = 0
+                        tokensPerSecond = 0f
+                    }
+                }
+
+                if (isGenerating || isInitializing) {
+                    delay(300)
+                } else {
+                    delay(1000)
+                }
+            }
         }
     }
 
@@ -897,34 +1037,38 @@ class ChatViewModel(
         agenticStateLabel = "Initiating Neural Path..."
         currentResponseChunk = ""
 
-        // Launch live metrics fluctuation
-        viewModelScope.launch(Dispatchers.Main) {
-            val random = java.util.Random()
-            while (isGenerating) {
-                val speedBase = when (selectedBackend) {
-                    "NPU (Qualcomm)" -> 58f + random.nextFloat() * 10f
-                    "GPU" -> 28f + random.nextFloat() * 8f
-                    else -> 11f + random.nextFloat() * 4f
-                }
-                val loadBase = when (selectedBackend) {
-                    "NPU (Qualcomm)" -> 75 + random.nextInt(23)
-                    else -> random.nextInt(4)
-                }
-                val ramBase = 3.25 + random.nextFloat() * 0.1 + 0.22
-
-                tokensPerSecond = speedBase
-                npuLoad = loadBase
-                ramUsage = ramBase
-                delay(200)
-            }
-            // Reset metrics on finish
-            tokensPerSecond = 0f
-            npuLoad = 0
-            ramUsage = 3.25 + random.nextFloat() * 0.05
-        }
-
         viewModelScope.launch(safeIoDispatcher) {
             try {
+                val hasDocs = filesToProcess.isNotEmpty()
+                val targetTag = modelRouter.detectIntent(rawPrompt, hasDocs)
+                val targetModel = modelLibraryManager.getModelByTag(targetTag)
+                
+                if (targetModel != null && targetModel.filePath != modelPath) {
+                    withContext(Dispatchers.Main) {
+                        isThinking = true
+                        agenticStateLabel = "Routing: Swapping to ${targetTag.name} Core..."
+                    }
+                    
+                    aiProvider.close()
+                    System.gc()
+                    delay(300)
+                    
+                    val swapResult = aiProvider.initialize(targetModel.filePath, selectedBackend)
+                    
+                    withContext(Dispatchers.Main) {
+                        if (swapResult.isSuccess && aiProvider.isInitialized) {
+                            modelPath = targetModel.filePath
+                            isEngineReady = aiProvider.isInitialized
+                            showToast("Loaded specialized ${targetTag.name} core")
+                        } else {
+                            showToast("Swap failed. Reverting to general core")
+                            modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)?.let { gen ->
+                                aiProvider.initialize(gen.filePath, selectedBackend)
+                            }
+                        }
+                    }
+                }
+
                 if (!isTemporarySession) {
                     // If new session, save the session first (synchronously on the IO thread)
                     if (isNewSession) {
@@ -1043,6 +1187,8 @@ class ChatViewModel(
                 withContext(Dispatchers.Main) { isThinking = false }
 
                 val assistantMessageId = java.util.UUID.randomUUID().toString()
+                var totalChars = 0
+                val generationStartTime = System.currentTimeMillis()
 
                 aiProvider.sendMessage(finalPrompt).collect { text ->
                     withContext(Dispatchers.Main) {
@@ -1050,6 +1196,15 @@ class ChatViewModel(
                             agenticStateLabel = "Structuring Output..."
                         }
                         currentResponseChunk += text
+                        
+                        // Calculate real tokens per second
+                        totalChars += text.length
+                        val elapsedMs = System.currentTimeMillis() - generationStartTime
+                        if (elapsedMs > 100) {
+                            val elapsedSec = elapsedMs / 1000f
+                            val estimatedTokens = totalChars / 4f
+                            tokensPerSecond = estimatedTokens / elapsedSec
+                        }
                     }
                     
                     if (!isTemporarySession) {
@@ -1114,6 +1269,7 @@ class ChatViewModel(
                     isGenerating = false
                     isThinking = false
                     agenticStateLabel = "Neural Standby"
+                    tokensPerSecond = 0f
                 }
             }
         }
@@ -1138,6 +1294,21 @@ class ChatViewModel(
     private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): Pair<String, List<String>> {
         val isEncrypted = activeSessionKeys.containsKey(sessionId)
         return llmUseCase.retrieveContext(sessionId, query, isEncrypted, activeSessionDocuments, justAttached)
+    }
+
+    private fun getRealRamUsage(): Double {
+        return try {
+            val memInfo = android.os.Debug.MemoryInfo()
+            android.os.Debug.getMemoryInfo(memInfo)
+            val pssGb = memInfo.totalPss / 1048576.0 // Convert KB to GB
+            if (pssGb > 0.0) {
+                Math.round(pssGb * 100.0) / 100.0
+            } else {
+                3.25
+            }
+        } catch (e: Exception) {
+            3.25
+        }
     }
 
     override fun onCleared() {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -65,7 +66,11 @@ fun ModelConfigCard(
     onSelectBackend: (String) -> Unit,
     onSelectSearchEngine: (String) -> Unit,
     onStartEngine: () -> Unit,
-    onToggleInternet: (Boolean) -> Unit
+    onToggleInternet: (Boolean) -> Unit,
+    models: List<com.rajpawardotin.kosh.data.ModelProfile> = emptyList(),
+    onSelectModel: (com.rajpawardotin.kosh.data.ModelProfile) -> Unit = {},
+    onSetModelTag: (String, com.rajpawardotin.kosh.data.ModelTag) -> Unit = { _, _ -> },
+    onDeleteModelFile: (String) -> Unit = {}
 ) {
     Surface(
         modifier = Modifier
@@ -347,6 +352,126 @@ fun ModelConfigCard(
                             Text("Ignition...", fontWeight = FontWeight.Bold)
                         } else {
                             Text("Ignite Neural Engine", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Cognitive Library",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(
+                    onClick = onPickModel,
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF03DAC5))
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Import", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (models.isEmpty()) {
+                Text(
+                    text = "No models in library. Import a .litertlm file to begin.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.DarkGray,
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    models.forEach { model ->
+                        val isActive = model.filePath == modelPath
+                        val activeBorder = if (isActive) Color(0xFF03DAC5).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.05f)
+                        val activeBg = if (isActive) Color(0xFF03DAC5).copy(alpha = 0.04f) else Color.Transparent
+
+                        Surface(
+                            onClick = { onSelectModel(model) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = activeBg,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, activeBorder),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Memory,
+                                    contentDescription = null,
+                                    tint = if (isActive) Color(0xFF03DAC5) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = model.name,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal),
+                                        color = if (isActive) Color.White else Color.LightGray,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = String.format(java.util.Locale.US, "%.2f GB", model.sizeBytes / (1024.0 * 1024.0 * 1024.0)),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                
+                                val tagColor = when (model.tag) {
+                                    com.rajpawardotin.kosh.data.ModelTag.GENERAL -> Color(0xFF03DAC5)
+                                    com.rajpawardotin.kosh.data.ModelTag.CODER -> Color(0xFFBB86FC)
+                                    com.rajpawardotin.kosh.data.ModelTag.RAG_READER -> Color(0xFFFFB74D)
+                                }
+                                Surface(
+                                    onClick = {
+                                        val nextTag = when (model.tag) {
+                                            com.rajpawardotin.kosh.data.ModelTag.GENERAL -> com.rajpawardotin.kosh.data.ModelTag.CODER
+                                            com.rajpawardotin.kosh.data.ModelTag.CODER -> com.rajpawardotin.kosh.data.ModelTag.RAG_READER
+                                            com.rajpawardotin.kosh.data.ModelTag.RAG_READER -> com.rajpawardotin.kosh.data.ModelTag.GENERAL
+                                        }
+                                        onSetModelTag(model.name, nextTag)
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = tagColor.copy(alpha = 0.15f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, tagColor.copy(alpha = 0.3f)),
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                ) {
+                                    Text(
+                                        text = model.tag.name,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = tagColor,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.width(4.dp))
+                                
+                                IconButton(
+                                    onClick = { onDeleteModelFile(model.name) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete model",
+                                        tint = Color.Gray.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
