@@ -272,7 +272,6 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
         onStatusUpdate("All free engines failed/blocked.")
         return emptyList()
     }
-
     private fun queryDuckDuckGoVqd(query: String): List<SearchResult> {
         val results = mutableListOf<SearchResult>()
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
@@ -284,8 +283,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
         
-        val bootstrapResponse = client.newCall(bootstrapRequest).execute()
-        val bootstrapHtml = bootstrapResponse.body?.string() ?: return results
+        val bootstrapHtml = client.newCall(bootstrapRequest).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         
         val vqdRegex = """vqd\s*=\s*['"]([^'"]+)['"]""".toRegex()
         val matchResult = vqdRegex.find(bootstrapHtml) ?: return results
@@ -299,8 +299,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .header("Referer", "https://duckduckgo.com/")
             .build()
             
-        val djsResponse = client.newCall(djsRequest).execute()
-        val djsBody = djsResponse.body?.string() ?: return results
+        val djsBody = client.newCall(djsRequest).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         
         val startIdx = djsBody.indexOf('[')
         val endIdx = djsBody.lastIndexOf(']')
@@ -340,11 +341,12 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .post(requestBody)
             .build()
             
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("HTTP error code: ${response.code}")
-        }
-        val responseBody = response.body?.string() ?: return results
+        val responseBody = client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("HTTP error code: ${response.code}")
+            }
+            response.body?.string()
+        } ?: return results
         val jsonResponse = org.json.JSONObject(responseBody)
         if (jsonResponse.has("results")) {
             val resultsArray = jsonResponse.getJSONArray("results")
@@ -372,11 +374,12 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .header("Accept", "application/json")
             .build()
             
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("HTTP error code: ${response.code}")
-        }
-        val responseBody = response.body?.string() ?: return results
+        val responseBody = client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("HTTP error code: ${response.code}")
+            }
+            response.body?.string()
+        } ?: return results
         val jsonResponse = org.json.JSONObject(responseBody)
         if (jsonResponse.has("web")) {
             val web = jsonResponse.getJSONObject("web")
@@ -405,8 +408,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
             .build()
-        val response = client.newCall(request).execute()
-        val html = response.body?.string() ?: return results
+        val html = client.newCall(request).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         val doc = Jsoup.parse(html)
         doc.select(".result").forEach { element ->
             val titleLink = element.select("a.result__a").firstOrNull() ?: return@forEach
@@ -431,8 +435,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .post(formBody)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
-        val response = client.newCall(request).execute()
-        val html = response.body?.string() ?: return results
+        val html = client.newCall(request).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         val doc = Jsoup.parse(html)
         val tdLinks = doc.select("td.result-link")
         tdLinks.forEach { td ->
@@ -458,8 +463,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .url(url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
-        val response = client.newCall(request).execute()
-        val html = response.body?.string() ?: return results
+        val html = client.newCall(request).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         val doc = Jsoup.parse(html)
         val googleG = doc.select(".g")
         if (googleG.isNotEmpty()) {
@@ -498,8 +504,9 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             .url(url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .build()
-        val response = client.newCall(request).execute()
-        val html = response.body?.string() ?: return results
+        val html = client.newCall(request).execute().use { response ->
+            response.body?.string()
+        } ?: return results
         val doc = Jsoup.parse(html)
         doc.select(".b_algo").forEach { element ->
             val a = element.select("h2 a").firstOrNull() ?: return@forEach
@@ -555,17 +562,19 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
                 .readTimeout(5, TimeUnit.SECONDS)
                 .build()
                 
-            val response = clientWithTimeout.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext "HTTP error: ${response.code}"
-            }
+            val html = clientWithTimeout.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext "HTTP error: ${response.code}"
+                }
+                
+                val contentType = response.header("Content-Type") ?: ""
+                if (!contentType.contains("text/html") && !contentType.contains("text/plain")) {
+                    return@withContext "Skipped non-text content"
+                }
+                
+                response.body?.string()
+            } ?: return@withContext "No content"
             
-            val contentType = response.header("Content-Type") ?: ""
-            if (!contentType.contains("text/html") && !contentType.contains("text/plain")) {
-                return@withContext "Skipped non-text content"
-            }
-            
-            val html = response.body?.string() ?: return@withContext "No content"
             val doc = Jsoup.parse(html, url)
             
             doc.select("script, style, iframe, footer, header, nav, aside, noscript, form").remove()

@@ -73,9 +73,17 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (::chatViewModel.isInitialized) {
+            chatViewModel.startTrackingMetrics()
+        }
+    }
+
     override fun onStop() {
         super.onStop()
         if (::chatViewModel.isInitialized) {
+            chatViewModel.stopTrackingMetrics()
             chatViewModel.lockAppOnBackground()
         }
         ttsProvider.stop()

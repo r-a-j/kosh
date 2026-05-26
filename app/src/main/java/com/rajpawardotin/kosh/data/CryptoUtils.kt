@@ -227,11 +227,16 @@ object CryptoUtils {
 
     fun secureDelete(file: File) {
         if (!file.exists()) return
+        val length = file.length()
+        if (length <= 0) {
+            file.delete()
+            return
+        }
         val random = SecureRandom()
         val buf = ByteArray(4096)
         try {
             FileOutputStream(file).use { fos ->
-                var remaining = file.length()
+                var remaining = length
                 while (remaining > 0) {
                     random.nextBytes(buf)
                     val chunk = minOf(buf.size.toLong(), remaining).toInt()

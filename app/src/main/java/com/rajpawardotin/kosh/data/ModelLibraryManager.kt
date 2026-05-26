@@ -23,6 +23,7 @@ class ModelLibraryManager(private val context: Context) {
             modelsDir.mkdirs()
         }
         cleanupBrokenModels()
+        migrateLegacyModel()
     }
 
     private fun cleanupBrokenModels() {
@@ -128,8 +129,8 @@ class ModelLibraryManager(private val context: Context) {
         var count = 1
         var file = File(modelsDir, "${cleanBase}_$count$ext")
         while (file.exists()) {
-            file = File(modelsDir, "${cleanBase}_$count$ext")
             count++
+            file = File(modelsDir, "${cleanBase}_$count$ext")
         }
         return file
     }

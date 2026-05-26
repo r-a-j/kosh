@@ -64,6 +64,9 @@ class ChatViewModelTest {
  
     @After
     fun tearDown() {
+        if (::viewModel.isInitialized) {
+            viewModel.stopTrackingMetrics()
+        }
         Dispatchers.resetMain()
     }
  

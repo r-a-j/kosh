@@ -21,6 +21,7 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
         private set
 
     override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
+        close()
         return try {
             val litertBackend = when (backend) {
                 "GPU" -> Backend.GPU()

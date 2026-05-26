@@ -18,7 +18,7 @@ android {
         applicationId = "com.rajpawardotin.kosh"
         minSdk = 36
         targetSdk = 36
-        versionCode = 2
+        versionCode = 3
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -56,10 +56,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            // Include native debug symbols in the App Bundle for Play Console
+            
             ndk {
                 debugSymbolLevel = "full"
             }
+            
             val releaseSigningConfig = signingConfigs.getByName("release")
             if (releaseSigningConfig.storeFile != null) {
                 signingConfig = releaseSigningConfig
@@ -79,7 +80,8 @@ android {
     }
     packaging {
         jniLibs {
-            useLegacyPackaging = true
+            // Disable legacy packaging to allow Play Store to manage native libraries correctly
+            useLegacyPackaging = false
             pickFirsts.add("**/libLiteRt*.so")
         }
     }

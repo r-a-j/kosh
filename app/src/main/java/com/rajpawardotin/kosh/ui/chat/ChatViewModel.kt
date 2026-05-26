@@ -37,7 +37,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.SecretKeySpec
 
 import kotlinx.coroutines.CoroutineExceptionHandler
-import java.util.concurrent.CancellationException
+import kotlinx.coroutines.CancellationException
 
 class ChatViewModel(
     private val aiProvider: AIProvider,
@@ -313,14 +313,11 @@ class ChatViewModel(
         isAppLocked = false
     }
 
-    init {
-        refreshModelsList()
-        viewModelScope.launch(safeIoDispatcher) {
-            loadSavedSessionsInternal()
-        }
+    private var metricsJob: kotlinx.coroutines.Job? = null
 
-        // Start continuous background hardware metrics tracker
-        viewModelScope.launch(Dispatchers.Default) {
+    fun startTrackingMetrics() {
+        if (metricsJob?.isActive == true) return
+        metricsJob = viewModelScope.launch(Dispatchers.Default) {
             var lastCpuTime = try { android.os.Process.getElapsedCpuTime() } catch (e: Throwable) { 0L }
             var lastTime = System.currentTimeMillis()
             val cores = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
@@ -367,6 +364,20 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    fun stopTrackingMetrics() {
+        metricsJob?.cancel()
+        metricsJob = null
+    }
+
+    init {
+        refreshModelsList()
+        viewModelScope.launch(safeIoDispatcher) {
+            loadSavedSessionsInternal()
+        }
+
+        startTrackingMetrics()
     }
 
     private suspend fun loadSavedSessionsInternal() {
