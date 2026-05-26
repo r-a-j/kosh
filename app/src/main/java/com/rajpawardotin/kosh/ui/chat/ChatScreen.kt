@@ -456,7 +456,11 @@ fun ChatScreen(
                         ) {
                             if (viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()) {
                                 com.rajpawardotin.kosh.ui.chat.components.ChatEmptyState(
-                                    isTemporarySession = viewModel.isTemporarySession
+                                    isTemporarySession = viewModel.isTemporarySession,
+                                    onSuggestionClick = { suggestion ->
+                                        viewModel.prompt = suggestion
+                                        viewModel.sendMessage(context)
+                                    }
                                 )
                             } else {
                                 LazyColumn(
