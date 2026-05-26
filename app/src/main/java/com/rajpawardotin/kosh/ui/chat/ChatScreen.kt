@@ -459,7 +459,6 @@ fun ChatScreen(
                                     isTemporarySession = viewModel.isTemporarySession,
                                     onSuggestionClick = { suggestion ->
                                         viewModel.prompt = suggestion
-                                        viewModel.sendMessage(context)
                                     }
                                 )
                             } else {
