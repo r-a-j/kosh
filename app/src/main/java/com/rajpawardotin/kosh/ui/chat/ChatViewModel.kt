@@ -1064,6 +1064,12 @@ class ChatViewModel(
         }
         if (rawPrompt.isBlank() || isGenerating) return
 
+        val currentPath = modelPath
+        if (currentPath == null) {
+            showToast("Please import or select a model first.")
+            return
+        }
+
         // 1. Resolve Session ID
         var sessionId = currentSessionId
         val isNewSession = sessionId == null
@@ -1088,33 +1094,21 @@ class ChatViewModel(
 
         viewModelScope.launch(safeIoDispatcher) {
             try {
-                val hasDocs = filesToProcess.isNotEmpty()
-                val targetTag = modelRouter.detectIntent(rawPrompt, hasDocs)
-                val targetModel = modelLibraryManager.getModelByTag(targetTag)
-                
-                if (targetModel != null && targetModel.filePath != modelPath) {
+                if (!aiProvider.isInitialized) {
                     withContext(Dispatchers.Main) {
                         isThinking = true
-                        agenticStateLabel = "Routing: Swapping to ${targetTag.name} Core..."
+                        agenticStateLabel = "Igniting Neural Core..."
                     }
-                    
-                    aiProvider.close()
-                    System.gc()
-                    delay(300)
-                    
-                    val swapResult = aiProvider.initialize(targetModel.filePath, selectedBackend)
-                    
+                    val initResult = aiProvider.initialize(currentPath, selectedBackend)
                     withContext(Dispatchers.Main) {
-                        if (swapResult.isSuccess && aiProvider.isInitialized) {
-                            modelPath = targetModel.filePath
-                            isEngineReady = aiProvider.isInitialized
-                            showToast("Loaded specialized ${targetTag.name} core")
-                        } else {
-                            showToast("Swap failed. Reverting to general core")
-                            modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)?.let { gen ->
-                                aiProvider.initialize(gen.filePath, selectedBackend)
-                            }
+                        isEngineReady = aiProvider.isInitialized
+                        if (!initResult.isSuccess || !aiProvider.isInitialized) {
+                            val errorMsg = initResult.exceptionOrNull()?.localizedMessage ?: "Unknown initialization error"
+                            showToast("Ignition failed: $errorMsg")
                         }
+                    }
+                    if (!aiProvider.isInitialized) {
+                        return@launch
                     }
                 }
 
@@ -1178,11 +1172,6 @@ class ChatViewModel(
                 }
 
                 val shouldSearch = detectSearchRequirement(rawPrompt)
-                if (shouldSearch && !isInternetEnabled) {
-                    withContext(Dispatchers.Main) {
-                        isInternetEnabled = true
-                    }
-                }
 
                 var lastQueryUsed: String? = null
                 val finalPrompt = if (shouldSearch) {

@@ -143,7 +143,7 @@ fun ChatBubble(
                         is ChatContentBlock.Checklist -> {
                             ChecklistCard(
                                 items = block.items,
-                                messageKey = message.hashCode().toString(),
+                                messageKey = message.id,
                                 checkedItems = checkedItems,
                                 onToggleChecklistItem = { index, checked ->
                                     onToggleChecklistItem(index, checked)

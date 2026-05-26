@@ -15,7 +15,7 @@ class LlmUseCase(
 ) {
 
     fun detectSearchRequirement(prompt: String, isInternetEnabled: Boolean): Boolean {
-        if (isInternetEnabled) return true
+        if (!isInternetEnabled) return false
         
         val lowercasePrompt = prompt.lowercase()
         val searchKeywords = listOf(

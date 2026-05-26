@@ -60,6 +60,7 @@ class ChatViewModelTest {
             mockModelRouter, 
             testDispatcher
         )
+        viewModel.modelPath = "fake/model/path.bin"
     }
  
     @After
@@ -467,10 +468,50 @@ class ChatViewModelTest {
         assertTrue(viewModel.activeSessionDocuments.isEmpty())
     }
 
+    @Test
+    fun testAutoIgnitionWhenEngineNotInitialized() = runTest(testDispatcher) {
+        // Set engine to not initialized
+        fakeAI.isInitialized = false
+        fakeAI.initializeCallCount = 0
+        viewModel.modelPath = "fake/model/path.bin"
+        
+        viewModel.prompt = "Hello AI"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+        
+        // Engine must be auto-initialized
+        assertEquals(1, fakeAI.initializeCallCount)
+        assertTrue(fakeAI.isInitialized)
+        assertTrue(viewModel.isEngineReady)
+        
+        // Message should be processed successfully
+        assertEquals(2, viewModel.chatMessages.size)
+        assertEquals("Mock response from Kosh", viewModel.chatMessages[1].text)
+    }
+
+    @Test
+    fun testModelDoesNotSwapOnCodingKeywords() = runTest(testDispatcher) {
+        viewModel.modelPath = "fake/model/path.bin"
+        fakeAI.isInitialized = true
+        fakeAI.initializeCallCount = 0
+        
+        // Even with coding keywords in the prompt, there should be no model swapping/re-initialisation
+        viewModel.prompt = "Write a Kotlin class to sort an array"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+        
+        // Model path should remain the same and no re-initialization calls should have occurred
+        assertEquals("fake/model/path.bin", viewModel.modelPath)
+        assertEquals(0, fakeAI.initializeCallCount)
+    }
+
 
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true
+        var initializeCallCount = 0
         override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
+            initializeCallCount++
+            isInitialized = true
             return Result.success(Unit)
         }
         override fun sendMessage(prompt: String): Flow<String> {
