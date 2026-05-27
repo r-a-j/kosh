@@ -424,6 +424,21 @@ fun ChatScreen(
                                     ),
                                     color = Color(0xFFFF9100)
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .clickable { viewModel.startNewChat(isTemporary = false) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Exit Temporary Chat",
+                                        tint = Color(0xFFFF9100),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -476,6 +491,9 @@ fun ChatScreen(
                                     isTemporarySession = viewModel.isTemporarySession,
                                     onSuggestionClick = { suggestion ->
                                         viewModel.prompt = suggestion
+                                    },
+                                    onExitTemporaryClick = {
+                                        viewModel.startNewChat(isTemporary = false)
                                     }
                                 )
                             } else {

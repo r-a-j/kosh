@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -144,7 +145,7 @@ fun ChatTopBar(
             // Temporary Chat Button
             IconButton(
                 onClick = {
-                    onNewChatClick(true)
+                    onNewChatClick(!isTemporarySession)
                 },
                 enabled = !isGenerating,
                 modifier = Modifier
@@ -157,8 +158,8 @@ fun ChatTopBar(
                     .graphicsLayer(alpha = if (isTemporarySession) 1f else 0.6f)
             ) {
                 Icon(
-                    imageVector = Icons.Default.VisibilityOff,
-                    contentDescription = "Temporary Chat",
+                    imageVector = if (isTemporarySession) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    contentDescription = if (isTemporarySession) "Exit Temporary Chat" else "Enter Temporary Chat",
                     tint = if (isTemporarySession) Color(0xFFFF9100) else Color.White,
                     modifier = Modifier.size(18.dp)
                 )

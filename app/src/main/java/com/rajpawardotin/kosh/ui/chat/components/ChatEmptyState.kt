@@ -16,6 +16,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,7 +33,8 @@ import com.rajpawardotin.kosh.ui.components.KoshLogo
 @Composable
 fun ChatEmptyState(
     isTemporarySession: Boolean,
-    onSuggestionClick: (String) -> Unit
+    onSuggestionClick: (String) -> Unit,
+    onExitTemporaryClick: (() -> Unit)? = null
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -62,6 +65,26 @@ fun ChatEmptyState(
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
         )
+
+        if (isTemporarySession && onExitTemporaryClick != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onExitTemporaryClick,
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.4f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFFFF9100)
+                )
+            ) {
+                Text(
+                    text = "EXIT TEMPORARY VAULT",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                )
+            }
+        }
         
         Spacer(modifier = Modifier.height(28.dp))
 
