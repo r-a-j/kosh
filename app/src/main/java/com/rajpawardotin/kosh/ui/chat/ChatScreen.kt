@@ -50,7 +50,6 @@ import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.ui.components.ChatBubble
 import com.rajpawardotin.kosh.ui.components.ChatInput
 import com.rajpawardotin.kosh.ui.components.ModelConfigCard
-import com.rajpawardotin.kosh.ui.components.KoshSplashScreen
 import com.rajpawardotin.kosh.ui.components.NeuralCoreWizard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,8 +74,6 @@ fun ChatScreen(
     val currentSessionId = viewModel.currentSessionId
     val currentSession = viewModel.savedSessions.find { it.id == currentSessionId }
     val isLocked = currentSession != null && currentSession.encryptedKeyPassword != null && !viewModel.activeSessionKeys.containsKey(currentSession.id)
-
-    var showSplash by remember { mutableStateOf(true) }
 
     var sessionToLock by remember { mutableStateOf<ChatSession?>(null) }
     var showManageLockDialog by remember { mutableStateOf(false) }
@@ -117,14 +114,6 @@ fun ChatScreen(
         viewModel.toastMessage.collect { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
-    }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(2500)
-        while (viewModel.isInitializing || viewModel.isCopyingModel) {
-            kotlinx.coroutines.delay(100)
-        }
-        showSplash = false
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -741,19 +730,6 @@ fun ChatScreen(
                         }
                     }
                 }
-            )
-        }
-
-        // Splash Screen Overlay
-        AnimatedVisibility(
-            visible = showSplash,
-            enter = fadeIn(),
-            exit = fadeOut(animationSpec = tween(600))
-        ) {
-            KoshSplashScreen(
-                isInitializing = viewModel.isInitializing,
-                isCopyingModel = viewModel.isCopyingModel,
-                modifier = Modifier.fillMaxSize()
             )
         }
     }
