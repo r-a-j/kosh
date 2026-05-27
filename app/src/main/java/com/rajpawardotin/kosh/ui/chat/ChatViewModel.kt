@@ -66,6 +66,8 @@ class ChatViewModel(
     
     private val safeIoDispatcher = ioDispatcher + exceptionHandler
 
+    private var generationJob: kotlinx.coroutines.Job? = null
+
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage = _toastMessage.asSharedFlow()
 
@@ -250,10 +252,25 @@ class ChatViewModel(
 
     var isScreenshotEnabled by mutableStateOf(settingsProvider.getBoolean("screenshot_enabled", false))
         private set
+
+    var isScreenshotPasscodeSet by mutableStateOf(settingsProvider.getString("screenshot_encrypted_key", "").isNotEmpty())
+        private set
+
+    var isScreenshotBiometricEnabled by mutableStateOf(settingsProvider.getBoolean("screenshot_biometric_enabled", false))
+        private set
     
     val activeSessionKeys = mutableStateMapOf<String, SecretKey>()
 
+    fun stopGeneration() {
+        generationJob?.cancel()
+        generationJob = null
+        isGenerating = false
+        isThinking = false
+        agenticStateLabel = "Neural Standby"
+    }
+
     fun clearActiveSessionKeys() {
+        stopGeneration()
         for (key in activeSessionKeys.values) {
             try {
                 val keyField = key.javaClass.getDeclaredField("key")
@@ -268,6 +285,8 @@ class ChatViewModel(
         }
         activeSessionKeys.clear()
         activeSessionDocuments.clear()
+        aiProvider.close()
+        isEngineReady = aiProvider.isInitialized
     }
 
 
@@ -306,6 +325,206 @@ class ChatViewModel(
             showToast("Screenshots allowed")
         } else {
             showToast("Screenshots blocked (Privacy Mode)")
+        }
+    }
+
+    fun setupScreenshotPasscode(password: String, enableBiometric: Boolean, context: Context, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(safeIoDispatcher) {
+            try {
+                val screenshotKey = CryptoUtils.generateRandomSessionKey()
+                val salt = CryptoUtils.generateSalt()
+                val derivedKey = CryptoUtils.deriveKeyFromPassword(password, salt)
+                val screenshotKeyEncodedBase64 = java.util.Base64.getEncoder().encodeToString(screenshotKey.encoded)
+                val encryptedKey = CryptoUtils.encryptMessage(screenshotKeyEncodedBase64, derivedKey)
+                val encryptedToken = CryptoUtils.encryptMessage("screenshot_authorized", screenshotKey)
+                
+                settingsProvider.putString("screenshot_salt", java.util.Base64.getEncoder().encodeToString(salt))
+                settingsProvider.putString("screenshot_encrypted_key", encryptedKey)
+                settingsProvider.putString("screenshot_encrypted_token", encryptedToken)
+                settingsProvider.putBoolean("screenshot_biometric_enabled", enableBiometric)
+                
+                if (enableBiometric) {
+                    withContext(Dispatchers.Main) {
+                        try {
+                            val cipher = CryptoUtils.getBiometricCipherForEncryption()
+                            val biometricPrompt = androidx.biometric.BiometricPrompt(
+                                context as androidx.fragment.app.FragmentActivity,
+                                androidx.core.content.ContextCompat.getMainExecutor(context),
+                                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                                        super.onAuthenticationSucceeded(result)
+                                        viewModelScope.launch(safeIoDispatcher) {
+                                            try {
+                                                val cryptoCipher = result.cryptoObject?.cipher ?: cipher
+                                                val encryptedKeyBiometric = CryptoUtils.wrapSessionKey(screenshotKey, cryptoCipher)
+                                                settingsProvider.putString("screenshot_encrypted_biometric", encryptedKeyBiometric)
+                                                
+                                                withContext(Dispatchers.Main) {
+                                                    isScreenshotPasscodeSet = true
+                                                    isScreenshotBiometricEnabled = true
+                                                    toggleScreenshot(true)
+                                                    showToast("Screenshot passcode set successfully with biometrics")
+                                                    onResult(true)
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                                withContext(Dispatchers.Main) {
+                                                    isScreenshotPasscodeSet = true
+                                                    isScreenshotBiometricEnabled = false
+                                                    settingsProvider.putBoolean("screenshot_biometric_enabled", false)
+                                                    toggleScreenshot(true)
+                                                    showToast("Screenshot passcode set (Biometric failed)")
+                                                    onResult(true)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                                        super.onAuthenticationError(errorCode, errString)
+                                        viewModelScope.launch(safeIoDispatcher) {
+                                            withContext(Dispatchers.Main) {
+                                                isScreenshotPasscodeSet = true
+                                                isScreenshotBiometricEnabled = false
+                                                settingsProvider.putBoolean("screenshot_biometric_enabled", false)
+                                                toggleScreenshot(true)
+                                                showToast("Screenshot passcode set (Biometric failed: $errString)")
+                                                onResult(true)
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                                .setTitle("Confirm Fingerprint")
+                                .setSubtitle("Authorize biometric bypass for screenshots")
+                                .setNegativeButtonText("Cancel")
+                                .build()
+                            biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            isScreenshotPasscodeSet = true
+                            isScreenshotBiometricEnabled = false
+                            settingsProvider.putBoolean("screenshot_biometric_enabled", false)
+                            toggleScreenshot(true)
+                            showToast("Screenshot passcode set (Biometric error: ${e.localizedMessage})")
+                            onResult(true)
+                        }
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        isScreenshotPasscodeSet = true
+                        isScreenshotBiometricEnabled = false
+                        toggleScreenshot(true)
+                        showToast("Screenshot passcode set successfully")
+                        onResult(true)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast("Failed to set screenshot passcode: ${e.localizedMessage}")
+                    onResult(false)
+                }
+            }
+        }
+    }
+
+    fun unlockScreenshotWithPassword(password: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch(safeIoDispatcher) {
+            try {
+                val saltBase64 = settingsProvider.getString("screenshot_salt", "")
+                val encryptedKey = settingsProvider.getString("screenshot_encrypted_key", "")
+                val encryptedToken = settingsProvider.getString("screenshot_encrypted_token", "")
+                
+                if (saltBase64.isEmpty() || encryptedKey.isEmpty() || encryptedToken.isEmpty()) {
+                    withContext(Dispatchers.Main) { onResult(false) }
+                    return@launch
+                }
+                
+                val salt = java.util.Base64.getDecoder().decode(saltBase64)
+                val derivedKey = CryptoUtils.deriveKeyFromPassword(password, salt)
+                val screenshotKeyBase64 = CryptoUtils.decryptMessage(encryptedKey, derivedKey)
+                val screenshotKeyBytes = java.util.Base64.getDecoder().decode(screenshotKeyBase64)
+                val screenshotKey = javax.crypto.spec.SecretKeySpec(screenshotKeyBytes, "AES")
+                
+                val decryptedToken = CryptoUtils.decryptMessage(encryptedToken, screenshotKey)
+                if (decryptedToken == "screenshot_authorized") {
+                    withContext(Dispatchers.Main) {
+                        toggleScreenshot(true)
+                        onResult(true)
+                    }
+                } else {
+                    throw Exception("Invalid token")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast("Invalid password!")
+                    onResult(false)
+                }
+            }
+        }
+    }
+
+    fun unlockScreenshotWithBiometrics(context: Context, onResult: (Boolean) -> Unit) {
+        val encryptedBiometric = settingsProvider.getString("screenshot_encrypted_biometric", "")
+        val encryptedToken = settingsProvider.getString("screenshot_encrypted_token", "")
+        if (encryptedBiometric.isEmpty() || encryptedToken.isEmpty()) {
+            onResult(false)
+            return
+        }
+        
+        try {
+            val combined = java.util.Base64.getDecoder().decode(encryptedBiometric)
+            if (combined.size < 12) {
+                onResult(false)
+                return
+            }
+            val iv = ByteArray(12)
+            System.arraycopy(combined, 0, iv, 0, 12)
+            
+            val cipher = CryptoUtils.getBiometricCipherForDecryption(iv)
+            val biometricPrompt = androidx.biometric.BiometricPrompt(
+                context as androidx.fragment.app.FragmentActivity,
+                androidx.core.content.ContextCompat.getMainExecutor(context),
+                object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                        super.onAuthenticationSucceeded(result)
+                        viewModelScope.launch(safeIoDispatcher) {
+                            try {
+                                val cryptoCipher = result.cryptoObject?.cipher ?: cipher
+                                val screenshotKey = CryptoUtils.unwrapSessionKey(encryptedBiometric, cryptoCipher)
+                                val decryptedToken = CryptoUtils.decryptMessage(encryptedToken, screenshotKey)
+                                if (decryptedToken == "screenshot_authorized") {
+                                    withContext(Dispatchers.Main) {
+                                        toggleScreenshot(true)
+                                        showToast("Screenshots unlocked successfully")
+                                        onResult(true)
+                                    }
+                                } else {
+                                    throw Exception("Invalid token")
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                withContext(Dispatchers.Main) { onResult(false) }
+                            }
+                        }
+                    }
+                    override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                        super.onAuthenticationError(errorCode, errString)
+                        onResult(false)
+                    }
+                }
+            )
+            val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                .setTitle("Unlock Screenshots")
+                .setSubtitle("Confirm fingerprint to allow screenshots")
+                .setNegativeButtonText("Use Passcode")
+                .build()
+            biometricPrompt.authenticate(promptInfo, androidx.biometric.BiometricPrompt.CryptoObject(cipher))
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onResult(false)
         }
     }
 
@@ -539,6 +758,9 @@ class ChatViewModel(
         context: Context, 
         onResult: (Boolean, String?) -> Unit
     ) {
+        if (currentSessionId == sessionId) {
+            stopGeneration()
+        }
         viewModelScope.launch(safeIoDispatcher) {
             try {
                 val (mnemonic, entropy) = Bip39Utils.generateMnemonic(context)
@@ -1092,7 +1314,9 @@ class ChatViewModel(
         agenticStateLabel = "Initiating Neural Path..."
         currentResponseChunk = ""
 
-        viewModelScope.launch(safeIoDispatcher) {
+        generationJob = viewModelScope.launch(safeIoDispatcher) {
+            var assistantMessageId = ""
+            var sourceDocumentsString: String? = null
             try {
                 if (!aiProvider.isInitialized) {
                     withContext(Dispatchers.Main) {
@@ -1163,7 +1387,7 @@ class ChatViewModel(
 
                 // local RAG retrieval
                 val (documentContext, sourceDocs) = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
-                val sourceDocumentsString = if (sourceDocs.isNotEmpty()) sourceDocs.joinToString(", ") else null
+                sourceDocumentsString = if (sourceDocs.isNotEmpty()) sourceDocs.joinToString(", ") else null
                 
                 val basePrompt = if (documentContext.isNotEmpty()) {
                     "$documentContext\n\nUSER QUERY: $rawPrompt"
@@ -1224,12 +1448,13 @@ class ChatViewModel(
                 delay(400)
                 withContext(Dispatchers.Main) { isThinking = false }
 
-                val assistantMessageId = java.util.UUID.randomUUID().toString()
+                assistantMessageId = java.util.UUID.randomUUID().toString()
                 var totalChars = 0
                 val generationStartTime = System.currentTimeMillis()
 
                 aiProvider.sendMessage(finalPrompt).collect { text ->
-                    withContext(Dispatchers.Main) {
+                    var shouldStop = false
+                    withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
                         if (currentResponseChunk.isEmpty()) {
                             agenticStateLabel = "Structuring Output..."
                         }
@@ -1243,6 +1468,16 @@ class ChatViewModel(
                             val estimatedTokens = totalChars / 4f
                             tokensPerSecond = estimatedTokens / elapsedSec
                         }
+                        
+                        if (hasRepetitionLoop(currentResponseChunk)) {
+                            currentResponseChunk += "\n\n[Neural Loop Protection: Repetition halted]"
+                            shouldStop = true
+                        }
+                    }
+                    
+                    if (shouldStop) {
+                        showToast("Repetition loop detected. Halting generation.")
+                        stopGeneration()
                     }
                     
                     if (!isTemporarySession) {
@@ -1286,8 +1521,18 @@ class ChatViewModel(
                         loadSavedSessionsInternal()
                     }
                 }
-            }
- catch (e: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) {
+                    if (currentResponseChunk.isNotEmpty()) {
+                        val finalMsgId = if (assistantMessageId.isEmpty()) java.util.UUID.randomUUID().toString() else assistantMessageId
+                        withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
+                            val msg = ChatMessage(id = finalMsgId, text = currentResponseChunk, isUser = false, sourceDocuments = sourceDocumentsString)
+                            chatMessages.add(msg)
+                            currentResponseChunk = ""
+                        }
+                    }
+                    throw e
+                }
                 var errorMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
                     isThinking = false
@@ -1303,7 +1548,7 @@ class ChatViewModel(
                     }
                 }
             } finally {
-                withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
                     isGenerating = false
                     isThinking = false
                     agenticStateLabel = "Neural Standby"
@@ -1311,6 +1556,38 @@ class ChatViewModel(
                 }
             }
         }
+    }
+
+    private fun hasRepetitionLoop(text: String): Boolean {
+        val len = text.length
+        if (len < 40) return false
+        
+        for (patternLen in 1..20) {
+            val requiredRepeats = when (patternLen) {
+                1 -> 25
+                2 -> 15
+                3, 4 -> 10
+                else -> 6
+            }
+            
+            if (len < patternLen * (requiredRepeats + 1)) continue
+            
+            val pattern = text.substring(len - patternLen)
+            var isRepeating = true
+            for (i in 1..requiredRepeats) {
+                val start = len - (patternLen * (i + 1))
+                val end = len - (patternLen * i)
+                val prev = text.substring(start, end)
+                if (prev != pattern) {
+                    isRepeating = false
+                    break
+                }
+            }
+            if (isRepeating) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun detectSearchRequirement(prompt: String): Boolean {

@@ -406,6 +406,140 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun testStopGenerationCancelsActiveJobAndResetsState() = runTest(testDispatcher) {
+        viewModel.prompt = "Test Cancel Prompt"
+        viewModel.sendMessage(context)
+        
+        // Active states should be set
+        assertTrue(viewModel.isGenerating)
+        assertTrue(viewModel.isThinking)
+        
+        // Cancel the generation
+        viewModel.stopGeneration()
+        testScheduler.advanceUntilIdle()
+        
+        // Active states should be reset
+        assertFalse(viewModel.isGenerating)
+        assertFalse(viewModel.isThinking)
+        assertEquals("Neural Standby", viewModel.agenticStateLabel)
+    }
+
+    @Test
+    fun testRepetitionLoopDetectionHaltsGeneration() = runTest(testDispatcher) {
+        // Define a custom flow that emits repeating tokens
+        fakeAI.customFlow = kotlinx.coroutines.flow.flow {
+            emit("Standard prefix text ")
+            repeat(30) {
+                emit("🌌")
+                kotlinx.coroutines.delay(10)
+            }
+        }
+        
+        viewModel.prompt = "Write emojis"
+        viewModel.sendMessage(context)
+        
+        testScheduler.advanceUntilIdle()
+        
+        // Check that isGenerating was reset
+        assertFalse(viewModel.isGenerating)
+        
+        // The last message in chatMessages must have the Neural Loop Protection warning
+        assertTrue(viewModel.chatMessages.isNotEmpty())
+        val lastMsg = viewModel.chatMessages.last()
+        assertTrue(lastMsg.text.contains("[Neural Loop Protection: Repetition halted]"))
+        
+        // Clean up
+        fakeAI.customFlow = null
+    }
+
+    @Test
+    fun testCancellationPreservesPartialResponse() = runTest(testDispatcher) {
+        // Define a custom flow that emits and suspends
+        fakeAI.customFlow = kotlinx.coroutines.flow.flow {
+            emit("Partial AI Response")
+            kotlinx.coroutines.delay(2000)
+            emit("This should not be reached")
+        }
+        
+        viewModel.prompt = "Tell me something"
+        viewModel.sendMessage(context)
+        
+        // Let it run until it suspends (after emitting first chunk)
+        testScheduler.advanceTimeBy(500)
+        
+        // Verify currentResponseChunk has the first chunk
+        assertEquals("Partial AI Response", viewModel.currentResponseChunk)
+        
+        // Stop generation
+        viewModel.stopGeneration()
+        testScheduler.advanceUntilIdle()
+        
+        // Verify that the partial message was added to chatMessages
+        assertEquals(2, viewModel.chatMessages.size) // User message + Partial Assistant message
+        assertEquals("Tell me something", viewModel.chatMessages[0].text)
+        assertEquals("Partial AI Response", viewModel.chatMessages[1].text)
+        
+        // Clean up
+        fakeAI.customFlow = null
+    }
+
+    @Test
+    fun testLockAppOnBackgroundOrClearSessionKeysStopsGeneration() = runTest(testDispatcher) {
+        viewModel.prompt = "Test Cancel Background Prompt"
+        viewModel.sendMessage(context)
+        
+        assertTrue(viewModel.isGenerating)
+        
+        // Locking app / clearing keys should call stopGeneration
+        viewModel.clearActiveSessionKeys()
+        testScheduler.advanceUntilIdle()
+        
+        assertFalse(viewModel.isGenerating)
+    }
+
+    @Test
+    fun testLockSessionStopsGenerationForActiveSession() = runTest(testDispatcher) {
+        val sessionId = "active-generation-session"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Generating Session",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeSessionRepo.saveSession(session)
+        
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.prompt = "Generate something long"
+        viewModel.sendMessage(context)
+        
+        assertTrue(viewModel.isGenerating)
+        
+        // Lock this active session
+        var lockSuccess = false
+        val mockContext = mock<Context>()
+        val mockAssets = mock<android.content.res.AssetManager>()
+        org.mockito.kotlin.whenever(mockContext.assets).thenReturn(mockAssets)
+        val realFile = java.io.File("app/src/main/assets/bip39_english.txt").let {
+            if (it.exists()) it else java.io.File("src/main/assets/bip39_english.txt")
+        }
+        org.mockito.kotlin.whenever(mockAssets.open("bip39_english.txt")).thenAnswer {
+            java.io.FileInputStream(realFile)
+        }
+
+        viewModel.lockSession(sessionId, "password_123", enableBiometric = false, context = mockContext) { success, _ ->
+            lockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        
+        // Should immediately stop generation
+        assertFalse(viewModel.isGenerating)
+    }
+
+    @Test
     fun testSizeLimitedInputStreamThrowsOnLimitExceeded() {
         val rawData = "a".repeat(15)
         val stream = com.rajpawardotin.kosh.data.SizeLimitedInputStream(rawData.byteInputStream(), 10)
@@ -505,17 +639,82 @@ class ChatViewModelTest {
         assertEquals(0, fakeAI.initializeCallCount)
     }
 
+    @Test
+    fun testSetupScreenshotPasscodeUpdatesStateAndSettings() = runTest(testDispatcher) {
+        var setupCallbackCalled = false
+        var setupSuccess = false
+        
+        viewModel.setupScreenshotPasscode("screenshot123", false, context) { success ->
+            setupCallbackCalled = true
+            setupSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(setupCallbackCalled)
+        assertTrue(setupSuccess)
+        assertTrue(viewModel.isScreenshotPasscodeSet)
+        assertFalse(viewModel.isScreenshotBiometricEnabled)
+        assertTrue(viewModel.isScreenshotEnabled)
+        
+        val encryptedKey = fakeSettings.getString("screenshot_encrypted_key", "")
+        assertTrue(encryptedKey.isNotEmpty())
+    }
+
+    @Test
+    fun testUnlockScreenshotWithCorrectPasswordSucceeds() = runTest(testDispatcher) {
+        viewModel.setupScreenshotPasscode("screenshot123", false, context) { }
+        testScheduler.advanceUntilIdle()
+        
+        // Turn screenshots off
+        viewModel.toggleScreenshot(false)
+        assertFalse(viewModel.isScreenshotEnabled)
+        
+        var unlockCallbackCalled = false
+        var unlockSuccess = false
+        viewModel.unlockScreenshotWithPassword("screenshot123") { success ->
+            unlockCallbackCalled = true
+            unlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(unlockCallbackCalled)
+        assertTrue(unlockSuccess)
+        assertTrue(viewModel.isScreenshotEnabled)
+    }
+
+    @Test
+    fun testUnlockScreenshotWithIncorrectPasswordFails() = runTest(testDispatcher) {
+        viewModel.setupScreenshotPasscode("screenshot123", false, context) { }
+        testScheduler.advanceUntilIdle()
+        
+        // Turn screenshots off
+        viewModel.toggleScreenshot(false)
+        assertFalse(viewModel.isScreenshotEnabled)
+        
+        var unlockCallbackCalled = false
+        var unlockSuccess = false
+        viewModel.unlockScreenshotWithPassword("wrongpass") { success ->
+            unlockCallbackCalled = true
+            unlockSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(unlockCallbackCalled)
+        assertFalse(unlockSuccess)
+        assertFalse(viewModel.isScreenshotEnabled)
+    }
 
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true
         var initializeCallCount = 0
+        var customFlow: Flow<String>? = null
         override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
             initializeCallCount++
             isInitialized = true
             return Result.success(Unit)
         }
         override fun sendMessage(prompt: String): Flow<String> {
-            return flowOf("Mock", " response", " from", " Kosh")
+            return customFlow ?: flowOf("Mock", " response", " from", " Kosh")
         }
         override fun close() {}
     }

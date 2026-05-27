@@ -91,6 +91,9 @@ fun ChatScreen(
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var showImportPasswordDialog by remember { mutableStateOf(false) }
 
+    var showScreenshotSetupDialog by remember { mutableStateOf(false) }
+    var showScreenshotUnlockDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(currentSessionId) {
         if (currentSessionId != null && currentSession != null) {
             val isSessionLocked = currentSession.encryptedKeyPassword != null && !viewModel.activeSessionKeys.containsKey(currentSessionId)
@@ -266,6 +269,29 @@ fun ChatScreen(
         scrollState.scrollToItem(0)
     }
 
+    val topLightsTransition = rememberInfiniteTransition(label = "top_lights_movement")
+    val animationAngle by topLightsTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(8000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "lightsAngle"
+    )
+
+    val movementIntensity by animateFloatAsState(
+        targetValue = if (viewModel.isGenerating) 1f else 0f,
+        animationSpec = tween(1200, easing = FastOutSlowInEasing),
+        label = "movementIntensity"
+    )
+
+    val tealOffsetX = (-120).dp + (80.dp * kotlin.math.cos(animationAngle.toDouble()).toFloat() * movementIntensity)
+    val tealOffsetY = (-120).dp + (60.dp * kotlin.math.sin(animationAngle.toDouble()).toFloat() * movementIntensity)
+
+    val indigoOffsetX = 120.dp - (80.dp * kotlin.math.sin(animationAngle.toDouble()).toFloat() * movementIntensity)
+    val indigoOffsetY = (-120).dp + (60.dp * kotlin.math.cos(animationAngle.toDouble()).toFloat() * movementIntensity)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -275,7 +301,7 @@ fun ChatScreen(
         Box(
             modifier = Modifier
                 .size(450.dp)
-                .offset(x = (-120).dp, y = (-120).dp)
+                .offset(x = tealOffsetX, y = tealOffsetY)
                 .background(Brush.radialGradient(listOf(Color(0xFF0F766E).copy(alpha = 0.18f), Color.Transparent)))
                 .blur(80.dp)
         )
@@ -284,7 +310,7 @@ fun ChatScreen(
             modifier = Modifier
                 .size(450.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = 120.dp, y = (-120).dp)
+                .offset(x = indigoOffsetX, y = indigoOffsetY)
                 .background(Brush.radialGradient(listOf(Color(0xFF312E81).copy(alpha = 0.22f), Color.Transparent)))
                 .blur(80.dp)
         )
@@ -507,6 +533,7 @@ fun ChatScreen(
                         value = viewModel.prompt,
                         onValueChange = { viewModel.prompt = it },
                         onSend = { viewModel.sendMessage(context) },
+                        onStop = { viewModel.stopGeneration() },
                         onVoiceClick = { startVoiceInput() },
                         onAttachClick = { documentPickerLauncher.launch("*/*") },
                         attachedFiles = viewModel.attachedFiles,
@@ -555,7 +582,25 @@ fun ChatScreen(
                         isAppLockEnabled = viewModel.isAppLockEnabled,
                         isScreenshotEnabled = viewModel.isScreenshotEnabled,
                         onToggleAppLock = { viewModel.toggleAppLock(it) },
-                        onToggleScreenshot = { viewModel.toggleScreenshot(it) },
+                        onToggleScreenshot = { enabled ->
+                            if (!enabled) {
+                                viewModel.toggleScreenshot(false)
+                            } else {
+                                if (!viewModel.isScreenshotPasscodeSet) {
+                                    showScreenshotSetupDialog = true
+                                } else {
+                                    if (viewModel.isScreenshotBiometricEnabled) {
+                                        viewModel.unlockScreenshotWithBiometrics(context) { success ->
+                                            if (!success) {
+                                                showScreenshotUnlockDialog = true
+                                            }
+                                        }
+                                    } else {
+                                        showScreenshotUnlockDialog = true
+                                    }
+                                }
+                            }
+                        },
                         onExportBackup = { showExportPasswordDialog = true },
                         onImportBackup = { importBackupLauncher.launch(arrayOf("*/*")) },
                         onTavilyApiKeyChange = { viewModel.updateTavilyApiKey(it) },
@@ -670,6 +715,33 @@ fun ChatScreen(
                     onDismiss = { showManageLockDialog = false }
                 )
             }
+        }
+
+        // Screenshot Setup Dialog
+        if (showScreenshotSetupDialog) {
+            com.rajpawardotin.kosh.ui.chat.dialogs.ScreenshotSetupDialog(
+                onDismiss = { showScreenshotSetupDialog = false },
+                onSetupSubmit = { password, enableBiometric ->
+                    viewModel.setupScreenshotPasscode(password, enableBiometric, context) { success ->
+                        showScreenshotSetupDialog = false
+                    }
+                }
+            )
+        }
+
+        // Screenshot Unlock Dialog
+        if (showScreenshotUnlockDialog) {
+            com.rajpawardotin.kosh.ui.chat.dialogs.ScreenshotUnlockDialog(
+                viewModel = viewModel,
+                onDismiss = { showScreenshotUnlockDialog = false },
+                onUnlockSubmit = { password ->
+                    viewModel.unlockScreenshotWithPassword(password) { success ->
+                        if (success) {
+                            showScreenshotUnlockDialog = false
+                        }
+                    }
+                }
+            )
         }
 
         // Splash Screen Overlay

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ fun ChatInput(
     value: String,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
+    onStop: () -> Unit,
     onVoiceClick: () -> Unit,
     onAttachClick: () -> Unit,
     attachedFiles: List<AttachedFile>,
@@ -177,18 +179,26 @@ fun ChatInput(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Send button
+                // Send / Stop button
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSend()
+                        if (isGenerating) {
+                            onStop()
+                        } else {
+                            onSend()
+                        }
                     },
-                    enabled = enabled && (value.isNotBlank() || attachedFiles.isNotEmpty()) && !isGenerating,
+                    enabled = enabled && (isGenerating || value.isNotBlank() || attachedFiles.isNotEmpty()),
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
                         .background(
-                            if (enabled && (value.isNotBlank() || attachedFiles.isNotEmpty())) {
+                            if (!enabled) {
+                                Brush.linearGradient(listOf(Color(0xFF222222), Color(0xFF222222)))
+                            } else if (isGenerating) {
+                                Brush.linearGradient(listOf(Color(0xFFFF5252), Color(0xFFFF1744)))
+                            } else if (value.isNotBlank() || attachedFiles.isNotEmpty()) {
                                 Brush.linearGradient(listOf(Color(0xFF03DAC5), Color(0xFF6200EE)))
                             } else {
                                 Brush.linearGradient(listOf(Color(0xFF222222), Color(0xFF222222)))
@@ -196,10 +206,11 @@ fun ChatInput(
                         )
                 ) {
                     if (isGenerating) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
                         )
                     } else {
                         Icon(

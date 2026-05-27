@@ -16,11 +16,16 @@ import kotlinx.coroutines.flow.callbackFlow
 class LiteRTModelProvider(private val context: Context) : AIProvider {
     private var engine: Engine? = null
     private var conversation: Conversation? = null
+    private var currentModelPath: String? = null
+    private var currentBackend: String? = null
 
     override var isInitialized: Boolean = false
         private set
 
     override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
+        if (isInitialized && modelPath == currentModelPath && backend == currentBackend) {
+            return Result.success(Unit)
+        }
         close()
         return try {
             val litertBackend = when (backend) {
@@ -33,6 +38,8 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
             newEngine.initialize()
             engine = newEngine
             conversation = newEngine.createConversation()
+            currentModelPath = modelPath
+            currentBackend = backend
             isInitialized = true
             Result.success(Unit)
         } catch (e: Exception) {
@@ -42,8 +49,8 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
 
     override fun sendMessage(prompt: String): Flow<String> = callbackFlow {
         val currentConv = conversation ?: run {
-            close()
-            error("Engine not initialized")
+            this@callbackFlow.close(IllegalStateException("Engine not initialized"))
+            return@callbackFlow
         }
 
         currentConv.sendMessageAsync(prompt, object : MessageCallback {
@@ -54,21 +61,52 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
                 trySend(textChunk)
             }
             override fun onDone() {
-                close()
+                this@callbackFlow.close()
             }
             override fun onError(throwable: Throwable) {
-                close(throwable)
+                this@callbackFlow.close(throwable)
             }
         })
-        awaitClose { /* No-op: sendMessageAsync handles its own lifecycle */ }
+        awaitClose {
+            try {
+                currentConv.cancelProcess()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 
     override fun close() {
-        conversation?.close()
-        engine?.close()
+        val conv = conversation
+        val eng = engine
         conversation = null
         engine = null
         isInitialized = false
+        currentModelPath = null
+        currentBackend = null
+
+        if (conv != null) {
+            try {
+                conv.cancelProcess()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
+        if (conv != null || eng != null) {
+            // Run JNI close in a background thread to prevent native C++ deadlocks/hangs from blocking JVM threads.
+            Thread {
+                try {
+                    conv?.close()
+                } catch (e: Exception) {
+                    // Ignore
+                }
+                try {
+                    eng?.close()
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }.start()
+        }
     }
 }
-
