@@ -314,13 +314,18 @@ fun ModelConfigCard(
                     ) {
                         backends.forEach { text ->
                             val selected = text == selectedBackend
+                            val activeColor = when {
+                                text.contains("NPU") -> Color(0xFF03DAC5)
+                                text == "GPU" -> Color(0xFFBB86FC)
+                                else -> Color(0xFFFFB74D)
+                            }
                             Surface(
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(16.dp),
-                                color = if (selected) Color(0xFF03DAC5).copy(alpha = 0.15f) else Color.Transparent,
+                                color = if (selected) activeColor.copy(alpha = 0.15f) else Color.Transparent,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.dp, 
-                                    if (selected) Color(0xFF03DAC5).copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f)
+                                    if (selected) activeColor.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f)
                                 ),
                                 onClick = { onSelectBackend(text) }
                             ) {
@@ -328,7 +333,7 @@ fun ModelConfigCard(
                                     Text(
                                         text = text.split(" ")[0],
                                         style = MaterialTheme.typography.labelMedium,
-                                        color = if (selected) Color(0xFF03DAC5) else Color.Gray,
+                                        color = if (selected) activeColor else Color.Gray,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 }
