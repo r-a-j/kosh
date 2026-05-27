@@ -241,7 +241,9 @@ fun ChatScreen(
         if (file.exists()) {
             if (file.length() > 10 * 1024 * 1024) { // At least 10MB for a valid LLM
                 viewModel.setModel(file.absolutePath)
-                // Removed auto-initializeEngine() here to wait for user confirmation
+                if (!viewModel.isEngineReady) {
+                    viewModel.initializeEngine()
+                }
             } else {
                 file.delete()
             }

@@ -285,8 +285,6 @@ class ChatViewModel(
         }
         activeSessionKeys.clear()
         activeSessionDocuments.clear()
-        aiProvider.close()
-        isEngineReady = aiProvider.isInitialized
     }
 
 

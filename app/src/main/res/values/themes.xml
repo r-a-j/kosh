@@ -2,7 +2,10 @@
 <resources>
 
     <style name="Theme.Kosh" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@drawable/launch_background</item>
+        <item name="android:windowBackground">@color/kosh_dark_bg</item>
+        <item name="android:windowSplashScreenBackground">@color/kosh_dark_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/kosh_app_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/kosh_dark_bg</item>
         <item name="android:statusBarColor">@color/kosh_dark_bg</item>
         <item name="android:navigationBarColor">@color/kosh_dark_bg</item>
     </style>
