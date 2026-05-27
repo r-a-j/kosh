@@ -142,4 +142,65 @@ class LlmUseCase(
         sb.append("--- END DOCUMENT CONTEXT ---")
         return Pair(sb.toString(), sourceNames.toList())
     }
+
+    fun compileFinalPrompt(
+        chatMessages: List<ChatMessage>,
+        rawPrompt: String,
+        documentContext: String,
+        searchResults: String?,
+        searchQuery: String?,
+        maxContextChars: Int = 8000 // approx 2048 tokens
+    ): String {
+        val budgetForHistory = maxContextChars - rawPrompt.length - documentContext.length - (searchResults?.length ?: 0) - 1500
+        
+        val selectedHistory = mutableListOf<String>()
+        var currentUsedChars = 0
+
+        // Traverse history backward to get most recent messages within budget
+        val historyMessages = chatMessages.dropLast(1)
+        for (msg in historyMessages.reversed()) {
+            val role = if (msg.isUser) "User" else "Assistant"
+            val cleanText = msg.text.trim()
+            if (cleanText.startsWith("Error:") || cleanText.isEmpty()) continue
+            
+            val formattedMsg = "- $role: $cleanText\n"
+            if (currentUsedChars + formattedMsg.length > budgetForHistory && selectedHistory.isNotEmpty()) {
+                break
+            }
+            selectedHistory.add(0, formattedMsg)
+            currentUsedChars += formattedMsg.length
+        }
+
+        val promptSb = StringBuilder()
+        
+        // 1. System context
+        promptSb.append("You are Kosh, a private offline personal assistant. ")
+        
+        // 2. Chat history context
+        if (selectedHistory.isNotEmpty()) {
+            promptSb.append("Here is the context of our conversation history for reference:\n")
+            promptSb.append("--- START CONVERSATION HISTORY ---\n")
+            for (msg in selectedHistory) {
+                promptSb.append(msg)
+            }
+            promptSb.append("--- END CONVERSATION HISTORY ---\n\n")
+        }
+
+        // 3. Search Context
+        if (!searchResults.isNullOrBlank()) {
+            promptSb.append("You have access to the web search results below to answer the user's query.\n")
+            promptSb.append("SEARCH RESULTS (Query: $searchQuery):\n")
+            promptSb.append("$searchResults\n\n")
+        }
+
+        // 4. Document Context
+        if (documentContext.isNotEmpty()) {
+            promptSb.append(documentContext).append("\n\n")
+        }
+
+        // 5. Current User Query
+        promptSb.append("USER QUERY: $rawPrompt")
+        
+        return promptSb.toString()
+    }
 }

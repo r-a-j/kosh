@@ -1387,23 +1387,20 @@ class ChatViewModel(
                 val (documentContext, sourceDocs) = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
                 sourceDocumentsString = if (sourceDocs.isNotEmpty()) sourceDocs.joinToString(", ") else null
                 
-                val basePrompt = if (documentContext.isNotEmpty()) {
-                    "$documentContext\n\nUSER QUERY: $rawPrompt"
-                } else {
-                    rawPrompt
-                }
-
                 val shouldSearch = detectSearchRequirement(rawPrompt)
 
                 var lastQueryUsed: String? = null
-                val finalPrompt = if (shouldSearch) {
+                var searchResults: String? = null
+                var searchQuery: String? = null
+
+                if (shouldSearch) {
                     withContext(Dispatchers.Main) { 
                         isSearchingInternet = true 
                         agenticStateLabel = "Querying Web Knowledge..."
                     }
                     
-                    val searchQuery = determineSearchQuery(rawPrompt)
-                    val searchResults = searchProvider.performSearch(searchQuery, selectedSearchEngine) { status ->
+                    searchQuery = determineSearchQuery(rawPrompt)
+                    val rawResults = searchProvider.performSearch(searchQuery!!, selectedSearchEngine) { status ->
                         viewModelScope.launch(Dispatchers.Main) {
                             agenticStateLabel = status
                         }
@@ -1417,19 +1414,23 @@ class ChatViewModel(
                         isSearchingInternet = false
                     }
 
-                    val hasResults = searchResults.isNotEmpty() && 
-                            !searchResults.contains("No search results found.") && 
-                            !searchResults.contains("Error performing search:")
+                    val hasResults = rawResults.isNotEmpty() && 
+                            !rawResults.contains("No search results found.") && 
+                            !rawResults.contains("Error performing search:")
                     
                     if (hasResults) {
                         lastQueryUsed = searchQuery
-                        buildSystemPrompt(searchQuery, searchResults, basePrompt)
-                    } else {
-                        basePrompt
+                        searchResults = rawResults
                     }
-                } else {
-                    basePrompt
                 }
+
+                val finalPrompt = llmUseCase.compileFinalPrompt(
+                    chatMessages = chatMessages,
+                    rawPrompt = rawPrompt,
+                    documentContext = documentContext,
+                    searchResults = searchResults,
+                    searchQuery = lastQueryUsed
+                )
 
                 if (lastQueryUsed != null) {
                     withContext(Dispatchers.Main) {

@@ -58,4 +58,66 @@ class LlmUseCaseTest {
         assertFalse(llmUseCase.detectSearchRequirement("hello, who are you?", isInternetEnabled = true))
         assertFalse(llmUseCase.detectSearchRequirement("Explain the concept of quantum computing.", isInternetEnabled = true))
     }
+
+    @Test
+    fun testCompileFinalPromptFormatsCorrectlyWithEmptyHistory() {
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = emptyList(),
+            rawPrompt = "How does photosynthesis work?",
+            documentContext = "Photosynthesis is the process used by plants to convert light energy into chemical energy.",
+            searchResults = null,
+            searchQuery = null
+        )
+        
+        assertTrue(prompt.contains("Photosynthesis is the process"))
+        assertTrue(prompt.contains("USER QUERY: How does photosynthesis work?"))
+        assertFalse(prompt.contains("START CONVERSATION HISTORY"))
+    }
+
+    @Test
+    fun testCompileFinalPromptFormatsCorrectlyWithHistory() {
+        val messages = listOf(
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Hello Kosh", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Hello! I am Kosh.", isUser = false),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Current question", isUser = true)
+        )
+
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question",
+            documentContext = "",
+            searchResults = "Web search result snippet",
+            searchQuery = "SearchQuery"
+        )
+
+        assertTrue(prompt.contains("START CONVERSATION HISTORY"))
+        assertTrue(prompt.contains("- User: Hello Kosh"))
+        assertTrue(prompt.contains("- Assistant: Hello! I am Kosh."))
+        assertTrue(prompt.contains("SEARCH RESULTS (Query: SearchQuery):"))
+        assertTrue(prompt.contains("Web search result snippet"))
+        assertTrue(prompt.contains("USER QUERY: Current question"))
+    }
+
+    @Test
+    fun testCompileFinalPromptTruncatesOlderMessagesWhenBudgetExceeded() {
+        val messages = mutableListOf<com.rajpawardotin.kosh.domain.model.ChatMessage>()
+        for (i in 1..20) {
+            messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(text = "User prompt $i", isUser = true))
+            messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Assistant response $i", isUser = false))
+        }
+        messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Current question", isUser = true))
+
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            maxContextChars = 2000
+        )
+
+        assertTrue(prompt.contains("User prompt 20"))
+        assertTrue(prompt.contains("Assistant response 20"))
+        assertFalse(prompt.contains("User prompt 1\n"))
+    }
 }

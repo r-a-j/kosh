@@ -704,9 +704,43 @@ class ChatViewModelTest {
         assertFalse(viewModel.isScreenshotEnabled)
     }
 
+    @Test
+    fun testSendMessageIncludesHistoryInPrompt() = runTest(testDispatcher) {
+        val sessionId = "history-session-id"
+        val session = ChatSession(
+            id = sessionId,
+            title = "History Thread",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeSessionRepo.saveSession(session)
+
+        val msg1 = ChatMessage(id = "msg1", text = "Hello", isUser = true)
+        val msg2 = ChatMessage(id = "msg2", text = "Hi there", isUser = false)
+        fakeMessageRepo.saveMessage(sessionId, msg1)
+        fakeMessageRepo.saveMessage(sessionId, msg2)
+
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.prompt = "What did I say first?"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+
+        val sentPrompt = fakeAI.lastSentPrompt
+        assertNotNull(sentPrompt)
+        assertTrue(sentPrompt!!.contains("START CONVERSATION HISTORY"))
+        assertTrue(sentPrompt.contains("- User: Hello"))
+        assertTrue(sentPrompt.contains("- Assistant: Hi there"))
+        assertTrue(sentPrompt.contains("USER QUERY: What did I say first?"))
+    }
+
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true
         var initializeCallCount = 0
+        var lastSentPrompt: String? = null
         var customFlow: Flow<String>? = null
         override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
             initializeCallCount++
@@ -714,6 +748,7 @@ class ChatViewModelTest {
             return Result.success(Unit)
         }
         override fun sendMessage(prompt: String): Flow<String> {
+            lastSentPrompt = prompt
             return customFlow ?: flowOf("Mock", " response", " from", " Kosh")
         }
         override fun close() {}
