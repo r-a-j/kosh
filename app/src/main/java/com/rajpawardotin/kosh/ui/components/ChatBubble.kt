@@ -85,22 +85,33 @@ fun ChatBubble(
         }
 
         if (message.isUser) {
-            Box(
-                modifier = Modifier
-                    .widthIn(max = 280.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF2F3033)) // Sleek dark charcoal capsule
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Text(
-                    text = message.text,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = 22.sp,
-                        letterSpacing = 0.2.sp,
-                        fontSize = 15.sp
-                    ),
-                    color = Color.White
-                )
+            Column(horizontalAlignment = Alignment.End) {
+                Box(
+                    modifier = Modifier
+                        .widthIn(max = 280.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xFF2F3033)) // Sleek dark charcoal capsule
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Text(
+                        text = message.text,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            lineHeight = 22.sp,
+                            letterSpacing = 0.2.sp,
+                            fontSize = 15.sp
+                        ),
+                        color = Color.White
+                    )
+                }
+                
+                val parsedRefs = remember(message.sourceDocuments) {
+                    ReferenceParser.parseReferences(message.sourceDocuments)
+                }
+                val docsList = parsedRefs.first
+                if (docsList.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    DocumentSourcesView(sourceDocuments = docsList.joinToString(", "))
+                }
             }
         } else {
             // Render blocks
@@ -193,7 +204,7 @@ fun ChatBubble(
                         text = "Neural OS is an AI and can make mistakes. Verify important info.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.3f)
+                            color = Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 8.dp)
                     )

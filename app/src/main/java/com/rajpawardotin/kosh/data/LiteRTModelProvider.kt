@@ -42,7 +42,7 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
             val newEngine = Engine(config)
             newEngine.initialize()
             engine = newEngine
-            conversation = newEngine.createConversation()
+            conversation = null // Do not pre-allocate conversation to avoid FAILED_PRECONDITION
             currentModelPath = modelPath
             currentBackend = backend
             isInitialized = true
@@ -53,12 +53,27 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
     }
 
     override fun sendMessage(prompt: String): Flow<String> = callbackFlow {
-        val currentConv = conversation ?: run {
+        val eng = engine ?: run {
             this@callbackFlow.close(IllegalStateException("Engine not initialized"))
             return@callbackFlow
         }
 
-        currentConv.sendMessageAsync(prompt, object : MessageCallback {
+        // Close any pre-existing active conversation to avoid FAILED_PRECONDITION: A session already exists.
+        val oldConv = conversation
+        conversation = null
+        if (oldConv != null) {
+            try {
+                oldConv.cancelProcess()
+                oldConv.close()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+
+        val freshConv = eng.createConversation()
+        conversation = freshConv
+
+        freshConv.sendMessageAsync(prompt, object : MessageCallback {
             override fun onMessage(message: Message) {
                 val textChunk = message.contents.contents
                     .filterIsInstance<Content.Text>()
@@ -74,7 +89,7 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
         })
         awaitClose {
             try {
-                currentConv.cancelProcess()
+                freshConv.cancelProcess()
             } catch (e: Exception) {
                 // Ignore
             }

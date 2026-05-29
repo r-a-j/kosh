@@ -452,7 +452,13 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         val db = readableDatabase
         
         // Remove common stop words and punctuation to improve RAG search relevance
-        val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
+        val stopWords = setOf(
+            "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", 
+            "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain",
+            "see", "reference", "doc", "docs", "file", "files", "pdf", "pdfs", "txt", "md", "attachment", "attachments",
+            "earlier", "earliest", "previous", "previously", "above", "below", "read", "view", "check", "open", "here", "there",
+            "them", "yesterday", "message", "chat", "conversation", "show", "get", "give", "display", "find", "search", "lookup", "look"
+        )
         val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
         val terms = sanitizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() && !stopWords.contains(it) }
 

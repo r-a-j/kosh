@@ -92,6 +92,7 @@ class ChatViewModel(
                         modelPath = generalModel.filePath
                     }
                 }
+                isCheckingModels = false
             }
         }
     }
@@ -193,6 +194,7 @@ class ChatViewModel(
     }
 
     var modelPath by mutableStateOf<String?>(null)
+    var isCheckingModels by mutableStateOf(true)
     var isCopyingModel by mutableStateOf(false)
     var isInitializing by mutableStateOf(false)
     var prompt by mutableStateOf("")
@@ -1315,13 +1317,27 @@ class ChatViewModel(
             currentSessionId = sessionId
         }
 
-        // 2. Add User Message in memory
-        val userMessage = ChatMessage(text = rawPrompt, isUser = true)
-        chatMessages.add(userMessage)
-
         // Keep copy of attached files, then clear the state immediately to refresh UI
         val filesToProcess = attachedFiles.toList()
         attachedFiles.clear()
+
+        // 2. Add User Message in memory (with serialized attachment information)
+        val sourceDocsJson = if (filesToProcess.isNotEmpty()) {
+            val sb = java.lang.StringBuilder()
+            sb.append("{\"docs\":[")
+            filesToProcess.forEachIndexed { index, file ->
+                val escapedName = file.fileName.replace("\\", "\\\\").replace("\"", "\\\"")
+                sb.append("\"").append(escapedName).append("\"")
+                if (index < filesToProcess.size - 1) sb.append(",")
+            }
+            sb.append("],\"web\":[]}")
+            sb.toString()
+        } else {
+            null
+        }
+
+        val userMessage = ChatMessage(text = rawPrompt, isUser = true, sourceDocuments = sourceDocsJson)
+        chatMessages.add(userMessage)
 
         prompt = ""
         isGenerating = true
@@ -1393,7 +1409,10 @@ class ChatViewModel(
                     // Now save the message (guarantees that the session row already exists)
                     val key = activeSessionKeys[sessionId!!]
                     val userMsgToSave = if (key != null) {
-                        userMessage.copy(text = CryptoUtils.encryptMessage(userMessage.text, key))
+                        userMessage.copy(
+                            text = CryptoUtils.encryptMessage(userMessage.text, key),
+                            sourceDocuments = userMessage.sourceDocuments?.let { CryptoUtils.encryptMessage(it, key) }
+                        )
                     } else {
                         userMessage
                     }
@@ -1401,7 +1420,8 @@ class ChatViewModel(
                 }
 
                 // local RAG retrieval
-                val (documentContext, sourceDocs) = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
+                val resolvedRagQuery = llmUseCase.resolveQueryContext(rawPrompt, chatMessages)
+                val (documentContext, sourceDocs) = retrieveContext(sessionId!!, resolvedRagQuery, filesToProcess.isNotEmpty())
                 
                 val shouldSearch = isInternetEnabled && (isSearchForced || detectSearchRequirement(rawPrompt))
 

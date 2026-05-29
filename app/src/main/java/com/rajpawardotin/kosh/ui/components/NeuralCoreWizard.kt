@@ -32,6 +32,7 @@ fun NeuralCoreWizard(
     modelPath: String?,
     isInitializing: Boolean,
     isCopyingModel: Boolean,
+    isCheckingModels: Boolean,
     selectedBackend: String,
     backends: List<String>,
     onPickModel: () -> Unit,
@@ -90,7 +91,9 @@ fun NeuralCoreWizard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            if (modelPath == null) {
+            if (isCheckingModels) {
+                StepScanningModels()
+            } else if (modelPath == null) {
                 // Step 1: Load Core Intelligence
                 Step1LoadModel(
                     isCopyingModel = isCopyingModel,
@@ -367,6 +370,47 @@ fun Step2Ignite(
                     Text("IGNITE NEURAL CORE", fontWeight = FontWeight.Bold)
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun StepScanningModels() {
+    Card(
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22).copy(alpha = 0.8f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "SCANNING SYSTEM LIBRARY...",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 2.sp
+                ),
+                color = Color(0xFF03DAC5),
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "Kosh is scanning for offline intelligence cores in your secure vault library. Accessing files...",
+                style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                color = Color.Gray,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            CircularProgressIndicator(
+                color = Color(0xFF03DAC5),
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(36.dp)
+            )
         }
     }
 }

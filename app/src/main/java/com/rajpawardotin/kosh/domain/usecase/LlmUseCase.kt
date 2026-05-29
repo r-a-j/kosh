@@ -14,6 +14,16 @@ class LlmUseCase(
     private val documentRepository: DocumentRepository
 ) {
 
+    companion object {
+        val STOP_WORDS = setOf(
+            "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", 
+            "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain",
+            "see", "reference", "doc", "docs", "file", "files", "pdf", "pdfs", "txt", "md", "attachment", "attachments",
+            "earlier", "earliest", "previous", "previously", "above", "below", "read", "view", "check", "open", "here", "there",
+            "them", "yesterday", "message", "chat", "conversation", "show", "get", "give", "display", "find", "search", "lookup", "look"
+        )
+    }
+
     fun detectSearchRequirement(prompt: String, isInternetEnabled: Boolean): Boolean {
         if (!isInternetEnabled) return false
         
@@ -82,6 +92,31 @@ class LlmUseCase(
                 "Do not state that you cannot browse the internet or access real-time information since the search results are already provided to you above."
     }
 
+    fun resolveQueryContext(rawPrompt: String, chatMessages: List<ChatMessage>): String {
+        val trimmed = rawPrompt.trim().lowercase()
+        val numberRegex = Regex("^(?:option|choice|select|number|#)?\\s*(\\d+)\\.?$")
+        val match = numberRegex.matchEntire(trimmed)
+        if (match != null) {
+            val digit = match.groupValues[1]
+            val lastAssistantMsg = chatMessages.reversed().firstOrNull { !it.isUser }?.text
+            if (lastAssistantMsg != null) {
+                val lines = lastAssistantMsg.lines()
+                val linePrefixes = listOf("$digit.", "$digit)", "[$digit]", "$digit -", "$digit:")
+                for (line in lines) {
+                    val trimmedLine = line.trim()
+                    val matchedPrefix = linePrefixes.find { trimmedLine.startsWith(it) }
+                    if (matchedPrefix != null) {
+                        val optionText = trimmedLine.substring(matchedPrefix.length).trim()
+                        if (optionText.isNotEmpty()) {
+                            return optionText
+                        }
+                    }
+                }
+            }
+        }
+        return rawPrompt
+    }
+
     fun retrieveContext(
         sessionId: String, 
         query: String, 
@@ -90,9 +125,8 @@ class LlmUseCase(
         justAttached: Boolean = false
     ): Pair<String, List<String>> {
         val relevantDocs = if (isEncrypted) {
-            val stopWords = setOf("a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain")
             val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
-            val terms = sanitizedQuery.split(Regex("\\s+")).filter { it.isNotBlank() && !stopWords.contains(it) }
+            val terms = sanitizedQuery.split(Regex("\\s+")).filter { it.isNotBlank() && !STOP_WORDS.contains(it) }
             
             if (terms.isEmpty() || justAttached) {
                 activeSessionDocuments.takeLast(3).reversed()
@@ -124,26 +158,41 @@ class LlmUseCase(
                 }
             }
         } else {
-            val docs = documentRepository.searchSessionDocumentsFTS(sessionId, query)
-            if (docs.isEmpty() && justAttached) {
-                emptyList()
+            val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
+            val terms = sanitizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() && !STOP_WORDS.contains(it) }
+
+            if (terms.isEmpty() || justAttached) {
+                activeSessionDocuments.takeLast(3).reversed()
             } else {
-                docs.take(3)
+                val docs = documentRepository.searchSessionDocumentsFTS(sessionId, query)
+                if (docs.isEmpty()) {
+                    activeSessionDocuments.takeLast(3).reversed()
+                } else {
+                    docs.take(3)
+                }
             }
         }
 
         if (relevantDocs.isEmpty()) return Pair("", emptyList())
 
-        val sb = StringBuilder()
-        sb.append("Answer the user query using ONLY the following document context:\n")
-        sb.append("--- START DOCUMENT CONTEXT ---\n")
         val sourceNames = mutableSetOf<String>()
+        val sb = StringBuilder()
+        
         for (doc in relevantDocs) {
-            sb.append("[File: ${doc.fileName}]\n")
-            sb.append("${doc.chunkText}\n\n")
             sourceNames.add(doc.fileName)
         }
-        sb.append("--- END DOCUMENT CONTEXT ---")
+
+        sb.append("### ACTIVE CONVERSATION DOCUMENTS\n")
+        sb.append("The user has attached the following files to this session: ")
+        sb.append(sourceNames.joinToString(", ")).append("\n\n")
+        sb.append("Excerpts/Context from the attached documents:\n")
+        sb.append("--- START EXCERPTS ---\n")
+        for (doc in relevantDocs) {
+            sb.append("File: ").append(doc.fileName).append(" (Chunk ").append(doc.chunkIndex + 1).append("):\n")
+            sb.append(doc.chunkText.trim()).append("\n\n")
+        }
+        sb.append("--- END EXCERPTS ---")
+
         return Pair(sb.toString(), sourceNames.toList())
     }
 
@@ -178,33 +227,53 @@ class LlmUseCase(
 
         val promptSb = StringBuilder()
         
-        // 1. System context
-        promptSb.append("You are Kosh, a private offline personal assistant. ")
+        // 1. System Prompt / Instructions
+        promptSb.append("### SYSTEM INSTRUCTIONS\n")
+        promptSb.append("You are Kosh, a private, secure offline personal assistant running on the user's device. ")
+        promptSb.append("You help the user brainstorm, study, and analyze information.\n")
         
-        // 2. Chat history context
-        if (selectedHistory.isNotEmpty()) {
-            promptSb.append("Here is the context of our conversation history for reference:\n")
-            promptSb.append("--- START CONVERSATION HISTORY ---\n")
-            for (msg in selectedHistory) {
-                promptSb.append(msg)
-            }
-            promptSb.append("--- END CONVERSATION HISTORY ---\n\n")
+        if (documentContext.isNotEmpty()) {
+            promptSb.append("- The user has attached documents/files to this conversation. ")
+            promptSb.append("Use the provided excerpts under 'ACTIVE CONVERSATION DOCUMENTS' to answer the user's query. ")
+            promptSb.append("If the user refers to 'the document', 'the PDF', 'the file', or 'reference doc attached earlier', ")
+            promptSb.append("they are referring to these active conversation documents. ")
+            promptSb.append("Always prioritize this context and answer based on it.\n")
+            promptSb.append("- Keep your answers factual and grounded ONLY in the provided document excerpts. ")
+            promptSb.append("If the information is not in the excerpts and cannot be answered from them, say 'I cannot find that in the attached document.'\n")
         }
-
-        // 3. Search Context
+        
         if (!searchResults.isNullOrBlank()) {
-            promptSb.append("You have access to the web search results below to answer the user's query.\n")
-            promptSb.append("SEARCH RESULTS (Query: $searchQuery):\n")
-            promptSb.append("$searchResults\n\n")
+            promptSb.append("- You have access to real-time search results. Use the provided search results to answer the query.\n")
         }
+        promptSb.append("\n")
 
-        // 4. Document Context
+        // 2. Active Documents Context
         if (documentContext.isNotEmpty()) {
             promptSb.append(documentContext).append("\n\n")
         }
+        
+        // 3. Search Context
+        if (!searchResults.isNullOrBlank()) {
+            promptSb.append("### WEB SEARCH RESULTS\n")
+            promptSb.append("Search Query: ").append(searchQuery).append("\n")
+            promptSb.append("--- START SEARCH RESULTS ---\n")
+            promptSb.append(searchResults.trim()).append("\n")
+            promptSb.append("--- END SEARCH RESULTS ---\n\n")
+        }
+
+        // 4. Conversation History Context
+        if (selectedHistory.isNotEmpty()) {
+            promptSb.append("### CONVERSATION HISTORY\n")
+            promptSb.append("--- START HISTORY ---\n")
+            for (msg in selectedHistory) {
+                promptSb.append(msg)
+            }
+            promptSb.append("--- END HISTORY ---\n\n")
+        }
 
         // 5. Current User Query
-        promptSb.append("USER QUERY: $rawPrompt")
+        promptSb.append("### USER QUERY\n")
+        promptSb.append(rawPrompt.trim())
         
         return promptSb.toString()
     }

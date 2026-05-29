@@ -233,7 +233,10 @@ fun ChatInput(
                             .weight(1f)
                             .padding(start = startPadding, end = endPadding, top = 12.dp, bottom = 12.dp),
                         enabled = enabled && !isGenerating,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color.White,
+                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                        ),
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Default, // Carriage Return for multi-line support
                             capitalization = KeyboardCapitalization.Sentences
@@ -256,7 +259,9 @@ fun ChatInput(
                                 if (value.isEmpty()) {
                                     Text(
                                         text = placeholderText,
-                                        style = MaterialTheme.typography.bodyLarge,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
+                                        ),
                                         color = placeholderColor
                                     )
                                 }

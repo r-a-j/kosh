@@ -73,7 +73,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
     val density = LocalDensity.current
-    var inputHeightDp by remember { mutableStateOf(0.dp) }
+    var inputHeightDp by remember { mutableStateOf(80.dp) }
 
     val currentSessionId = viewModel.currentSessionId
     val currentSession = viewModel.savedSessions.find { it.id == currentSessionId }
@@ -455,6 +455,7 @@ fun ChatScreen(
                         modelPath = viewModel.modelPath,
                         isInitializing = viewModel.isInitializing,
                         isCopyingModel = viewModel.isCopyingModel,
+                        isCheckingModels = viewModel.isCheckingModels,
                         selectedBackend = viewModel.selectedBackend,
                         backends = viewModel.backends,
                         onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
@@ -563,13 +564,13 @@ fun ChatScreen(
                                 isSearchForced = viewModel.isSearchForced,
                                 onToggleSearch = { viewModel.toggleSearchForced() },
                                 modifier = Modifier
+                                    .onGloballyPositioned { coordinates ->
+                                        inputHeightDp = with(density) { coordinates.size.height.toDp() }
+                                    }
                                     .fillMaxWidth()
                                     .imePadding()
                                     .navigationBarsPadding()
                                     .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                                    .onGloballyPositioned { coordinates ->
-                                        inputHeightDp = with(density) { coordinates.size.height.toDp() }
-                                    }
                             )
                         }
                     }
