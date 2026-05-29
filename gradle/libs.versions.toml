@@ -11,7 +11,7 @@ composeBom = "2026.02.01"
 # Remove ML Kit
 # mlkitGenaiPrompt = "1.0.0-beta2"
 litertlm = "0.12.0"
-litert = "2.1.5"
+litert = "1.4.2"
 qnnDelegate = "2.37.0"
 markdownRenderer = "0.41.0"
 coil = "2.7.0"
@@ -28,6 +28,7 @@ androidx-biometric = { group = "androidx.biometric", name = "biometric", version
 markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3-android", version.ref = "markdownRenderer" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 litert-core = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
+litert-gpu = { group = "com.google.ai.edge.litert", name = "litert-gpu", version.ref = "litert" }
 qnn-litert-delegate = { group = "com.qualcomm.qti", name = "qnn-litert-delegate", version.ref = "qnnDelegate" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

@@ -109,6 +109,7 @@ dependencies {
     // implementation(libs.mlkit.genai.prompt)
     implementation(libs.litertlm.android)
     implementation(libs.litert.core)
+    implementation(libs.litert.gpu)
     implementation(libs.qnn.litert.delegate)
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")

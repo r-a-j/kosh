@@ -135,6 +135,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             )
         """.trimIndent()
 
+        //language=none
         val createDocumentsFtsTable = """
             CREATE VIRTUAL TABLE documents_fts USING fts4(
                 chunk_id,
@@ -200,6 +201,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 )
             """.trimIndent())
 
+            //language=none
             db.execSQL("""
                 CREATE VIRTUAL TABLE documents_fts USING fts4(
                     chunk_id,

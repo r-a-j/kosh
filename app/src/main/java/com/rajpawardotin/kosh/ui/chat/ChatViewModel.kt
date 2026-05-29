@@ -1523,7 +1523,7 @@ class ChatViewModel(
 
                 assistantMessageId = java.util.UUID.randomUUID().toString()
                 var totalChars = 0
-                val generationStartTime = System.currentTimeMillis()
+                var generationStartTime = 0L
 
                 aiProvider.sendMessage(finalPrompt).collect { text ->
                     var shouldStop = false
@@ -1535,6 +1535,9 @@ class ChatViewModel(
                         
                         // Calculate real tokens per second
                         totalChars += text.length
+                        if (generationStartTime == 0L) {
+                            generationStartTime = System.currentTimeMillis()
+                        }
                         val elapsedMs = System.currentTimeMillis() - generationStartTime
                         if (elapsedMs > 100) {
                             val elapsedSec = elapsedMs / 1000f

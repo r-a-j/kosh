@@ -36,9 +36,17 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
             val litertBackend = when (backend) {
                 "GPU" -> Backend.GPU()
                 "NPU (Qualcomm)" -> Backend.NPU(context.applicationInfo.nativeLibraryDir)
-                else -> Backend.CPU()
+                else -> {
+                    // Restrict CPU threads to 4 to target performance cores and avoid scheduling on
+                    // slow efficiency cores. This reduces cache thrashing, synchronization barriers, and heat.
+                    Backend.CPU(numOfThreads = 4)
+                }
             }
-            val config = EngineConfig(modelPath = modelPath, backend = litertBackend)
+            val config = EngineConfig(
+                modelPath = modelPath,
+                backend = litertBackend,
+                cacheDir = context.cacheDir.absolutePath
+            )
             val newEngine = Engine(config)
             newEngine.initialize()
             engine = newEngine
