@@ -41,3 +41,18 @@ Kosh uses a customized `safeIoDispatcher` infused with a `CoroutineExceptionHand
 - It catches any background exceptions, prints the stack trace, and displays a user-friendly Toast notification.
 - It explicitly ignores `CancellationException` to avoid flooding logs during lifecycle destruction.
 - It intentionally re-throws `OutOfMemoryError` to allow a clean crash, preventing Kosh from limping along as a frozen "zombie" application with a trashed heap.
+
+## 5. Web Crawling & LaTeX Rendering Fallbacks
+
+### A. Anti-Blocking & Scraper Resilience
+- **Rotating User-Agents**: To avoid HTTP `403 Forbidden` or `429 Too Many Requests` status codes from major search providers and crawled websites, `SearchProviderImpl` rotates mobile and desktop User-Agents.
+- **Custom Browser Request Headers**: Scrapers inject standard request headers (`Accept`, `Accept-Language`, `Referer`, `Sec-Ch-Ua`, etc.) mimicking a real Chrome or Safari browser.
+- **Fallback Content Extraction**: If parser elements cannot isolate a `<main>` or `<article>` element, they fall back to parsing paragraphs, meta description tags, or page titles to provide context.
+
+### B. Offline LaTeX KaTeX WebView Fallback
+- **WebView Isolations**: Loading native JS engines or heavy rendering layouts can lead to memory overhead or rendering freezes. The WebView is initialized with hardware acceleration and transparent backgrounds to merge smoothly into Jetpack Compose.
+- **Offline Plain-Text Rendering**: Since KaTeX styles are loaded dynamically, the rendering wrapper falls back to a clean monospace formatting card if the device is offline or the renderer times out, ensuring that the original mathematical formula is still readable.
+
+### C. JSON Reference Parsing Robustness
+- **Backward-Compatible Handlers**: Older versions of the app saved citations as plain comma-separated strings inside the database. When loading history, the system attempts to match structured JSON elements. If parsing fails, it safely falls back to parsing as a comma-separated document list, preventing database deserialization crashes.
+

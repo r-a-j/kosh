@@ -549,6 +549,9 @@ fun ChatScreen(
                         onDetachFile = { viewModel.detachFile(it) },
                         enabled = viewModel.isEngineReady,
                         isGenerating = viewModel.isGenerating,
+                        isInternetEnabled = viewModel.isInternetEnabled,
+                        isSearchForced = viewModel.isSearchForced,
+                        onToggleSearch = { viewModel.toggleSearchForced() },
                         modifier = Modifier
                             .fillMaxWidth()
                             .imePadding()

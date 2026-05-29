@@ -21,7 +21,7 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
         query: String,
         searchEngine: String,
         onStatusUpdate: (String) -> Unit
-    ): String = withContext(Dispatchers.IO) {
+    ): com.rajpawardotin.kosh.domain.provider.SearchResponse = withContext(Dispatchers.IO) {
         try {
             val urlsInQuery = extractUrls(query)
             val (maxPages, maxChars) = getRAMBasedLimits()
@@ -38,23 +38,38 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
                 val resultsToCrawl = urlsInQuery.take(maxPages)
                 val deferredCrawls = resultsToCrawl.map { url ->
                     async(Dispatchers.IO) {
-                        val content = crawlUrl(url, maxChars, onStatusUpdate)
-                        url to content
+                        crawlUrl(url, maxChars, onStatusUpdate)
                     }
                 }
                 val crawled = deferredCrawls.awaitAll()
                 val contextBuilder = StringBuilder("DIRECT WEBPAGE CONTENTS LOADED:\n\n")
-                crawled.forEachIndexed { index, (url, content) ->
-                    contextBuilder.append("URL ${index + 1}: $url\n")
-                    contextBuilder.append("Content:\n$content\n\n")
+                val sourcesList = mutableListOf<com.rajpawardotin.kosh.domain.provider.SearchSource>()
+                crawled.forEachIndexed { index, page ->
+                    contextBuilder.append("URL ${index + 1}: ${page.url}\n")
+                    contextBuilder.append("Content:\n${page.text}\n\n")
+                    sourcesList.add(
+                        com.rajpawardotin.kosh.domain.provider.SearchSource(
+                            title = page.title,
+                            url = page.url,
+                            snippet = page.text.take(200),
+                            imageUrl = page.imageUrl,
+                            videoUrl = page.videoUrl
+                        )
+                    )
                 }
-                return@withContext contextBuilder.toString()
+                return@withContext com.rajpawardotin.kosh.domain.provider.SearchResponse(
+                    contextText = contextBuilder.toString(),
+                    sources = sourcesList
+                )
             }
             
             onStatusUpdate("Searching $searchEngine...")
             val results = fetchSearchResults(query, searchEngine, onStatusUpdate)
             if (results.isEmpty()) {
-                return@withContext "No search results found."
+                return@withContext com.rajpawardotin.kosh.domain.provider.SearchResponse(
+                    contextText = "No search results found.",
+                    sources = emptyList()
+                )
             }
             
             onStatusUpdate("Found ${results.size} matches. Concurrently scraping pages...")
@@ -62,8 +77,8 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             
             val deferredCrawls = resultsToCrawl.map { res ->
                 async(Dispatchers.IO) {
-                    val pageContent = crawlUrl(res.link, maxChars, onStatusUpdate)
-                    res to pageContent
+                    val page = crawlUrl(res.link, maxChars, onStatusUpdate)
+                    res to page
                 }
             }
             
@@ -77,14 +92,42 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             }
             
             contextBuilder.append("\nDEEP CRAWL CONTENT INTEGRATED:\n\n")
-            crawled.forEachIndexed { index, (res, content) ->
-                contextBuilder.append("--- PAGE ${index + 1}: ${res.title} (${res.link}) ---\n")
-                contextBuilder.append("$content\n\n")
+            val sourcesList = mutableListOf<com.rajpawardotin.kosh.domain.provider.SearchSource>()
+            crawled.forEachIndexed { index, (res, page) ->
+                contextBuilder.append("--- PAGE ${index + 1}: ${page.title} (${page.url}) ---\n")
+                contextBuilder.append("${page.text}\n\n")
+                sourcesList.add(
+                    com.rajpawardotin.kosh.domain.provider.SearchSource(
+                        title = page.title.takeIf { it != "Scrape Failed" && it != "HTTP Error" && it != "Non-text Content" && it.isNotBlank() } ?: res.title,
+                        url = page.url,
+                        snippet = res.snippet,
+                        imageUrl = page.imageUrl,
+                        videoUrl = page.videoUrl
+                    )
+                )
             }
             
-            contextBuilder.toString()
+            results.drop(maxPages).take(5).forEach { res ->
+                if (sourcesList.none { it.url == res.link }) {
+                    sourcesList.add(
+                        com.rajpawardotin.kosh.domain.provider.SearchSource(
+                            title = res.title,
+                            url = res.link,
+                            snippet = res.snippet
+                        )
+                    )
+                }
+            }
+            
+            com.rajpawardotin.kosh.domain.provider.SearchResponse(
+                contextText = contextBuilder.toString(),
+                sources = sourcesList
+            )
         } catch (e: Exception) {
-            "Error performing search: ${e.localizedMessage}"
+            com.rajpawardotin.kosh.domain.provider.SearchResponse(
+                contextText = "Error performing search: ${e.localizedMessage}",
+                sources = emptyList()
+            )
         }
     }
 
@@ -538,23 +581,29 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
         }
     }
 
-    private suspend fun crawlUrl(url: String, maxChars: Int, onStatusUpdate: (String) -> Unit): String = withContext(Dispatchers.IO) {
+    private suspend fun crawlUrl(url: String, maxChars: Int, onStatusUpdate: (String) -> Unit): CrawledPage = withContext(Dispatchers.IO) {
         try {
             if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                return@withContext "Invalid URL"
+                return@withContext CrawledPage("Invalid URL", url, "Invalid URL")
             }
             val uri = java.net.URI(url)
             val host = uri.host
             if (host == null || isBannedIp(host)) {
-                return@withContext "Access Denied: Local IP blocked"
+                return@withContext CrawledPage("Access Denied", url, "Access Denied: Local IP blocked")
             }
             val domain = host
             onStatusUpdate("Scraping: $domain...")
             
             val request = Request.Builder()
                 .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header("User-Agent", getRandomUserAgent())
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+                .header("Accept-Language", "en-US,en;q=0.9")
+                .header("Sec-Ch-Ua", "\"Not A(Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
+                .header("Sec-Fetch-Dest", "document")
+                .header("Sec-Fetch-Mode", "navigate")
+                .header("Sec-Fetch-Site", "none")
+                .header("Sec-Fetch-User", "?1")
                 .build()
                 
             val clientWithTimeout = client.newBuilder()
@@ -564,23 +613,32 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
                 
             val html = clientWithTimeout.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return@withContext "HTTP error: ${response.code}"
+                    return@withContext CrawledPage("HTTP Error", url, "HTTP error: ${response.code}")
                 }
                 
                 val contentType = response.header("Content-Type") ?: ""
                 if (!contentType.contains("text/html") && !contentType.contains("text/plain")) {
-                    return@withContext "Skipped non-text content"
+                    return@withContext CrawledPage("Non-text Content", url, "Skipped non-text content")
                 }
                 
                 response.body?.string()
-            } ?: return@withContext "No content"
+            } ?: return@withContext CrawledPage("No content", url, "No content")
             
             val doc = Jsoup.parse(html, url)
             
-            doc.select("script, style, iframe, footer, header, nav, aside, noscript, form").remove()
+            val pageTitle = doc.select("meta[property=og:title]").firstOrNull()?.attr("content")?.takeIf { it.isNotBlank() }
+                ?: doc.title().takeIf { it.isNotBlank() }
+                ?: domain
+            
+            val imageUrl = doc.select("meta[property=og:image], meta[name=twitter:image]").firstOrNull()?.attr("content")?.takeIf { it.isNotBlank() }
+            val videoUrl = doc.select("meta[property=og:video:url], meta[property=og:video]").firstOrNull()?.attr("content")?.takeIf { it.isNotBlank() }
+            
+            val bodyElement = doc.select("article, main, .content, .post, .article-body, #content").firstOrNull() ?: doc.body()
+            val cleanElement = bodyElement.clone()
+            cleanElement.select("script, style, iframe, footer, header, nav, aside, noscript, form, .cookie, .nav").remove()
             
             val textBuilder = StringBuilder()
-            val elements = doc.select("h1, h2, h3, p, li")
+            val elements = cleanElement.select("h1, h2, h3, p, li")
             var totalLength = 0
             for (element in elements) {
                 val text = element.text().trim()
@@ -593,17 +651,44 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
                 }
             }
             
-            val extracted = textBuilder.toString().trim()
+            var extracted = textBuilder.toString().trim()
             if (extracted.isEmpty()) {
-                val bodyText = doc.body().text().trim()
-                if (bodyText.length > maxChars) bodyText.substring(0, maxChars) else bodyText
+                val bodyText = cleanElement.text().trim()
+                extracted = if (bodyText.length > maxChars) bodyText.substring(0, maxChars) else bodyText
             } else {
-                if (extracted.length > maxChars) extracted.substring(0, maxChars) else extracted
+                if (extracted.length > maxChars) extracted = extracted.substring(0, maxChars)
             }
+            
+            if (extracted.length < 150) {
+                val description = doc.select("meta[name=description], meta[property=og:description]").firstOrNull()?.attr("content")
+                if (!description.isNullOrBlank()) {
+                    extracted = "$extracted\n\nPage Summary:\n$description"
+                }
+            }
+            
+            CrawledPage(pageTitle, url, extracted, imageUrl, videoUrl)
         } catch (e: Exception) {
-            "Scrape failed: ${e.localizedMessage}"
+            CrawledPage("Scrape Failed", url, "Scrape failed: ${e.localizedMessage}")
         }
     }
+
+    private fun getRandomUserAgent(): String {
+        return listOf(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        ).random()
+    }
 }
+
+private data class CrawledPage(
+    val title: String,
+    val url: String,
+    val text: String,
+    val imageUrl: String? = null,
+    val videoUrl: String? = null
+)
 
 private data class SearchResult(val title: String, val link: String, val snippet: String)

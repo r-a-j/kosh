@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajpawardotin.kosh.data.Bip39Utils
 import com.rajpawardotin.kosh.data.CryptoUtils
+import com.rajpawardotin.kosh.data.DestroyableSecretKey
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.data.TtsProvider
 import com.rajpawardotin.kosh.domain.model.ChatSession
@@ -196,6 +197,7 @@ class ChatViewModel(
     var isInitializing by mutableStateOf(false)
     var prompt by mutableStateOf("")
     var isInternetEnabled by mutableStateOf(false)
+    var isSearchForced by mutableStateOf(false)
     var isSearchingInternet by mutableStateOf(false)
     var isGenerating by mutableStateOf(false)
     var currentResponseChunk by mutableStateOf("")
@@ -272,15 +274,19 @@ class ChatViewModel(
     fun clearActiveSessionKeys() {
         stopGeneration()
         for (key in activeSessionKeys.values) {
-            try {
-                val keyField = key.javaClass.getDeclaredField("key")
-                keyField.isAccessible = true
-                val keyBytes = keyField.get(key) as? ByteArray
-                if (keyBytes != null) {
-                    java.util.Arrays.fill(keyBytes, 0.toByte())
+            if (key is DestroyableSecretKey) {
+                key.clear()
+            } else {
+                try {
+                    val keyField = key.javaClass.getDeclaredField("key")
+                    keyField.isAccessible = true
+                    val keyBytes = keyField.get(key) as? ByteArray
+                    if (keyBytes != null) {
+                        java.util.Arrays.fill(keyBytes, 0.toByte())
+                    }
+                } catch (e: Exception) {
+                    // Ignore
                 }
-            } catch (e: Exception) {
-                // Ignore
             }
         }
         activeSessionKeys.clear()
@@ -290,11 +296,17 @@ class ChatViewModel(
 
     fun lockAppOnBackground() {
         clearActiveSessionKeys()
-        currentSessionId?.let { sessId ->
-            val session = savedSessions.find { it.id == sessId }
-            if (session?.encryptedKeyPassword != null) {
-                chatMessages.clear()
-                checkedItems.clear()
+        if (isTemporarySession) {
+            chatMessages.clear()
+            checkedItems.clear()
+            currentSessionId = null
+        } else {
+            currentSessionId?.let { sessId ->
+                val session = savedSessions.find { it.id == sessId }
+                if (session?.encryptedKeyPassword != null) {
+                    chatMessages.clear()
+                    checkedItems.clear()
+                }
             }
         }
         
@@ -304,6 +316,10 @@ class ChatViewModel(
         } else {
             showToast("Vault Sealed in Background")
         }
+    }
+
+    fun toggleSearchForced() {
+        isSearchForced = !isSearchForced
     }
 
     fun toggleAppLock(enabled: Boolean) {
@@ -700,6 +716,7 @@ class ChatViewModel(
         if (isGenerating) return
         currentSessionId = null
         isTemporarySession = isTemporary
+        isSearchForced = false
         chatMessages.clear()
         checkedItems.clear()
         lastSearchQuery = null
@@ -1385,13 +1402,13 @@ class ChatViewModel(
 
                 // local RAG retrieval
                 val (documentContext, sourceDocs) = retrieveContext(sessionId!!, rawPrompt, filesToProcess.isNotEmpty())
-                sourceDocumentsString = if (sourceDocs.isNotEmpty()) sourceDocs.joinToString(", ") else null
                 
-                val shouldSearch = detectSearchRequirement(rawPrompt)
+                val shouldSearch = isInternetEnabled && (isSearchForced || detectSearchRequirement(rawPrompt))
 
                 var lastQueryUsed: String? = null
                 var searchResults: String? = null
                 var searchQuery: String? = null
+                val searchSourcesList = mutableListOf<com.rajpawardotin.kosh.domain.provider.SearchSource>()
 
                 if (shouldSearch) {
                     withContext(Dispatchers.Main) { 
@@ -1400,7 +1417,7 @@ class ChatViewModel(
                     }
                     
                     searchQuery = determineSearchQuery(rawPrompt)
-                    val rawResults = searchProvider.performSearch(searchQuery!!, selectedSearchEngine) { status ->
+                    val searchResponse = searchProvider.performSearch(searchQuery!!, selectedSearchEngine) { status ->
                         viewModelScope.launch(Dispatchers.Main) {
                             agenticStateLabel = status
                         }
@@ -1414,6 +1431,7 @@ class ChatViewModel(
                         isSearchingInternet = false
                     }
 
+                    val rawResults = searchResponse.contextText
                     val hasResults = rawResults.isNotEmpty() && 
                             !rawResults.contains("No search results found.") && 
                             !rawResults.contains("Error performing search:")
@@ -1421,7 +1439,43 @@ class ChatViewModel(
                     if (hasResults) {
                         lastQueryUsed = searchQuery
                         searchResults = rawResults
+                        searchSourcesList.addAll(searchResponse.sources)
                     }
+                }
+
+                // Serialize both documents and web sources into a JSON string manually (runs on both JVM and Android)
+                if (sourceDocs.isEmpty() && searchSourcesList.isEmpty()) {
+                    sourceDocumentsString = null
+                } else {
+                    val sbRefs = StringBuilder()
+                    sbRefs.append("{")
+                    
+                    sbRefs.append("\"docs\":[")
+                    sourceDocs.forEachIndexed { index, doc ->
+                        val escapedDoc = doc.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+                        sbRefs.append("\"").append(escapedDoc).append("\"")
+                        if (index < sourceDocs.size - 1) sbRefs.append(",")
+                    }
+                    sbRefs.append("],")
+                    
+                    sbRefs.append("\"web\":[")
+                    searchSourcesList.forEachIndexed { index, src ->
+                        val escapedTitle = src.title.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+                        val escapedUrl = src.url.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+                        val escapedImg = (src.imageUrl ?: "").replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+                        val escapedVid = (src.videoUrl ?: "").replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ")
+                        
+                        sbRefs.append("{")
+                        sbRefs.append("\"title\":\"").append(escapedTitle).append("\",")
+                        sbRefs.append("\"url\":\"").append(escapedUrl).append("\",")
+                        sbRefs.append("\"imageUrl\":\"").append(escapedImg).append("\",")
+                        sbRefs.append("\"videoUrl\":\"").append(escapedVid).append("\"")
+                        sbRefs.append("}")
+                        if (index < searchSourcesList.size - 1) sbRefs.append(",")
+                    }
+                    sbRefs.append("]")
+                    sbRefs.append("}")
+                    sourceDocumentsString = sbRefs.toString()
                 }
 
                 val finalPrompt = llmUseCase.compileFinalPrompt(

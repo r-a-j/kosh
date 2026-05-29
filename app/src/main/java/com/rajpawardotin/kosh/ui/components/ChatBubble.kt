@@ -27,6 +27,7 @@ import com.mikepenz.markdown.m3.markdownTypography
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.ui.chat.ChatContentBlock
 import com.rajpawardotin.kosh.ui.chat.ResponseParser
+import com.rajpawardotin.kosh.ui.chat.ReferenceParser
 import com.rajpawardotin.kosh.ui.chat.components.*
 
 @Composable
@@ -159,13 +160,26 @@ fun ChatBubble(
                         is ChatContentBlock.Sources -> {
                             SourcesCarousel(items = block.items)
                         }
+                        is ChatContentBlock.MathBlock -> {
+                            MathFormulaCard(formula = block.formula)
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                 }
 
                 if (!message.isSystemMessage) {
-                    if (!message.sourceDocuments.isNullOrBlank()) {
-                        DocumentSourcesView(sourceDocuments = message.sourceDocuments)
+                    val parsedRefs = remember(message.sourceDocuments) {
+                        ReferenceParser.parseReferences(message.sourceDocuments)
+                    }
+                    val docsList = parsedRefs.first
+                    val webList = parsedRefs.second
+
+                    if (docsList.isNotEmpty()) {
+                        DocumentSourcesView(sourceDocuments = docsList.joinToString(", "))
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    if (webList.isNotEmpty()) {
+                        SourcesCarousel(items = webList)
                         Spacer(modifier = Modifier.height(4.dp))
                     }
                     val isCurrentlySpeaking = currentlySpeakingMessageId == message.id

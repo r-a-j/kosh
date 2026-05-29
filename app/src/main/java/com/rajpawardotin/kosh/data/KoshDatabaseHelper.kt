@@ -234,7 +234,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     }
 
 
-    fun saveSession(session: ChatSession) {
+    fun saveSession(session: ChatSession) = synchronized(this) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(KEY_SESSION_ID, session.id)
@@ -256,7 +256,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         }
     }
 
-    fun renameSession(sessionId: String, newTitle: String) {
+    fun renameSession(sessionId: String, newTitle: String) = synchronized(this) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(KEY_SESSION_TITLE, newTitle)
@@ -264,7 +264,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.update(TABLE_SESSIONS, values, "$KEY_SESSION_ID = ?", arrayOf(sessionId))
     }
 
-    fun deleteSession(sessionId: String) {
+    fun deleteSession(sessionId: String) = synchronized(this) {
         val db = writableDatabase
         db.delete(TABLE_SESSIONS, "$KEY_SESSION_ID = ?", arrayOf(sessionId))
     }
@@ -311,7 +311,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return sessionsList
     }
 
-    fun saveMessage(sessionId: String, message: ChatMessage) {
+    fun saveMessage(sessionId: String, message: ChatMessage) = synchronized(this) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(KEY_MESSAGE_ID, message.id)
@@ -358,7 +358,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return messagesList
     }
 
-    fun saveChecklistState(messageId: String, itemIndex: Int, isChecked: Boolean) {
+    fun saveChecklistState(messageId: String, itemIndex: Int, isChecked: Boolean) = synchronized(this) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(KEY_CHECKLIST_MESSAGE_ID, messageId)
@@ -395,7 +395,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return states
     }
 
-    fun saveSessionDocument(document: com.rajpawardotin.kosh.domain.model.SessionDocument) {
+    fun saveSessionDocument(document: com.rajpawardotin.kosh.domain.model.SessionDocument) = synchronized(this) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put("id", document.id)
@@ -520,7 +520,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         }
     }
 
-    fun mergeFromAttachedDatabase(backupDbPath: String) {
+    fun mergeFromAttachedDatabase(backupDbPath: String) = synchronized(this) {
         val db = writableDatabase
         try {
             db.execSQL("ATTACH DATABASE ? AS backup_db", arrayOf(backupDbPath))

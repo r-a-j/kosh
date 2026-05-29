@@ -19,6 +19,9 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
     private var currentModelPath: String? = null
     private var currentBackend: String? = null
 
+    @Volatile
+    private var activeCloseThread: Thread? = null
+
     override var isInitialized: Boolean = false
         private set
 
@@ -26,7 +29,9 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
         if (isInitialized && modelPath == currentModelPath && backend == currentBackend) {
             return Result.success(Unit)
         }
+        activeCloseThread?.join()
         close()
+        activeCloseThread?.join()
         return try {
             val litertBackend = when (backend) {
                 "GPU" -> Backend.GPU()
@@ -95,7 +100,7 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
 
         if (conv != null || eng != null) {
             // Run JNI close in a background thread to prevent native C++ deadlocks/hangs from blocking JVM threads.
-            Thread {
+            val t = Thread {
                 try {
                     conv?.close()
                 } catch (e: Exception) {
@@ -106,7 +111,9 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
                 } catch (e: Exception) {
                     // Ignore
                 }
-            }.start()
+            }
+            activeCloseThread = t
+            t.start()
         }
     }
 }

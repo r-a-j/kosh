@@ -5,6 +5,7 @@ sealed interface ChatContentBlock {
     data class Checklist(val items: List<ChecklistItem>) : ChatContentBlock
     data class CodeBlock(val language: String, val code: String) : ChatContentBlock
     data class Sources(val items: List<SourceItem>) : ChatContentBlock
+    data class MathBlock(val formula: String) : ChatContentBlock
 }
 
 data class ChecklistItem(
@@ -15,8 +16,58 @@ data class ChecklistItem(
 
 data class SourceItem(
     val title: String,
-    val url: String
+    val url: String,
+    val imageUrl: String? = null,
+    val videoUrl: String? = null
 )
+
+object ReferenceParser {
+    fun parseReferences(sourceDocuments: String?): Pair<List<String>, List<SourceItem>> {
+        if (sourceDocuments.isNullOrBlank()) return Pair(emptyList(), emptyList())
+        
+        try {
+            val docs = mutableListOf<String>()
+            val web = mutableListOf<SourceItem>()
+            
+            val docsMatch = "\"docs\"\\s*:\\s*\\[([^\\]]*)\\]".toRegex().find(sourceDocuments)
+            if (docsMatch != null) {
+                val docsContent = docsMatch.groupValues[1]
+                val docItems = docsContent.split(",")
+                    .map { it.trim().trim('"').replace("\\\"", "\"").replace("\\\\", "\\") }
+                    .filter { it.isNotEmpty() }
+                docs.addAll(docItems)
+            }
+            
+            val webMatch = "\"web\"\\s*:\\s*\\[([^\\]]*)\\]".toRegex().find(sourceDocuments)
+            if (webMatch != null) {
+                val webContent = webMatch.groupValues[1]
+                val objRegex = "\\{([^\\}]*)\\}".toRegex()
+                objRegex.findAll(webContent).forEach { objMatch ->
+                    val objFields = objMatch.groupValues[1]
+                    val title = extractJsonField(objFields, "title") ?: "Web Page"
+                    val url = extractJsonField(objFields, "url") ?: ""
+                    val imageUrl = extractJsonField(objFields, "imageUrl")?.takeIf { it.isNotEmpty() }
+                    val videoUrl = extractJsonField(objFields, "videoUrl")?.takeIf { it.isNotEmpty() }
+                    web.add(SourceItem(title, url, imageUrl, videoUrl))
+                }
+            }
+            
+            if (docsMatch != null || webMatch != null) {
+                return Pair(docs, web)
+            }
+        } catch (e: Exception) {
+            // Ignore and fallback
+        }
+        
+        val docs = sourceDocuments.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        return Pair(docs, emptyList())
+    }
+
+    private fun extractJsonField(jsonFields: String, key: String): String? {
+        val fieldMatch = "\"$key\"\\s*:\\s*\"([^\"]*)\"".toRegex().find(jsonFields)
+        return fieldMatch?.groupValues[1]?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+    }
+}
 
 object ResponseParser {
     private val checklistRegex = """^(?:[-*+]\s*\[\s*([ xX]?)\s*\])\s+(.+)""".toRegex()
@@ -28,8 +79,10 @@ object ResponseParser {
         val lines = text.lines()
         
         var inCodeBlock = false
+        var inMathBlock = false
         var currentLanguage = ""
         val codeBuffer = StringBuilder()
+        val mathBuffer = StringBuilder()
         
         val currentTextBuffer = StringBuilder()
         val currentChecklistItems = mutableListOf<ChecklistItem>()
@@ -59,16 +112,13 @@ object ResponseParser {
             // Check code block transition
             if (trimmedLine.startsWith("```")) {
                 if (inCodeBlock) {
-                    // Ending code block
                     blocks.add(ChatContentBlock.CodeBlock(currentLanguage, codeBuffer.toString().trimEnd()))
                     codeBuffer.clear()
                     currentLanguage = ""
                     inCodeBlock = false
                 } else {
-                    // Flush existing buffers
                     flushText()
                     flushChecklist()
-                    // Starting code block
                     currentLanguage = trimmedLine.substring(3).trim()
                     inCodeBlock = true
                 }
@@ -79,11 +129,63 @@ object ResponseParser {
                 codeBuffer.append(line).append("\n")
                 continue
             }
+
+            // Check block math transition
+            if (inMathBlock) {
+                if (trimmedLine.endsWith("$$")) {
+                    mathBuffer.append(line.substringBeforeLast("$$"))
+                    blocks.add(ChatContentBlock.MathBlock(mathBuffer.toString().trim()))
+                    mathBuffer.clear()
+                    inMathBlock = false
+                } else if (trimmedLine.endsWith("\\]")) {
+                    mathBuffer.append(line.substringBeforeLast("\\]"))
+                    blocks.add(ChatContentBlock.MathBlock(mathBuffer.toString().trim()))
+                    mathBuffer.clear()
+                    inMathBlock = false
+                } else if (trimmedLine.contains("$$")) {
+                    mathBuffer.append(line.substringBefore("$$"))
+                    blocks.add(ChatContentBlock.MathBlock(mathBuffer.toString().trim()))
+                    mathBuffer.clear()
+                    inMathBlock = false
+                    val remaining = line.substringAfter("$$")
+                    if (remaining.isNotBlank()) currentTextBuffer.append(remaining).append("\n")
+                } else if (trimmedLine.contains("\\]")) {
+                    mathBuffer.append(line.substringBefore("\\]"))
+                    blocks.add(ChatContentBlock.MathBlock(mathBuffer.toString().trim()))
+                    mathBuffer.clear()
+                    inMathBlock = false
+                    val remaining = line.substringAfter("\\]")
+                    if (remaining.isNotBlank()) currentTextBuffer.append(remaining).append("\n")
+                } else {
+                    mathBuffer.append(line).append("\n")
+                }
+                continue
+            } else {
+                if (trimmedLine.startsWith("$$") && trimmedLine.endsWith("$$") && trimmedLine.length > 4) {
+                    flushText()
+                    flushChecklist()
+                    val formula = trimmedLine.removePrefix("$$").removeSuffix("$$").trim()
+                    blocks.add(ChatContentBlock.MathBlock(formula))
+                    continue
+                } else if (trimmedLine.startsWith("\\[") && trimmedLine.endsWith("\\]") && trimmedLine.length > 4) {
+                    flushText()
+                    flushChecklist()
+                    val formula = trimmedLine.removePrefix("\\[").removeSuffix("\\]").trim()
+                    blocks.add(ChatContentBlock.MathBlock(formula))
+                    continue
+                } else if (trimmedLine.startsWith("$$") || trimmedLine.startsWith("\\[")) {
+                    flushText()
+                    flushChecklist()
+                    inMathBlock = true
+                    val content = if (trimmedLine.startsWith("$$")) trimmedLine.removePrefix("$$") else trimmedLine.removePrefix("\\[")
+                    mathBuffer.append(content).append("\n")
+                    continue
+                }
+            }
             
             // Try parsing list item
             val checklistMatch = checklistRegex.matchEntire(trimmedLine)
             if (checklistMatch != null) {
-                // Flush text buffer if we transitioned to a checklist
                 flushText()
                 
                 val checkedChar = checklistMatch.groupValues[1]
@@ -102,7 +204,6 @@ object ResponseParser {
                     )
                 )
             } else {
-                // Flush checklist if we transitioned to normal text
                 flushChecklist()
                 currentTextBuffer.append(line).append("\n")
             }
@@ -111,6 +212,8 @@ object ResponseParser {
         // Final flushes
         if (inCodeBlock) {
             blocks.add(ChatContentBlock.CodeBlock(currentLanguage, codeBuffer.toString().trimEnd()))
+        } else if (inMathBlock) {
+            blocks.add(ChatContentBlock.MathBlock(mathBuffer.toString().trim()))
         } else {
             flushText()
             flushChecklist()
@@ -132,7 +235,6 @@ object ResponseParser {
         plainUrlRegex.findAll(text).forEach { match ->
             val url = match.value
             if (sources.none { it.url == url }) {
-                // Try to infer a nice title from domain
                 val title = try {
                     val domain = java.net.URI(url).host ?: ""
                     domain.replace("www.", "")
@@ -150,4 +252,3 @@ object ResponseParser {
         return blocks
     }
 }
-

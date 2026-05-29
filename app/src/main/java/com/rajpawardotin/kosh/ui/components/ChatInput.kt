@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +49,9 @@ fun ChatInput(
     onDetachFile: (AttachedFile) -> Unit,
     enabled: Boolean,
     isGenerating: Boolean,
+    isInternetEnabled: Boolean,
+    isSearchForced: Boolean,
+    onToggleSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -119,6 +123,39 @@ fun ChatInput(
                         contentDescription = "Attach Document",
                         tint = Color(0xFF03DAC5)
                     )
+                }
+ 
+                // Web Search Toggle Button
+                AnimatedVisibility(visible = isInternetEnabled) {
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onToggleSearch()
+                        },
+                        enabled = enabled && !isGenerating,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isSearchForced) {
+                                    Color(0xFF00E5FF).copy(alpha = 0.15f)
+                                } else {
+                                    Color.White.copy(alpha = 0.05f)
+                                }
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isSearchForced) Color(0xFF00E5FF).copy(alpha = 0.4f) else Color.Transparent,
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "Force Web Search",
+                            tint = if (isSearchForced) Color(0xFF00E5FF) else Color.Gray
+                        )
+                    }
                 }
 
                 TextField(

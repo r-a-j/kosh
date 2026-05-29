@@ -85,4 +85,120 @@ class ResponseParserTest {
         assertTrue(combinedText.contains("1. First step"))
         assertTrue(combinedText.contains("2. Second step"))
     }
+
+    @Test
+    fun testReferenceParserJson() {
+        val jsonRefs = """
+            {
+                "docs": ["Document 1", "Document 2"],
+                "web": [
+                    {
+                        "title": "Kotlin Lang",
+                        "url": "https://kotlinlang.org",
+                        "imageUrl": "https://kotlinlang.org/preview.png",
+                        "videoUrl": ""
+                    },
+                    {
+                        "title": "Google Search",
+                        "url": "https://google.com",
+                        "imageUrl": "",
+                        "videoUrl": "https://youtube.com/watch?v=123"
+                    }
+                ]
+            }
+        """.trimIndent()
+
+        val (docs, web) = ReferenceParser.parseReferences(jsonRefs)
+
+        // Verify documents
+        assertEquals(2, docs.size)
+        assertEquals("Document 1", docs[0])
+        assertEquals("Document 2", docs[1])
+
+        // Verify web sources
+        assertEquals(2, web.size)
+        assertEquals("Kotlin Lang", web[0].title)
+        assertEquals("https://kotlinlang.org", web[0].url)
+        assertEquals("https://kotlinlang.org/preview.png", web[0].imageUrl)
+        assertNull(web[0].videoUrl)
+
+        assertEquals("Google Search", web[1].title)
+        assertEquals("https://google.com", web[1].url)
+        assertNull(web[1].imageUrl)
+        assertEquals("https://youtube.com/watch?v=123", web[1].videoUrl)
+    }
+
+    @Test
+    fun testReferenceParserLegacyFallback() {
+        val legacyRefs = "Legacy Doc A, Legacy Doc B, Legacy Doc C"
+        val (docs, web) = ReferenceParser.parseReferences(legacyRefs)
+
+        // Verify fallback parses comma-separated documents
+        assertEquals(3, docs.size)
+        assertEquals("Legacy Doc A", docs[0])
+        assertEquals("Legacy Doc B", docs[1])
+        assertEquals("Legacy Doc C", docs[2])
+
+        // Verify web source list is empty
+        assertTrue(web.isEmpty())
+    }
+
+    @Test
+    fun testReferenceParserEmptyOrNull() {
+        val (docs1, web1) = ReferenceParser.parseReferences(null)
+        assertTrue(docs1.isEmpty())
+        assertTrue(web1.isEmpty())
+
+        val (docs2, web2) = ReferenceParser.parseReferences("")
+        assertTrue(docs2.isEmpty())
+        assertTrue(web2.isEmpty())
+    }
+
+    @Test
+    fun testResponseParserMathBlockSingleLine() {
+        val text = """
+            Here is a basic formula:
+            $$ x = 42 $$
+            And here is another:
+            \[ E = mc^2 \]
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+        
+        // We expect:
+        // 1. Text: "Here is a basic formula:"
+        // 2. MathBlock: "x = 42"
+        // 3. Text: "And here is another:"
+        // 4. MathBlock: "E = mc^2"
+        assertEquals(4, blocks.size)
+        
+        assertEquals("Here is a basic formula:", (blocks[0] as ChatContentBlock.Text).content)
+        assertEquals("x = 42", (blocks[1] as ChatContentBlock.MathBlock).formula)
+        assertEquals("And here is another:", (blocks[2] as ChatContentBlock.Text).content)
+        assertEquals("E = mc^2", (blocks[3] as ChatContentBlock.MathBlock).formula)
+    }
+
+    @Test
+    fun testResponseParserMathBlockMultiLine() {
+        val text = """
+            Consider this system:
+            $$
+            y = mx + c
+            c = 10
+            $$
+            End of formula.
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+        
+        // We expect:
+        // 1. Text: "Consider this system:"
+        // 2. MathBlock: "y = mx + c\nc = 10" (trimmed)
+        // 3. Text: "End of formula."
+        assertEquals(3, blocks.size)
+        assertEquals("Consider this system:", (blocks[0] as ChatContentBlock.Text).content)
+        assertEquals("y = mx + c\nc = 10", (blocks[1] as ChatContentBlock.MathBlock).formula.replace("\r\n", "\n"))
+        assertEquals("End of formula.", (blocks[2] as ChatContentBlock.Text).content)
+    }
 }
+

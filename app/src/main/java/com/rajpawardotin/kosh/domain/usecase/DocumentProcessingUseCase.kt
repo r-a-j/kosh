@@ -60,23 +60,22 @@ class DocumentProcessingUseCase(
                     createdAt = System.currentTimeMillis()
                 )
                 documentRepository.saveSessionDocument(docChunk)
-                processedDocs.add(docChunk)
             }
             
-            if (isTemporarySession || (isEncrypted && key != null)) {
-                val docChunkDecrypted = SessionDocument(
-                    id = chunkId,
-                    sessionId = sessionId,
-                    fileName = file.fileName,
-                    fileType = file.fileType,
-                    fileSize = file.fileSize,
-                    chunkIndex = index,
-                    chunkText = chunkText,
-                    isEncrypted = isEncrypted,
-                    createdAt = System.currentTimeMillis()
-                )
-                processedDocs.add(docChunkDecrypted)
-            }
+            // For the in-memory representation used by RAG and UI for the active session,
+            // we always want the decrypted/plaintext version
+            val docChunkDecrypted = SessionDocument(
+                id = chunkId,
+                sessionId = sessionId,
+                fileName = file.fileName,
+                fileType = file.fileType,
+                fileSize = file.fileSize,
+                chunkIndex = index,
+                chunkText = chunkText,
+                isEncrypted = isEncrypted,
+                createdAt = System.currentTimeMillis()
+            )
+            processedDocs.add(docChunkDecrypted)
         }
         return processedDocs
     }

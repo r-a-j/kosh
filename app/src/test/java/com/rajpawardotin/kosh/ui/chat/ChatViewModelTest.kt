@@ -759,7 +759,18 @@ class ChatViewModelTest {
             query: String,
             searchEngine: String,
             onStatusUpdate: (String) -> Unit
-        ): String = "Mock search results"
+        ): com.rajpawardotin.kosh.domain.provider.SearchResponse {
+            return com.rajpawardotin.kosh.domain.provider.SearchResponse(
+                contextText = "Mock search results",
+                sources = listOf(
+                    com.rajpawardotin.kosh.domain.provider.SearchSource(
+                        title = "Mock Title",
+                        url = "https://mocksite.com",
+                        snippet = "Mock search results"
+                    )
+                )
+            )
+        }
     }
 
     class FakeTtsProvider : com.rajpawardotin.kosh.data.TtsProvider {

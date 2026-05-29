@@ -120,4 +120,31 @@ class LlmUseCaseTest {
         assertTrue(prompt.contains("Assistant response 20"))
         assertFalse(prompt.contains("User prompt 1\n"))
     }
+
+    @Test
+    fun testCompileFinalPromptWithNegativeOrZeroBudget() {
+        val messages = listOf(
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Hello Kosh", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Hello! I am Kosh.", isUser = false),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Current question", isUser = true)
+        )
+
+        // Set maxContextChars extremely low so that budgetForHistory becomes negative:
+        // budget = 500 - 16 (rawPrompt) - 1000 (docContext) - 0 (search) - 1500 = -2016
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question",
+            documentContext = "a".repeat(1000),
+            searchResults = null,
+            searchQuery = null,
+            maxContextChars = 500
+        )
+
+        // The prompt should NOT contain any conversation history
+        assertFalse(prompt.contains("START CONVERSATION HISTORY"))
+        assertFalse(prompt.contains("Hello Kosh"))
+        assertFalse(prompt.contains("Hello! I am Kosh."))
+        assertTrue(prompt.contains("USER QUERY: Current question"))
+    }
 }
+

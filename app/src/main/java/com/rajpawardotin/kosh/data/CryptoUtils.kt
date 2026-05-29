@@ -18,6 +18,17 @@ import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 
+class DestroyableSecretKey(private var keyBytes: ByteArray?, private val algorithm: String = "AES") : SecretKey {
+    override fun getAlgorithm(): String = algorithm
+    override fun getFormat(): String = "RAW"
+    override fun getEncoded(): ByteArray? = keyBytes?.clone()
+    
+    fun clear() {
+        keyBytes?.let { java.util.Arrays.fill(it, 0.toByte()) }
+        keyBytes = null
+    }
+}
+
 object CryptoUtils {
 
     private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
@@ -44,14 +55,14 @@ object CryptoUtils {
     fun generateRandomSessionKey(): SecretKey {
         val keyBytes = ByteArray(32) // 256-bit
         secureRandom.nextBytes(keyBytes)
-        return SecretKeySpec(keyBytes, ALGORITHM_AES)
+        return DestroyableSecretKey(keyBytes, ALGORITHM_AES)
     }
 
     fun deriveKeyFromPassword(password: String, salt: ByteArray): SecretKey {
         val spec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, AES_KEY_SIZE)
         val factory = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM)
         val derived = factory.generateSecret(spec).encoded
-        return SecretKeySpec(derived, ALGORITHM_AES)
+        return DestroyableSecretKey(derived, ALGORITHM_AES)
     }
 
     // Message Encryption (AES-GCM)
@@ -150,10 +161,10 @@ object CryptoUtils {
         System.arraycopy(combined, GCM_IV_LENGTH, ciphertext, 0, ciphertext.size)
         
         val unwrappedBytes = cipher.doFinal(ciphertext)
-        return SecretKeySpec(unwrappedBytes, ALGORITHM_AES)
+        return DestroyableSecretKey(unwrappedBytes, ALGORITHM_AES)
     }
 
-    // Database File Encryption for Backups (Stream-based AES-GCM)
+    // Database File Encryption for Backups (Direct memory-based AES-GCM)
     fun encryptDatabaseBackup(dbFile: File, backupFile: File, password: String): Boolean {
         return try {
             val salt = generateSalt()
@@ -165,21 +176,13 @@ object CryptoUtils {
             val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
 
+            val plaintext = dbFile.readBytes()
+            val ciphertext = cipher.doFinal(plaintext)
+            
             FileOutputStream(backupFile).use { fos ->
-                // 1. Write Salt (16 bytes)
                 fos.write(salt)
-                // 2. Write IV (12 bytes)
                 fos.write(iv)
-                // 3. Encrypt and write database file stream
-                CipherOutputStream(fos, cipher).use { cos ->
-                    FileInputStream(dbFile).use { fis ->
-                        val buffer = ByteArray(4096)
-                        var bytesRead: Int
-                        while (fis.read(buffer).also { bytesRead = it } != -1) {
-                            cos.write(buffer, 0, bytesRead)
-                        }
-                    }
-                }
+                fos.write(ciphertext)
             }
             true
         } catch (e: Exception) {
@@ -190,34 +193,27 @@ object CryptoUtils {
 
     fun decryptDatabaseBackup(backupFile: File, dbFile: File, password: String): Boolean {
         return try {
-            FileInputStream(backupFile).use { fis ->
-                // 1. Read Salt (16 bytes)
-                val salt = ByteArray(PBKDF2_SALT_LENGTH)
-                var bytesRead = fis.read(salt)
-                if (bytesRead != PBKDF2_SALT_LENGTH) return false
-                
-                // Derive secret key using the read salt
-                val secretKey = deriveKeyFromPassword(password, salt)
-                
-                // 2. Read IV (12 bytes)
-                val iv = ByteArray(GCM_IV_LENGTH)
-                bytesRead = fis.read(iv)
-                if (bytesRead != GCM_IV_LENGTH) return false
-
-                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-                val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
-                cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
-
-                // 3. Decrypt and write database
-                CipherInputStream(fis, cipher).use { cis ->
-                    FileOutputStream(dbFile).use { fos ->
-                        val buffer = ByteArray(4096)
-                        while (cis.read(buffer).also { bytesRead = it } != -1) {
-                            fos.write(buffer, 0, bytesRead)
-                        }
-                    }
-                }
+            val backupBytes = backupFile.readBytes()
+            if (backupBytes.size < PBKDF2_SALT_LENGTH + GCM_IV_LENGTH) {
+                return false
             }
+            
+            val salt = ByteArray(PBKDF2_SALT_LENGTH)
+            System.arraycopy(backupBytes, 0, salt, 0, PBKDF2_SALT_LENGTH)
+            
+            val iv = ByteArray(GCM_IV_LENGTH)
+            System.arraycopy(backupBytes, PBKDF2_SALT_LENGTH, iv, 0, GCM_IV_LENGTH)
+            
+            val ciphertext = ByteArray(backupBytes.size - PBKDF2_SALT_LENGTH - GCM_IV_LENGTH)
+            System.arraycopy(backupBytes, PBKDF2_SALT_LENGTH + GCM_IV_LENGTH, ciphertext, 0, ciphertext.size)
+            
+            val secretKey = deriveKeyFromPassword(password, salt)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+            
+            val decrypted = cipher.doFinal(ciphertext)
+            dbFile.writeBytes(decrypted)
             true
         } catch (e: Exception) {
             e.printStackTrace()

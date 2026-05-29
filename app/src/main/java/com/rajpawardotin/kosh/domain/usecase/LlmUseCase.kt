@@ -21,7 +21,11 @@ class LlmUseCase(
         val searchKeywords = listOf(
             "search web", "search internet", "search online", "google", "bing", "duckduckgo",
             "lookup", "look up", "find on web", "browse", "website", "realtime", "real-time",
-            "latest news", "today's headlines", "todays headlines", "weather today", "current price"
+            "latest news", "today's headlines", "todays headlines", "weather today", "current price",
+            "weather", "forecast", "ticker", "stock price", "price of", "value of", "market cap",
+            "vs", "versus", "score", "who won", "match result", "latest", "recent", "currently",
+            "today", "yesterday", "tomorrow", "tonight", "this week", "now", "news about",
+            "what happened", "current status", "flight status", "release date"
         )
         val hasUrl = prompt.contains("http://") || prompt.contains("https://") || prompt.contains("www.")
         
@@ -156,19 +160,20 @@ class LlmUseCase(
         val selectedHistory = mutableListOf<String>()
         var currentUsedChars = 0
 
-        // Traverse history backward to get most recent messages within budget
-        val historyMessages = chatMessages.dropLast(1)
-        for (msg in historyMessages.reversed()) {
-            val role = if (msg.isUser) "User" else "Assistant"
-            val cleanText = msg.text.trim()
-            if (cleanText.startsWith("Error:") || cleanText.isEmpty()) continue
-            
-            val formattedMsg = "- $role: $cleanText\n"
-            if (currentUsedChars + formattedMsg.length > budgetForHistory && selectedHistory.isNotEmpty()) {
-                break
+        if (budgetForHistory > 0) {
+            val historyMessages = chatMessages.dropLast(1)
+            for (msg in historyMessages.reversed()) {
+                val role = if (msg.isUser) "User" else "Assistant"
+                val cleanText = msg.text.trim()
+                if (cleanText.startsWith("Error:") || cleanText.isEmpty()) continue
+                
+                val formattedMsg = "- $role: $cleanText\n"
+                if (currentUsedChars + formattedMsg.length > budgetForHistory) {
+                    break
+                }
+                selectedHistory.add(0, formattedMsg)
+                currentUsedChars += formattedMsg.length
             }
-            selectedHistory.add(0, formattedMsg)
-            currentUsedChars += formattedMsg.length
         }
 
         val promptSb = StringBuilder()

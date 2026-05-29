@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.rajpawardotin.kosh.ui.chat.SourceItem
 
 @Composable
@@ -54,8 +56,8 @@ fun SourcesCarousel(items: List<SourceItem>) {
             items(items) { item ->
                 Card(
                     modifier = Modifier
-                        .width(220.dp)
-                        .height(80.dp)
+                        .width(260.dp)
+                        .height(78.dp)
                         .clickable { 
                             try {
                                 uriHandler.openUri(item.url)
@@ -63,44 +65,109 @@ fun SourcesCarousel(items: List<SourceItem>) {
                                 // Ignore
                             }
                         },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E).copy(alpha = 0.9f)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.9f)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp),
+                            .padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val initialLetter = item.title.firstOrNull()?.uppercaseChar()?.toString() ?: "W"
-                        val domainColors = listOf(Color(0xFF03DAC5), Color(0xFFBB86FC), Color(0xFF6200EE))
-                        val circleColor = domainColors[item.title.length % domainColors.size]
-                        
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(circleColor.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = initialLetter,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = circleColor
-                            )
+                        // Left-hand page image preview if available
+                        if (!item.imageUrl.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF222225))
+                            ) {
+                                AsyncImage(
+                                    model = item.imageUrl,
+                                    contentDescription = "Source Preview",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                // Overlay play icon if it has a video link
+                                if (!item.videoUrl.isNullOrBlank() || item.url.contains("youtube.com") || item.url.contains("youtu.be") || item.url.contains("vimeo.com")) {
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.6f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Play Video",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                        } else {
+                            // Fallback colored box with initial letter
+                            val initialLetter = item.title.firstOrNull()?.uppercaseChar()?.toString() ?: "W"
+                            val domainColors = listOf(Color(0xFF03DAC5), Color(0xFFBB86FC), Color(0xFF6200EE))
+                            val circleColor = domainColors[item.title.length % domainColors.size]
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(circleColor.copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = initialLetter,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = circleColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
                         }
                         
-                        Spacer(modifier = Modifier.width(10.dp))
-                        
-                        Column(verticalArrangement = Arrangement.Center) {
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                        // Right-hand text title/url metadata
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val domain = try {
+                                    java.net.URI(item.url).host?.replace("www.", "") ?: ""
+                                } catch (e: Exception) {
+                                    ""
+                                }
+                                if (domain.isNotEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.1f))
+                                    ) {
+                                        AsyncImage(
+                                            model = "https://www.google.com/s2/favicons?sz=64&domain=$domain",
+                                            contentDescription = "Favicon",
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = item.url.replace("https://", "").replace("http://", ""),
                                 style = MaterialTheme.typography.bodySmall,
