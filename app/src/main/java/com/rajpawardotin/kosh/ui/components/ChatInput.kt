@@ -1,5 +1,5 @@
 package com.rajpawardotin.kosh.ui.components
- 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -27,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +59,57 @@ fun ChatInput(
 ) {
     val haptic = LocalHapticFeedback.current
 
+    // Adaptive corner radius: morphs from a capsule (26.dp) to a rounded rect (18.dp) when multi-line
+    val lines = value.count { it == '\n' } + 1
+    val isMultiLine = lines > 1 || value.length > 45
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isMultiLine) 18.dp else 26.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMediumLow
+        ),
+        label = "cornerRadius"
+    )
+    val inputShape = RoundedCornerShape(cornerRadius)
+
+    // Breathing border animation for active generation
+    val generatingBorderTransition = rememberInfiniteTransition(label = "generating_border")
+    val borderAlpha by generatingBorderTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "borderAlpha"
+    )
+
+    // Breathing shimmer alpha for generation placeholder
+    val generatingTextTransition = rememberInfiniteTransition(label = "generating_text")
+    val generatingAlpha by generatingTextTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "generatingAlpha"
+    )
+
+    // Double-ended dynamic padding so text does not clash with the capsule borders or icons
+    val startPadding by animateDpAsState(
+        targetValue = if (isGenerating) 16.dp else 8.dp, // Comfort spacing when icons are visible
+        animationSpec = spring(stiffness = 1200f),
+        label = "textFieldStartPadding"
+    )
+
+    val showMic = value.isEmpty() && attachedFiles.isEmpty() && !isGenerating
+    val endPadding by animateDpAsState(
+        targetValue = if (showMic) 8.dp else 16.dp, // Comfort spacing when Mic icon is visible
+        animationSpec = spring(stiffness = 1200f),
+        label = "textFieldEndPadding"
+    )
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -79,144 +133,193 @@ fun ChatInput(
             }
         }
 
-        // Input Box Bubble
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .shadow(
-                    elevation = if (enabled) 4.dp else 2.dp, 
-                    shape = CircleShape
-                ),
-            shape = CircleShape,
-            color = Color(0xFF1E1E22),
-            border = androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                brush = Brush.horizontalGradient(
-                    colors = if (isGenerating) {
-                        listOf(Color(0xFF03DAC5), Color(0xFF6200EE))
-                    } else {
-                        listOf(Color.White.copy(alpha = 0.1f), Color.White.copy(alpha = 0.1f))
-                    }
-                )
-            )
+        // Horizontal Row containing the Input Bubble and the External floating Send Button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically // Vertically center the bubble and the Send button
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Paperclip button (left side)
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onAttachClick()
-                    },
-                    enabled = enabled && !isGenerating,
-                    modifier = Modifier
-                        .padding(start = 4.dp)
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.05f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AttachFile,
-                        contentDescription = "Attach Document",
-                        tint = Color(0xFF03DAC5)
-                    )
-                }
- 
-                // Web Search Toggle Button
-                AnimatedVisibility(visible = isInternetEnabled) {
-                    IconButton(
-                        onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onToggleSearch()
-                        },
-                        enabled = enabled && !isGenerating,
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (isSearchForced) {
-                                    Color(0xFF00E5FF).copy(alpha = 0.15f)
-                                } else {
-                                    Color.White.copy(alpha = 0.05f)
-                                }
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = if (isSearchForced) Color(0xFF00E5FF).copy(alpha = 0.4f) else Color.Transparent,
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = "Force Web Search",
-                            tint = if (isSearchForced) Color(0xFF00E5FF) else Color.Gray
-                        )
-                    }
-                }
-
-                TextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    placeholder = { 
-                        Text(
-                            if (enabled) "Neural Command..." else "Neural Core Offline...", 
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Gray.copy(alpha = if (enabled) 1f else 0.5f)
-                        ) 
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = enabled && !isGenerating,
-                    maxLines = 4,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Send,
-                        capitalization = KeyboardCapitalization.Sentences
+            // Input Box Bubble (expands to fill all space except the Send button)
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp) // Standard Material 3 height
+                    .shadow(
+                        elevation = if (enabled && !isGenerating) 4.dp else 0.dp,
+                        shape = inputShape
                     ),
-                    keyboardActions = KeyboardActions(
-                        onSend = {
-                            if (value.isNotBlank() || attachedFiles.isNotEmpty()) {
+                shape = inputShape,
+                color = if (isGenerating) Color(0xFF161619).copy(alpha = 0.95f) else Color(0xFF1E1E22).copy(alpha = 0.9f),
+                border = androidx.compose.foundation.BorderStroke(
+                    width = 1.dp,
+                    brush = Brush.horizontalGradient(
+                        colors = if (isGenerating) {
+                            listOf(
+                                Color(0xFF03DAC5).copy(alpha = borderAlpha),
+                                Color(0xFF6200EE).copy(alpha = borderAlpha)
+                            )
+                        } else {
+                            listOf(
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.08f)
+                            )
+                        }
+                    )
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), // Symmetric 6.dp padding top/bottom
+                    verticalAlignment = Alignment.CenterVertically // Center all elements vertically for absolute symmetry
+                ) {
+                    // Paperclip button (left side) - borderless, no background
+                    AnimatedVisibility(
+                        visible = !isGenerating,
+                        enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
+                        exit = fadeOut(animationSpec = spring(stiffness = 1200f)) + shrinkHorizontally(animationSpec = spring(stiffness = 1200f))
+                    ) {
+                        IconButton(
+                            onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSend()
+                                onAttachClick()
+                            },
+                            enabled = enabled,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AttachFile,
+                                contentDescription = "Attach Document",
+                                tint = Color(0xFF03DAC5)
+                            )
+                        }
+                    }
+
+                    // Web Search Toggle Button - borderless, no background
+                    AnimatedVisibility(
+                        visible = isInternetEnabled && !isGenerating,
+                        enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
+                        exit = fadeOut(animationSpec = spring(stiffness = 1200f)) + shrinkHorizontally(animationSpec = spring(stiffness = 1200f))
+                    ) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onToggleSearch()
+                            },
+                            enabled = enabled,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = "Force Web Search",
+                                tint = if (isSearchForced) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+
+                    // Custom BasicTextField for polished padding and alignment
+                    val placeholderText = when {
+                        !enabled -> "Neural Core Offline..."
+                        isGenerating -> "Kosh is composing..."
+                        else -> "Neural Command..."
+                    }
+                    val placeholderColor = when {
+                        !enabled -> Color.Gray.copy(alpha = 0.3f)
+                        isGenerating -> Color(0xFF03DAC5).copy(alpha = generatingAlpha)
+                        else -> Color.Gray.copy(alpha = 0.6f)
+                    }
+
+                    BasicTextField(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(start = startPadding, end = endPadding, top = 12.dp, bottom = 12.dp),
+                        enabled = enabled && !isGenerating,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Default, // Carriage Return for multi-line support
+                            capitalization = KeyboardCapitalization.Sentences
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSend = {
+                                if (value.isNotBlank() || attachedFiles.isNotEmpty()) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onSend()
+                                }
+                            }
+                        ),
+                        maxLines = 5,
+                        cursorBrush = SolidColor(Color(0xFF03DAC5)),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (value.isEmpty()) {
+                                    Text(
+                                        text = placeholderText,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = placeholderColor
+                                    )
+                                }
+                                innerTextField()
                             }
                         }
-                    ),
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        cursorColor = Color(0xFF03DAC5)
                     )
+
+                    // Voice Mic button (right side) - borderless, no background. Hidden when typing or generating.
+                    AnimatedVisibility(
+                        visible = showMic,
+                        enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
+                        exit = fadeOut(animationSpec = spring(stiffness = 1200f)) + shrinkHorizontally(animationSpec = spring(stiffness = 1200f))
+                    ) {
+                        IconButton(
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onVoiceClick()
+                            },
+                            enabled = enabled,
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = "Voice Input",
+                                tint = Color(0xFF03DAC5)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Dynamic Spacer between input bubble and Send/Stop button (only when Send button is active)
+            val showSendStop = isGenerating || value.isNotEmpty() || attachedFiles.isNotEmpty()
+            AnimatedVisibility(
+                visible = showSendStop,
+                enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
+                exit = fadeOut(animationSpec = spring(stiffness = 1200f)) + shrinkHorizontally(animationSpec = spring(stiffness = 1200f))
+            ) {
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            // External Floating Send / Stop Action Button (Telegram style)
+            AnimatedVisibility(
+                visible = showSendStop,
+                enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 1200f)) + 
+                        fadeIn(animationSpec = spring(stiffness = 1200f)) + 
+                        expandHorizontally(animationSpec = spring(stiffness = 1200f)),
+                exit = scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 1200f)) + 
+                       fadeOut(animationSpec = spring(stiffness = 1200f)) + 
+                       shrinkHorizontally(animationSpec = spring(stiffness = 1200f))
+            ) {
+                val stopPulseTransition = rememberInfiniteTransition(label = "stop_button_pulse")
+                val stopPulseScale by stopPulseTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = 1.08f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1000, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "stopPulseScale"
                 )
 
-                // Voice Mic button (right side)
-                IconButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onVoiceClick()
-                    },
-                    enabled = enabled && !isGenerating,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.05f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Input",
-                        tint = Color(0xFF03DAC5)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Send / Stop button
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -228,17 +331,25 @@ fun ChatInput(
                     },
                     enabled = enabled && (isGenerating || value.isNotBlank() || attachedFiles.isNotEmpty()),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(48.dp) // Removed padding to align bottom bounds perfectly
+                        .shadow(
+                            elevation = if (enabled) 4.dp else 0.dp,
+                            shape = CircleShape
+                        )
+                        .graphicsLayer {
+                            if (isGenerating) {
+                                scaleX = stopPulseScale
+                                scaleY = stopPulseScale
+                            }
+                        }
                         .clip(CircleShape)
                         .background(
                             if (!enabled) {
                                 Brush.linearGradient(listOf(Color(0xFF222222), Color(0xFF222222)))
                             } else if (isGenerating) {
                                 Brush.linearGradient(listOf(Color(0xFFFF5252), Color(0xFFFF1744)))
-                            } else if (value.isNotBlank() || attachedFiles.isNotEmpty()) {
-                                Brush.linearGradient(listOf(Color(0xFF03DAC5), Color(0xFF6200EE)))
                             } else {
-                                Brush.linearGradient(listOf(Color(0xFF222222), Color(0xFF222222)))
+                                Brush.linearGradient(listOf(Color(0xFF03DAC5), Color(0xFF6200EE)))
                             }
                         )
                 ) {
@@ -247,7 +358,7 @@ fun ChatInput(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Stop",
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     } else {
                         Icon(
@@ -262,6 +373,7 @@ fun ChatInput(
         }
     }
 }
+
 
 @Composable
 fun AttachmentBadge(

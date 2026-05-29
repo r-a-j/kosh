@@ -40,8 +40,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,6 +72,8 @@ fun ChatScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberLazyListState()
+    val density = LocalDensity.current
+    var inputHeightDp by remember { mutableStateOf(0.dp) }
 
     val currentSessionId = viewModel.currentSessionId
     val currentSession = viewModel.savedSessions.find { it.id == currentSessionId }
@@ -484,24 +488,34 @@ fun ChatScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
-                            contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.BottomCenter
                         ) {
                             if (viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()) {
-                                com.rajpawardotin.kosh.ui.chat.components.ChatEmptyState(
-                                    isTemporarySession = viewModel.isTemporarySession,
-                                    onSuggestionClick = { suggestion ->
-                                        viewModel.prompt = suggestion
-                                    },
-                                    onExitTemporaryClick = {
-                                        viewModel.startNewChat(isTemporary = false)
-                                    }
-                                )
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    com.rajpawardotin.kosh.ui.chat.components.ChatEmptyState(
+                                        isTemporarySession = viewModel.isTemporarySession,
+                                        onSuggestionClick = { suggestion ->
+                                            viewModel.prompt = suggestion
+                                        },
+                                        onExitTemporaryClick = {
+                                            viewModel.startNewChat(isTemporary = false)
+                                        }
+                                    )
+                                }
                             } else {
                                 LazyColumn(
                                     state = scrollState,
                                     modifier = Modifier.fillMaxSize(),
                                     reverseLayout = true,
-                                    contentPadding = PaddingValues(16.dp),
+                                    contentPadding = PaddingValues(
+                                        start = 16.dp,
+                                        end = 16.dp,
+                                        top = 16.dp,
+                                        bottom = inputHeightDp + 8.dp
+                                    ),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     // Index 0 is visual BOTTOM
@@ -533,31 +547,32 @@ fun ChatScreen(
                                     }
                                 }
                             }
+
+                            ChatInput(
+                                value = viewModel.prompt,
+                                onValueChange = { viewModel.prompt = it },
+                                onSend = { viewModel.sendMessage(context) },
+                                onStop = { viewModel.stopGeneration() },
+                                onVoiceClick = { startVoiceInput() },
+                                onAttachClick = { documentPickerLauncher.launch("*/*") },
+                                attachedFiles = viewModel.attachedFiles,
+                                onDetachFile = { viewModel.detachFile(it) },
+                                enabled = viewModel.isEngineReady,
+                                isGenerating = viewModel.isGenerating,
+                                isInternetEnabled = viewModel.isInternetEnabled,
+                                isSearchForced = viewModel.isSearchForced,
+                                onToggleSearch = { viewModel.toggleSearchForced() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .imePadding()
+                                    .navigationBarsPadding()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    .onGloballyPositioned { coordinates ->
+                                        inputHeightDp = with(density) { coordinates.size.height.toDp() }
+                                    }
+                            )
                         }
                     }
-                }
-
-                if (viewModel.isEngineReady && !isLocked) {
-                    ChatInput(
-                        value = viewModel.prompt,
-                        onValueChange = { viewModel.prompt = it },
-                        onSend = { viewModel.sendMessage(context) },
-                        onStop = { viewModel.stopGeneration() },
-                        onVoiceClick = { startVoiceInput() },
-                        onAttachClick = { documentPickerLauncher.launch("*/*") },
-                        attachedFiles = viewModel.attachedFiles,
-                        onDetachFile = { viewModel.detachFile(it) },
-                        enabled = viewModel.isEngineReady,
-                        isGenerating = viewModel.isGenerating,
-                        isInternetEnabled = viewModel.isInternetEnabled,
-                        isSearchForced = viewModel.isSearchForced,
-                        onToggleSearch = { viewModel.toggleSearchForced() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .imePadding()
-                            .navigationBarsPadding()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                    )
                 }
             }
         }
