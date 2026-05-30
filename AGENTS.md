@@ -1,5 +1,8 @@
 # AGENTS: How to get productive in Kosh
 
+> [!IMPORTANT]
+> **ABSOLUTE RULE FOR ALL AGENTS:** Do NOT commit or push code to GitHub without explicit permission from the user. Even if you have generated documentation or completed verification tests, you must stop, summarize your changes, and ask the user if they would like to commit and push. Never execute a commit or push command without this explicit user directive.
+
 This file contains concise, actionable guidance for AI coding agents working in this repository. Focus on discoverable patterns, key integration points, and exact commands.
 
 1) Big picture (quick):
