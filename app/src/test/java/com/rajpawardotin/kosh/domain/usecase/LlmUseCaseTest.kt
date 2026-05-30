@@ -70,8 +70,8 @@ class LlmUseCaseTest {
         )
         
         assertTrue(prompt.contains("Photosynthesis is the process"))
-        assertTrue(prompt.contains("USER QUERY: How does photosynthesis work?"))
-        assertFalse(prompt.contains("START CONVERSATION HISTORY"))
+        assertTrue(prompt.contains("### USER QUERY\nHow does photosynthesis work?"))
+        assertFalse(prompt.contains("--- START HISTORY ---"))
     }
 
     @Test
@@ -90,12 +90,12 @@ class LlmUseCaseTest {
             searchQuery = "SearchQuery"
         )
 
-        assertTrue(prompt.contains("START CONVERSATION HISTORY"))
+        assertTrue(prompt.contains("--- START HISTORY ---"))
         assertTrue(prompt.contains("- User: Hello Kosh"))
         assertTrue(prompt.contains("- Assistant: Hello! I am Kosh."))
-        assertTrue(prompt.contains("SEARCH RESULTS (Query: SearchQuery):"))
+        assertTrue(prompt.contains("Search Query: SearchQuery"))
         assertTrue(prompt.contains("Web search result snippet"))
-        assertTrue(prompt.contains("USER QUERY: Current question"))
+        assertTrue(prompt.contains("### USER QUERY\nCurrent question"))
     }
 
     @Test
@@ -141,10 +141,9 @@ class LlmUseCaseTest {
         )
 
         // The prompt should NOT contain any conversation history
-        assertFalse(prompt.contains("START CONVERSATION HISTORY"))
+        assertFalse(prompt.contains("--- START HISTORY ---"))
         assertFalse(prompt.contains("Hello Kosh"))
         assertFalse(prompt.contains("Hello! I am Kosh."))
-        assertTrue(prompt.contains("USER QUERY: Current question"))
+        assertTrue(prompt.contains("### USER QUERY\nCurrent question"))
     }
 }
-

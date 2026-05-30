@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CancellationException
 
 class ChatViewModel(
+    private val context: Context,
     private val aiProvider: AIProvider,
     private val searchProvider: SearchProvider,
     private val sessionRepository: SessionRepository,
@@ -51,11 +52,36 @@ class ChatViewModel(
     private val modelLibraryManager: com.rajpawardotin.kosh.data.ModelLibraryManager,
     private val modelRouter: com.rajpawardotin.kosh.domain.usecase.ModelRouter,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-) : ViewModel() {
+) : ViewModel(), com.rajpawardotin.kosh.domain.agent.PermissionRequester {
 
     private val chatSessionUseCase = com.rajpawardotin.kosh.domain.usecase.ChatSessionUseCase(sessionRepository)
     private val llmUseCase = com.rajpawardotin.kosh.domain.usecase.LlmUseCase(aiProvider, searchProvider, sessionRepository, documentRepository)
     private val documentProcessingUseCase = com.rajpawardotin.kosh.domain.usecase.DocumentProcessingUseCase(documentRepository)
+
+    private val _permissionRequestFlow = kotlinx.coroutines.flow.MutableSharedFlow<com.rajpawardotin.kosh.domain.agent.PermissionRequest>()
+    val permissionRequestFlow = _permissionRequestFlow.asSharedFlow()
+
+    override suspend fun requestPermission(permission: String): Boolean {
+        val deferred = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        _permissionRequestFlow.emit(com.rajpawardotin.kosh.domain.agent.PermissionRequest(permission, deferred))
+        return deferred.await()
+    }
+
+    private val deviceControlSkill = com.rajpawardotin.kosh.data.agent.native.DeviceControlSkill(context)
+    private val calendarSkill = com.rajpawardotin.kosh.data.agent.native.CalendarSkill(context, this)
+    
+    private val registeredSkills: List<com.rajpawardotin.kosh.domain.agent.Skill> = buildList {
+        deviceControlSkill::class.java.declaredMethods.forEach { method ->
+            if (method.isAnnotationPresent(com.rajpawardotin.kosh.domain.agent.Tool::class.java)) {
+                add(com.rajpawardotin.kosh.domain.agent.NativeSkillWrapper(deviceControlSkill, method))
+            }
+        }
+        calendarSkill::class.java.declaredMethods.forEach { method ->
+            if (method.isAnnotationPresent(com.rajpawardotin.kosh.domain.agent.Tool::class.java)) {
+                add(com.rajpawardotin.kosh.domain.agent.NativeSkillWrapper(calendarSkill, method))
+            }
+        }
+    }
 
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         if (exception is CancellationException) return@CoroutineExceptionHandler
@@ -1503,12 +1529,15 @@ class ChatViewModel(
                     sourceDocumentsString = sbRefs.toString()
                 }
 
+                val agentExecutor = com.rajpawardotin.kosh.domain.agent.AgentLoopExecutor(aiProvider, registeredSkills)
+
                 val finalPrompt = llmUseCase.compileFinalPrompt(
                     chatMessages = chatMessages,
                     rawPrompt = rawPrompt,
                     documentContext = documentContext,
                     searchResults = searchResults,
-                    searchQuery = lastQueryUsed
+                    searchQuery = lastQueryUsed,
+                    toolSchemas = registeredSkills.map { it.getSchema() }
                 )
 
                 if (lastQueryUsed != null) {
@@ -1530,54 +1559,61 @@ class ChatViewModel(
                 var totalChars = 0
                 var generationStartTime = 0L
 
-                aiProvider.sendMessage(finalPrompt).collect { text ->
-                    var shouldStop = false
-                    withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
-                        if (currentResponseChunk.isEmpty()) {
-                            agenticStateLabel = "Structuring Output..."
+                val finalResponse = agentExecutor.executeAgentLoop(
+                    initialPrompt = finalPrompt,
+                    onStatusUpdate = { status ->
+                        withContext(Dispatchers.Main) {
+                            agenticStateLabel = status
+                            isThinking = status.contains("Thinking")
                         }
-                        currentResponseChunk += text
-                        
-                        // Calculate real tokens per second
-                        totalChars += text.length
-                        if (generationStartTime == 0L) {
-                            generationStartTime = System.currentTimeMillis()
-                        }
-                        val elapsedMs = System.currentTimeMillis() - generationStartTime
-                        if (elapsedMs > 100) {
-                            val elapsedSec = elapsedMs / 1000f
-                            val estimatedTokens = totalChars / 4f
-                            tokensPerSecond = estimatedTokens / elapsedSec
-                        }
-                        
-                        if (hasRepetitionLoop(currentResponseChunk)) {
-                            currentResponseChunk += "\n\n[Neural Loop Protection: Repetition halted]"
-                            shouldStop = true
+                    },
+                    onTokenReceived = { token ->
+                        withContext(Dispatchers.Main) {
+                            if (currentResponseChunk.isEmpty()) {
+                                agenticStateLabel = "Structuring Output..."
+                            }
+                            currentResponseChunk += token
+                            
+                            // Check repetition loop synchronously on Main thread
+                            if (hasRepetitionLoop(currentResponseChunk)) {
+                                currentResponseChunk += "\n\n[Neural Loop Protection: Repetition halted]"
+                                stopGeneration()
+                                showToast("Repetition loop detected. Halting generation.")
+                            }
+                            
+                            // Calculate real tokens per second
+                            totalChars += token.length
+                            if (generationStartTime == 0L) {
+                                generationStartTime = System.currentTimeMillis()
+                            }
+                            val elapsedMs = System.currentTimeMillis() - generationStartTime
+                            if (elapsedMs > 100) {
+                                val elapsedSec = elapsedMs / 1000f
+                                val estimatedTokens = totalChars / 4f
+                                tokensPerSecond = estimatedTokens / elapsedSec
+                            }
+
+                            if (!isTemporarySession) {
+                                val key = activeSessionKeys[sessionId!!]
+                                val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
+                                val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
+                                
+                                val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
+                                withContext(safeIoDispatcher) {
+                                    messageRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                                }
+                            }
                         }
                     }
-                    
-                    if (shouldStop) {
-                        showToast("Repetition loop detected. Halting generation.")
-                        stopGeneration()
-                    }
-                    
-                    if (!isTemporarySession) {
-                        // Save response live chunk to the database
-                        val key = activeSessionKeys[sessionId!!]
-                        val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
-                        val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
-                        
-                        val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
-                        messageRepository.saveMessage(sessionId!!, liveAssistantMsg)
-                    }
-                }
+                )
 
                 var assistantMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
-                    val msg = ChatMessage(id = assistantMessageId, text = currentResponseChunk, isUser = false, sourceDocuments = sourceDocumentsString)
+                    val msg = ChatMessage(id = assistantMessageId, text = finalResponse, isUser = false, sourceDocuments = sourceDocumentsString)
                     chatMessages.add(msg)
                     currentResponseChunk = ""
                     assistantMessage = msg
+                    isThinking = false
                 }
 
                 if (!isTemporarySession) {

@@ -22,10 +22,13 @@ import com.rajpawardotin.kosh.ui.chat.ChatScreen
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import com.rajpawardotin.kosh.ui.theme.KoshTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : FragmentActivity() {
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var ttsProvider: TtsProvider
+    private var currentPermissionRequest: com.rajpawardotin.kosh.domain.agent.PermissionRequest? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +36,13 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         
         com.tom_roush.pdfbox.android.PDFBoxResourceLoader.init(applicationContext)
+        
+        val requestPermissionLauncher = registerForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { isGranted ->
+            currentPermissionRequest?.deferred?.complete(isGranted)
+            currentPermissionRequest = null
+        }
         
         val aiProvider = LiteRTModelProvider(applicationContext)
         val modelLibraryManager = com.rajpawardotin.kosh.data.ModelLibraryManager(applicationContext)
@@ -48,11 +58,18 @@ class MainActivity : FragmentActivity() {
         val viewModelFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return ChatViewModel(aiProvider, searchProvider, sessionRepository, messageRepository, documentRepository, settingsProvider, ttsProvider, modelLibraryManager, modelRouter) as T
+                return ChatViewModel(applicationContext, aiProvider, searchProvider, sessionRepository, messageRepository, documentRepository, settingsProvider, ttsProvider, modelLibraryManager, modelRouter) as T
             }
         }
 
         chatViewModel = ViewModelProvider(this, viewModelFactory)[ChatViewModel::class.java]
+
+        lifecycleScope.launch {
+            chatViewModel.permissionRequestFlow.collect { request ->
+                currentPermissionRequest = request
+                requestPermissionLauncher.launch(request.permission)
+            }
+        }
 
         setContent {
             KoshTheme(darkTheme = true) {

@@ -56,3 +56,11 @@ Kosh is an offline-first, strictly private AI cognitive vault designed to operat
 - **Block Mathematical Extraction**: Response parsers extract block-level equations bounded by `$$ ... $$` or `\[ ... \]` and segregate them into `ChatContentBlock.MathBlock` slots.
 - **KaTeX WebView Composable**: Displays formulas inside a transparent WebView loaded with KaTeX CSS/JS dependencies.
 - **Monospace Plaintext Fallback**: If the device is offline or the renderer fails to load within the timeout, it reverts to a monospace plain-text block wrapping the original LaTeX code to maintain readable equations.
+
+## 8. Agent Loop & Skills Framework
+- **Asynchronous Agent executor**: Coordinates multi-turn LLM reasoning loops, parsing JSON tool calls from model outputs and feeding back execution results.
+- **Just-in-Time Permissions**: Bridges background execution flow with the Main thread UI Activity layer using `CompletableDeferred` to request permissions dynamically when needed.
+- **Reflective Suspend Wrapper**: Invokes Kotlin suspend functions reflectively using Java reflection combined with coroutines intrinsic context (`suspendCoroutineUninterceptedOrReturn`), saving APK space.
+- **Sandbox WebView & Execution Guards**: Executes untrusted JS plugins on a headless WebView with timeout bounds and limits turn count to 5 to avoid infinite loops.
+- **For details, see [agent_and_skills.md](agent_and_skills.md)**.
+

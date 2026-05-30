@@ -193,6 +193,35 @@ fun ChatBubble(
                         SourcesCarousel(items = webList)
                         Spacer(modifier = Modifier.height(4.dp))
                     }
+                    val showPermissionSettingsButton = remember(message.text) {
+                        message.text.contains("permission", ignoreCase = true) ||
+                        message.text.contains("denied", ignoreCase = true)
+                    }
+                    if (showPermissionSettingsButton) {
+                        val context = androidx.compose.ui.platform.LocalContext.current
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                try {
+                                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF03DAC5),
+                                contentColor = Color.Black
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Text("Open App Permissions Settings", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     val isCurrentlySpeaking = currentlySpeakingMessageId == message.id
                     ResponseActionsRow(
                         textToCopy = message.text,

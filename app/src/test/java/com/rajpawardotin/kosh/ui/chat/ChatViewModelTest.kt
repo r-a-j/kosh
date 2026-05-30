@@ -49,6 +49,7 @@ class ChatViewModelTest {
         org.mockito.kotlin.whenever(mockModelRouter.detectIntent(org.mockito.kotlin.any(), org.mockito.kotlin.any())).thenReturn(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
         
         viewModel = ChatViewModel(
+            context,
             fakeAI, 
             fakeSearch, 
             fakeSessionRepo, 
@@ -729,12 +730,12 @@ class ChatViewModelTest {
         viewModel.sendMessage(context)
         testScheduler.advanceUntilIdle()
 
-        val sentPrompt = fakeAI.lastSentPrompt
+         val sentPrompt = fakeAI.lastSentPrompt
         assertNotNull(sentPrompt)
-        assertTrue(sentPrompt!!.contains("START CONVERSATION HISTORY"))
+        assertTrue(sentPrompt!!.contains("--- START HISTORY ---"))
         assertTrue(sentPrompt.contains("- User: Hello"))
         assertTrue(sentPrompt.contains("- Assistant: Hi there"))
-        assertTrue(sentPrompt.contains("USER QUERY: What did I say first?"))
+        assertTrue(sentPrompt.contains("### USER QUERY\nWhat did I say first?"))
     }
 
     class FakeAIProvider : AIProvider {

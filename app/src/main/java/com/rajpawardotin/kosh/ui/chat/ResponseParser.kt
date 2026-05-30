@@ -251,4 +251,77 @@ object ResponseParser {
         
         return blocks
     }
+
+    fun parseToolCalls(text: String): List<ToolCall> {
+        val toolCalls = mutableListOf<ToolCall>()
+        
+        // 1. Try finding JSON code fences
+        val jsonCodeFenceRegex = """```json\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```""".toRegex()
+        jsonCodeFenceRegex.findAll(text).forEach { match ->
+            val jsonStr = match.groupValues[1].trim()
+            if (jsonStr.startsWith("[")) {
+                try {
+                    val arr = org.json.JSONArray(jsonStr)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.optJSONObject(i)
+                        if (obj != null) {
+                            parseSingleJsonToolCall(obj.toString())?.let { toolCalls.add(it) }
+                        }
+                    }
+                } catch (e: Exception) {}
+            } else {
+                parseSingleJsonToolCall(jsonStr)?.let { toolCalls.add(it) }
+            }
+        }
+
+        if (toolCalls.isNotEmpty()) return toolCalls
+
+        // 2. Try matching any curly brackets containing "tool" or "name"
+        val genericJsonRegex = """(\{\s*"(?:tool|name)"\s*:\s*"[^"]*"\s*,[\s\S]*?\})""".toRegex()
+        genericJsonRegex.findAll(text).forEach { match ->
+            val jsonStr = match.groupValues[1].trim()
+            parseSingleJsonToolCall(jsonStr)?.let { toolCalls.add(it) }
+        }
+
+        if (toolCalls.isNotEmpty()) return toolCalls
+
+        // 3. Fallback: Parse the entire text block if it looks like pure JSON
+        val trimmed = text.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            parseSingleJsonToolCall(trimmed)?.let { toolCalls.add(it) }
+        }
+
+        return toolCalls
+    }
+
+    private fun parseSingleJsonToolCall(jsonStr: String): ToolCall? {
+        return try {
+            val obj = org.json.JSONObject(jsonStr)
+            val name = obj.optString("tool", "").takeIf { it.isNotEmpty() }
+                ?: obj.optString("name", "").takeIf { it.isNotEmpty() }
+                ?: return null
+            
+            val argsMap = mutableMapOf<String, Any>()
+            val argsObj = obj.optJSONObject("arguments") ?: obj.optJSONObject("params")
+            if (argsObj != null) {
+                val keys = argsObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    val value = argsObj.get(key)
+                    if (value != org.json.JSONObject.NULL) {
+                        argsMap[key] = value
+                    }
+                }
+            }
+            ToolCall(name, argsMap)
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
+
+data class ToolCall(
+    val name: String,
+    val arguments: Map<String, Any>
+)
+

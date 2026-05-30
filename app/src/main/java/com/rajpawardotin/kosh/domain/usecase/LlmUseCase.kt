@@ -202,6 +202,7 @@ class LlmUseCase(
         documentContext: String,
         searchResults: String?,
         searchQuery: String?,
+        toolSchemas: List<String> = emptyList(),
         maxContextChars: Int = 8000 // approx 2048 tokens
     ): String {
         val budgetForHistory = maxContextChars - rawPrompt.length - documentContext.length - (searchResults?.length ?: 0) - 1500
@@ -231,6 +232,24 @@ class LlmUseCase(
         promptSb.append("### SYSTEM INSTRUCTIONS\n")
         promptSb.append("You are Kosh, a private, secure offline personal assistant running on the user's device. ")
         promptSb.append("You help the user brainstorm, study, and analyze information.\n")
+        
+        if (toolSchemas.isNotEmpty()) {
+            promptSb.append("\n### AVAILABLE AGENT TOOLS\n")
+            promptSb.append("You have access to the following tools to assist the user. To invoke a tool, output a single JSON code block in this exact format:\n")
+            promptSb.append("```json\n")
+            promptSb.append("{\n")
+            promptSb.append("  \"tool\": \"tool_name\",\n")
+            promptSb.append("  \"arguments\": {\n")
+            promptSb.append("    \"parameter_name\": value\n")
+            promptSb.append("  }\n")
+            promptSb.append("}\n")
+            promptSb.append("```\n")
+            promptSb.append("Do not output any additional text before or after the JSON code block when calling a tool. Once the tool executes, you will receive the response and you can proceed to answer the user.\n\n")
+            promptSb.append("ACTIVE TOOLS SCHEMAS:\n")
+            toolSchemas.forEach { schema ->
+                promptSb.append(schema).append("\n\n")
+            }
+        }
         
         if (documentContext.isNotEmpty()) {
             promptSb.append("- The user has attached documents/files to this conversation. ")
