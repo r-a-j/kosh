@@ -1,23 +1,28 @@
 package com.rajpawardotin.kosh.ui.chat.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.AutoAwesome
 
 @Composable
 fun ChatEmptyState(
@@ -38,33 +42,67 @@ fun ChatEmptyState(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp)
+            .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            tint = Color(0xFF03DAC5),
-            modifier = Modifier.size(64.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Header Icon with subtle ambient gradient
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF03DAC5).copy(alpha = 0.15f),
+                            Color(0xFF8B5CF6).copy(alpha = 0.05f)
+                        )
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF03DAC5).copy(alpha = 0.4f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = RoundedCornerShape(14.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color(0xFF03DAC5),
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(14.dp))
+        
         Text(
-            text = if (isTemporarySession) "Temporary Vault" else "Kosh Neural Core",
+            text = if (isTemporarySession) "Temporary Vault" else "Kosh Neural Vault",
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.5).sp,
-                fontSize = 24.sp
+                fontSize = 22.sp
             ),
-            color = if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.8f) else Color.White.copy(alpha = 0.95f),
+            color = if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.95f),
             textAlign = TextAlign.Center
         )
+        
         Text(
-            text = if (isTemporarySession) "History is disabled. Session keys will be shredded upon lock." else "Your secure local AI brainstorm companion.",
+            text = if (isTemporarySession) 
+                "History is disabled. Session keys will be shredded upon lock." 
+            else 
+                "Private, local intelligence dashboard running strictly on-device.",
             style = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 14.sp
+                fontSize = 13.sp,
+                lineHeight = 18.sp
             ),
             color = Color.White.copy(alpha = 0.5f),
             textAlign = TextAlign.Center,
@@ -72,70 +110,198 @@ fun ChatEmptyState(
         )
 
         if (isTemporarySession && onExitTemporaryClick != null) {
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
                 onClick = onExitTemporaryClick,
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.4f)),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = Color(0xFFFF9100)
-                )
+                ),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = "EXIT TEMPORARY VAULT",
-                    style = MaterialTheme.typography.labelMedium.copy(
+                    style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        letterSpacing = 0.8.sp,
+                        fontSize = 11.sp
                     )
                 )
             }
         }
         
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Status Indicators Row (2026 Sleek Dashboard Chips)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            StatusChip(label = "Core", value = "LiteRT", color = Color(0xFF10B981))
+            StatusChip(label = "Vault", value = "AES-GCM", color = Color(0xFF06B6D4))
+            StatusChip(label = "Hardware", value = "NPU", color = Color(0xFF8B5CF6))
+        }
+
         Spacer(modifier = Modifier.height(28.dp))
 
+        // Dashboard Section Title
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            SuggestionCard(
-                title = "Write & Refactor",
-                desc = "Solve coding problems or debug logic",
-                icon = Icons.Default.Code,
-                gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFF6366F1)),
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestionClick("Write a Kotlin class to handle binary search recursively.") }
+            Text(
+                text = "CONNECTED SKILLS & AGENTS",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    fontSize = 11.sp
+                ),
+                color = Color.White.copy(alpha = 0.4f)
             )
-            SuggestionCard(
-                title = "Web Search",
-                desc = "Find real-time news, tech trends, or weather",
-                icon = Icons.Default.Language,
-                gradientColors = listOf(Color(0xFF06B6D4), Color(0xFF3B82F6)),
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestionClick("Search online for the latest news on on-device LLM trends today.") }
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(0.5.dp)
+                    .background(Color.White.copy(alpha = 0.1f))
             )
         }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Grid of Connected Skills (Dashboard Showcase)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SuggestionCard(
-                title = "Analyze Docs",
-                desc = "Summarize or extract facts from attachments",
-                icon = Icons.Default.Description,
-                gradientColors = listOf(Color(0xFF10B981), Color(0xFF059669)),
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestionClick("Summarize the key findings and details of the attached document.") }
-            )
-            SuggestionCard(
-                title = "Brainstorm Ideas",
-                desc = "Generate features, names, or outlines",
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SuggestionCard(
+                    title = "Device Flashlight",
+                    desc = "Toggle hardware torch",
+                    promptText = "Turn on the flashlight",
+                    icon = Icons.Default.Settings,
+                    gradientColors = listOf(Color(0xFF8B5CF6), Color(0xFF6D28D9)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+                SuggestionCard(
+                    title = "Audio Manager",
+                    desc = "Set music & media volume",
+                    promptText = "Set media volume to 50%",
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    gradientColors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SuggestionCard(
+                    title = "Calendar Planner",
+                    desc = "Check device schedules",
+                    promptText = "List my calendar events for next week",
+                    icon = Icons.Default.CalendarToday,
+                    gradientColors = listOf(Color(0xFF10B981), Color(0xFF047857)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+                SuggestionCard(
+                    title = "Web Knowledge",
+                    desc = "Forced or smart hybrid search",
+                    promptText = "Search online for the latest news on local LLM trends today",
+                    icon = Icons.Default.Language,
+                    gradientColors = listOf(Color(0xFF06B6D4), Color(0xFF0891B2)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                SuggestionCard(
+                    title = "Doc Intellect",
+                    desc = "Local PDF / TXT RAG parser",
+                    promptText = "Summarize the key findings of the attached document",
+                    icon = Icons.Default.Description,
+                    gradientColors = listOf(Color(0xFFEC4899), Color(0xFFBE185D)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+                SuggestionCard(
+                    title = "Script Sandbox",
+                    desc = "Run custom JS plugins",
+                    promptText = "Run the custom JS script to parse this query",
+                    icon = Icons.Default.Code,
+                    gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
+                    modifier = Modifier.weight(1f),
+                    onClick = onSuggestionClick
+                )
+            }
+
+            // A final full-width featured card for general coding/logic assistant
+            SuggestionCardFullWidth(
+                title = "Neural Logic & Coding",
+                desc = "Write classes, debug logic, or run local brainstorming routines",
+                promptText = "Write a Kotlin class to handle binary search recursively.",
                 icon = Icons.Default.Lightbulb,
-                gradientColors = listOf(Color(0xFFF59E0B), Color(0xFFD97706)),
-                modifier = Modifier.weight(1f),
-                onClick = { onSuggestionClick("Brainstorm 5 unique features for an immersive local AI notes app.") }
+                gradientColors = listOf(Color(0xFFEF4444), Color(0xFFB91C1C)),
+                onClick = onSuggestionClick
             )
         }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun StatusChip(label: String, value: String, color: Color) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF141416).copy(alpha = 0.5f))
+            .border(
+                width = 0.5.dp,
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(color)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$label: ",
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            color = Color.White.copy(alpha = 0.4f)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            ),
+            color = Color.White.copy(alpha = 0.85f)
+        )
     }
 }
 
@@ -143,35 +309,36 @@ fun ChatEmptyState(
 private fun SuggestionCard(
     title: String,
     desc: String,
+    promptText: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     gradientColors: List<Color>,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: (String) -> Unit
 ) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.7f)),
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick(promptText) },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.5f)),
         border = androidx.compose.foundation.BorderStroke(
-            1.dp,
+            0.8.dp,
             Brush.linearGradient(
                 listOf(
-                    Color.White.copy(alpha = 0.12f),
+                    Color.White.copy(alpha = 0.1f),
                     Color.White.copy(alpha = 0.02f)
                 )
             )
         )
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(9.dp))
                     .background(Brush.linearGradient(gradientColors)),
                 contentAlignment = Alignment.Center
             ) {
@@ -179,27 +346,99 @@ private fun SuggestionCard(
                     imageVector = icon,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 14.sp
                 ),
                 color = Color.White
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = desc,
                 style = MaterialTheme.typography.bodySmall.copy(
-                    lineHeight = 16.sp,
-                    fontSize = 12.sp
+                    lineHeight = 14.sp,
+                    fontSize = 11.sp
                 ),
-                color = Color.White.copy(alpha = 0.6f)
+                color = Color.White.copy(alpha = 0.5f)
             )
+        }
+    }
+}
+
+@Composable
+private fun SuggestionCardFullWidth(
+    title: String,
+    desc: String,
+    promptText: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    gradientColors: List<Color>,
+    onClick: (String) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick(promptText) },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.5f)),
+        border = androidx.compose.foundation.BorderStroke(
+            0.8.dp,
+            Brush.linearGradient(
+                listOf(
+                    Color.White.copy(alpha = 0.1f),
+                    Color.White.copy(alpha = 0.02f)
+                )
+            )
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Brush.linearGradient(gradientColors)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    ),
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = desc,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        lineHeight = 14.sp,
+                        fontSize = 11.sp
+                    ),
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+            }
         }
     }
 }
