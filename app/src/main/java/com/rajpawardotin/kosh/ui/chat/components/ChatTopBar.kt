@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.domain.model.ChatSession
@@ -49,8 +50,7 @@ fun ChatTopBar(
             .fillMaxWidth()
             .statusBarsPadding()
             .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalAlignment = Alignment.CenterVertically
     ) {
         // Left: 2-line Hamburger Menu
         Box(
@@ -71,43 +71,62 @@ fun ChatTopBar(
             }
         }
 
-        // Center: Dropdown Selector
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = 0.05f))
-                .clickable { onCoreSelectorClick() }
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+        // Safety margin between left menu and center selector
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Center: Dropdown Selector (occupies remaining space, centering its content)
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = if (isEngineReady) {
-                    modelPath?.let {
-                        File(it).name
-                            .replace(".litertlm", "")
-                            .replace(".bin", "")
-                            .replace("model", "Neural Core")
-                            .uppercase()
-                    } ?: "NEURAL CORE"
-                } else {
-                    "SELECT CORE"
-                },
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    fontSize = 13.sp
-                ),
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(
-                imageVector = Icons.Default.KeyboardArrowDown,
-                contentDescription = "Select Core",
-                tint = Color.White.copy(alpha = 0.7f),
-                modifier = Modifier.size(16.dp)
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .clickable { onCoreSelectorClick() }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (isEngineReady) {
+                        modelPath?.let {
+                            File(it).name
+                                .replace(".litertlm", "")
+                                .replace(".bin", "")
+                                .replace("model", "Neural Core")
+                                .uppercase()
+                                .replace("_QUALCOMM_SM8750", " (NPU)")
+                                .replace("_QUALCOMM", " (NPU)")
+                                .replace("_SM8750", " (NPU)")
+                                .replace("-IT", "")
+                        } ?: "NEURAL CORE"
+                    } else {
+                        "SELECT CORE"
+                    },
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        fontSize = 13.sp
+                    ),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Select Core",
+                    tint = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
+        // Safety margin between center selector and right actions
+        Spacer(modifier = Modifier.width(12.dp))
+
+        // Right: Action Buttons Row
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically

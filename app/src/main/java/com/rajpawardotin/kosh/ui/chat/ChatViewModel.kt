@@ -1285,7 +1285,8 @@ class ChatViewModel(
                 if (isEngineReady) {
                     showToast("Neural Core ignited successfully!")
                 } else {
-                    showToast("Ignition failed. Try selecting another backend.")
+                    val error = result.exceptionOrNull()?.localizedMessage ?: "Unknown configuration error"
+                    showToast("Ignition failed: $error")
                 }
             }
         }

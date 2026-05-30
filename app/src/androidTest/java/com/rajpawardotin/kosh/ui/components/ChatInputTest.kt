@@ -24,12 +24,16 @@ class ChatInputTest {
                 value = "Test prompt input",
                 onValueChange = {},
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
@@ -44,12 +48,16 @@ class ChatInputTest {
                 value = typedText,
                 onValueChange = { typedText = it },
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
@@ -66,22 +74,22 @@ class ChatInputTest {
                 value = "",
                 onValueChange = {},
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
-        // Send button should be disabled when empty and no files are attached
-        composeTestRule.onNodeWithContentDescription("Send").assertExists()
-        // Click the send button and verify it's disabled. In compose testing, we can check if it's enabled.
-        // But since there's no assertIsEnabled() or similar easily callable without import, we can do:
-        // composeTestRule.onNodeWithContentDescription("Send").assertIsNotEnabled()
-        // Wait, assertIsNotEnabled is a standard compose test extension.
-        // Let's use it.
+        // When empty, the Send button is hidden and replaced by Voice Input
+        composeTestRule.onNodeWithContentDescription("Send").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Voice Input").assertExists()
     }
 
     @Test
@@ -92,12 +100,16 @@ class ChatInputTest {
                 value = "A valid prompt",
                 onValueChange = {},
                 onSend = { sendClicked = true },
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
@@ -112,12 +124,16 @@ class ChatInputTest {
                 value = "",
                 onValueChange = {},
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = false,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
@@ -131,12 +147,16 @@ class ChatInputTest {
                 value = "Wait generation",
                 onValueChange = {},
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = emptyList(),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = true
+                isGenerating = true,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 
@@ -160,12 +180,16 @@ class ChatInputTest {
                 value = "",
                 onValueChange = {},
                 onSend = {},
+                onStop = {},
                 onVoiceClick = {},
                 onAttachClick = {},
                 attachedFiles = listOf(dummyFile),
                 onDetachFile = {},
                 enabled = true,
-                isGenerating = false
+                isGenerating = false,
+                isInternetEnabled = false,
+                isSearchForced = false,
+                onToggleSearch = {}
             )
         }
 

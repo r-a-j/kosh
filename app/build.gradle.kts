@@ -80,8 +80,9 @@ android {
     }
     packaging {
         jniLibs {
-            // Disable legacy packaging to allow Play Store to manage native libraries correctly
-            useLegacyPackaging = false
+            // Enable legacy packaging (extract libraries to nativeLibraryDir) to allow the
+            // Qualcomm QNN NPU delegate runtime to locate and dynamically load its driver stubs/skels.
+            useLegacyPackaging = true
             pickFirsts.add("**/libLiteRt*.so")
         }
     }

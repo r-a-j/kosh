@@ -20,7 +20,7 @@ Kosh is an offline-first, strictly private AI cognitive vault designed to operat
 
 ## 2. Neural Core (Local LLM)
 - **LiteRT (TensorFlow Lite)**: The `LiteRTModelProvider` handles loading quantized `.litertlm` or `.bin` models into memory.
-- **Hardware Acceleration**: Automatically delegates inference tasks to the Hexagon DSP (NPU) via `libcdsprpc.so`, or falls back to the GPU/CPU based on user preferences in the Settings panel.
+- **Hardware Acceleration**: Automatically delegates inference tasks to the Qualcomm Hexagon DSP (NPU) via `libcdsprpc.so`, or falls back to the GPU/CPU based on user preferences. For details on compilation, STL symbol linkage, 16 KB segment alignments, and preloading orders, see [npu_setup.md](npu_setup.md).
 - **Context Management**: Kosh dynamically truncates conversation history using a sliding window to fit within the model's maximum context window (e.g., 2048 or 4096 tokens). The context allocation engine enforces strict negative-space checks to avoid prompt buffer overflows.
 - **JNI Thread Safety**: Synchronizes initialization and model destruction loops to prevent JNI delegate token corruption (avoiding "laptop" looping bugs).
 

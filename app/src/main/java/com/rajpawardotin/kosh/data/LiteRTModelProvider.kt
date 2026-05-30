@@ -33,6 +33,26 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
         close()
         activeCloseThread?.join()
         return try {
+            if (backend == "NPU (Qualcomm)") {
+                val libsToLoad = listOf(
+                    "LiteRt",
+                    "QnnSystem",
+                    "QnnHtp",
+                    "LiteRtDispatch_Qualcomm"
+                )
+                for (lib in libsToLoad) {
+                    try {
+                        android.util.Log.i("KOSH_NPU", "Manually loading lib$lib.so...")
+                        System.loadLibrary(lib)
+                        android.util.Log.i("KOSH_NPU", "Successfully loaded lib$lib.so")
+                    } catch (e: UnsatisfiedLinkError) {
+                        android.util.Log.e("KOSH_NPU", "Failed to load lib$lib.so: ${e.message}", e)
+                    } catch (e: Exception) {
+                        android.util.Log.e("KOSH_NPU", "Error loading lib$lib.so: ${e.message}", e)
+                    }
+                }
+            }
+
             val litertBackend = when (backend) {
                 "GPU" -> Backend.GPU()
                 "NPU (Qualcomm)" -> Backend.NPU(context.applicationInfo.nativeLibraryDir)

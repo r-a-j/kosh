@@ -124,4 +124,60 @@ class ChatTopBarTest {
         assert(newChatClicked)
         assert(!isTempClicked)
     }
+
+    @Test
+    fun chatTopBar_displaysCleanModelName_npu() {
+        composeTestRule.setContent {
+            ChatTopBar(
+                isEngineReady = true,
+                modelPath = "/path/to/gemma-4-E2B-it_qualcomm_sm8750.litertlm",
+                currentSession = null,
+                isCurrentSessionUnlocked = false,
+                isTemporarySession = false,
+                isGenerating = false,
+                onMenuClick = {},
+                onCoreSelectorClick = {},
+                onLockSettingsClick = {},
+                onManageLockClick = {},
+                onNewChatClick = {},
+                onSettingsClick = {}
+            )
+        }
+
+        // Check if the suffix _qualcomm_sm8750 is replaced with (NPU) and -it is removed
+        composeTestRule.onNodeWithText("GEMMA-4-E2B (NPU)").assertExists()
+    }
+
+    @Test
+    fun chatTopBar_temporarySession_hidesLockIcon() {
+        val session = ChatSession(
+            id = "test-session",
+            title = "Secure Vault",
+            createdAt = 123456789L,
+            lastActive = 123456789L,
+            modelPath = null,
+            lastSearchQuery = null,
+            encryptedKeyPassword = "encrypted-password-hash"
+        )
+
+        composeTestRule.setContent {
+            ChatTopBar(
+                isEngineReady = true,
+                modelPath = null,
+                currentSession = session,
+                isCurrentSessionUnlocked = false,
+                isTemporarySession = true, // Temporary Session
+                isGenerating = false,
+                onMenuClick = {},
+                onCoreSelectorClick = {},
+                onLockSettingsClick = {},
+                onManageLockClick = {},
+                onNewChatClick = {},
+                onSettingsClick = {}
+            )
+        }
+
+        // Vault Lock Settings button should not be displayed in temporary sessions
+        composeTestRule.onNodeWithContentDescription("Vault Lock Settings").assertDoesNotExist()
+    }
 }
