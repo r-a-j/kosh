@@ -95,3 +95,28 @@ To support long hardware-specific model names (e.g. `gemma-4-E2B-it_qualcomm_sm8
 2. **Weighted Centered Box**: The core selector chip sits inside a `Box(Modifier.weight(1f), contentAlignment = Alignment.Center)`. This Box scales dynamically to occupy all remaining width and centers its content, ensuring it never overlaps or touches neighboring buttons under any screen size.
 3. **Ellipsis & Truncation**: The text inside the chip uses `maxLines = 1` and `overflow = TextOverflow.Ellipsis` with a child weight constraint, guaranteeing it will gracefully display an ellipsis on tight space constraints.
 4. **Descriptive Name Sanitization**: Strips verbose model parameters (e.g. `-IT` and `_QUALCOMM_SM8750`) and appends ` (NPU)` dynamically to create clean visual titles.
+
+---
+
+## 6. Build Tools Automation & Setup Scripts
+
+To allow reproducibility and save development setup efforts, the automation scripts are version-tracked under the [build_tools/](file:///d:/Work/Testbench/temp/build_tools) folder of the project repository. 
+
+> [!IMPORTANT]
+> To prevent massive binary files from polluting the git tree, all compiled SDK binaries (NDK, CMake toolchain, flatc, Ninja) and the `LiteRT` source code repository are explicitly ignored in [.gitignore](file:///d:/Work/Testbench/temp/.gitignore). Only the orchestrating build and configuration scripts are committed.
+
+### Script Catalog
+
+* **[setup_build_tools.ps1](file:///d:/Work/Testbench/temp/build_tools/setup_build_tools.ps1)**:
+  Downloads and extracts standard build dependencies (Android NDK r26b, CMake 3.29.3, Ninja 1.12.1) using PowerShell's WebRequest.
+* **[setup_build_tools_fast.ps1](file:///d:/Work/Testbench/temp/build_tools/setup_build_tools_fast.ps1)**:
+  An optimized setup script using native `curl.exe` block streams for high-speed download and decompression.
+* **[configure_cmake.ps1](file:///d:/Work/Testbench/temp/build_tools/configure_cmake.ps1)**:
+  PowerShell script executing the full CMake configure and build stages:
+  1. Configures `Ninja` as the make generator.
+  2. Maps NDK's target toolchain compilation configurations.
+  3. Maps QNN header dependencies (`QAIRT_HEADERS_DIR`, `LITECORE_HEADERS_DIR`).
+  4. Enforces static C++ runtime linkage (`-DANDROID_STL=c++_static`) and 16 KB segment padding flags (`-Wl,-z,max-page-size=16384`).
+* **[extract_npu_steps.py](file:///d:/Work/Testbench/temp/build_tools/extract_npu_steps.py)**:
+  Python utility to extract transcript compilation commands and setup steps for troubleshooting reference.
+
