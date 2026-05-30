@@ -16,3 +16,15 @@ local.properties
 *.jks
 *.keystore
 *.db
+
+# Build tools binaries and SDKs
+/build_tools/android-ndk-r26b/
+/build_tools/cmake/
+/build_tools/flatc/
+/build_tools/ninja/
+
+# LiteRT clone and built dependencies
+/LiteRT/
+
+# Temporary zip files
+/*.zip
