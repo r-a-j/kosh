@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.rajpawardotin.kosh.ui.components.KoshLogo
+import androidx.compose.material.icons.filled.AutoAwesome
 
 @Composable
 fun ChatEmptyState(
@@ -44,7 +44,12 @@ fun ChatEmptyState(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        KoshLogo(modifier = Modifier.size(130.dp))
+        Icon(
+            imageVector = Icons.Default.AutoAwesome,
+            contentDescription = null,
+            tint = Color(0xFF03DAC5),
+            modifier = Modifier.size(64.dp)
+        )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = if (isTemporarySession) "Temporary Vault" else "Kosh Neural Core",

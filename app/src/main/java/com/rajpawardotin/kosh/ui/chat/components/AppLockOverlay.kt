@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -33,8 +32,12 @@ fun AppLockOverlay(
         Box(
             modifier = Modifier
                 .size(300.dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF03DAC5).copy(alpha = 0.15f), Color.Transparent)))
-                .blur(50.dp)
+                .background(Brush.radialGradient(
+                    0.0f to Color(0xFF03DAC5).copy(alpha = 0.12f),
+                    0.3f to Color(0xFF03DAC5).copy(alpha = 0.06f),
+                    0.6f to Color(0xFF03DAC5).copy(alpha = 0.02f),
+                    1.0f to Color.Transparent
+                ))
         )
         
         Column(

@@ -36,7 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
+
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -240,19 +240,7 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        val file = File(context.filesDir, "model.litertlm")
-        if (file.exists()) {
-            if (file.length() > 10 * 1024 * 1024) { // At least 10MB for a valid LLM
-                viewModel.setModel(file.absolutePath)
-                if (!viewModel.isEngineReady) {
-                    viewModel.initializeEngine()
-                }
-            } else {
-                file.delete()
-            }
-        }
-    }
+
 
     LaunchedEffect(viewModel.chatMessages.size, viewModel.currentResponseChunk, viewModel.isThinking, viewModel.isSearchingInternet, viewModel.isGenerating) {
         if (viewModel.chatMessages.isNotEmpty() || viewModel.currentResponseChunk.isNotEmpty() || viewModel.isThinking || viewModel.isSearchingInternet || viewModel.isGenerating) {
@@ -264,94 +252,37 @@ fun ChatScreen(
         scrollState.scrollToItem(0)
     }
 
-    val topLightsTransition = rememberInfiniteTransition(label = "top_lights_movement")
-    val animationAngle by topLightsTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(8000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "lightsAngle"
-    )
-
-    val movementIntensity by animateFloatAsState(
-        targetValue = if (viewModel.isGenerating) 1f else 0f,
-        animationSpec = tween(1200, easing = FastOutSlowInEasing),
-        label = "movementIntensity"
-    )
-
-    val tealOffsetX = (-120).dp + (80.dp * kotlin.math.cos(animationAngle.toDouble()).toFloat() * movementIntensity)
-    val tealOffsetY = (-120).dp + (60.dp * kotlin.math.sin(animationAngle.toDouble()).toFloat() * movementIntensity)
-
-    val indigoOffsetX = 120.dp - (80.dp * kotlin.math.sin(animationAngle.toDouble()).toFloat() * movementIntensity)
-    val indigoOffsetY = (-120).dp + (60.dp * kotlin.math.cos(animationAngle.toDouble()).toFloat() * movementIntensity)
-
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF0C0C0F))
     ) {
-        // Top-left teal radial glow
+        // Static ambient glow — no animation, no blur, zero GPU cost
         Box(
             modifier = Modifier
-                .size(450.dp)
-                .offset(x = tealOffsetX, y = tealOffsetY)
-                .background(Brush.radialGradient(listOf(Color(0xFF0F766E).copy(alpha = 0.18f), Color.Transparent)))
-                .blur(80.dp)
+                .size(400.dp)
+                .offset(x = (-100).dp, y = (-100).dp)
+                .background(Brush.radialGradient(
+                    0.0f to Color(0xFF0F766E).copy(alpha = 0.14f),
+                    0.3f to Color(0xFF0F766E).copy(alpha = 0.07f),
+                    0.6f to Color(0xFF0F766E).copy(alpha = 0.02f),
+                    1.0f to Color.Transparent
+                ))
         )
-        // Top-right indigo radial glow
         Box(
             modifier = Modifier
-                .size(450.dp)
+                .size(400.dp)
                 .align(Alignment.TopEnd)
-                .offset(x = indigoOffsetX, y = indigoOffsetY)
-                .background(Brush.radialGradient(listOf(Color(0xFF312E81).copy(alpha = 0.22f), Color.Transparent)))
-                .blur(80.dp)
+                .offset(x = 100.dp, y = (-100).dp)
+                .background(Brush.radialGradient(
+                    0.0f to Color(0xFF312E81).copy(alpha = 0.18f),
+                    0.3f to Color(0xFF312E81).copy(alpha = 0.09f),
+                    0.6f to Color(0xFF312E81).copy(alpha = 0.03f),
+                    1.0f to Color.Transparent
+                ))
         )
 
-        // Bottom pulsing web search blue/cyan glow
-        AnimatedVisibility(
-            visible = viewModel.isSearchingInternet,
-            enter = fadeIn(animationSpec = tween(500)),
-            exit = fadeOut(animationSpec = tween(500)),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "blue_glow")
-            val glowAlpha by infiniteTransition.animateFloat(
-                initialValue = 0.1f,
-                targetValue = 0.35f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "glowAlpha"
-            )
-            val glowSize by infiniteTransition.animateFloat(
-                initialValue = 350f,
-                targetValue = 500f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(1200, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "glowSize"
-            )
-            Box(
-                modifier = Modifier
-                    .size(glowSize.dp)
-                    .offset(y = 120.dp)
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF00E5FF).copy(alpha = glowAlpha),
-                                Color(0xFF2979FF).copy(alpha = glowAlpha * 0.5f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-                    .blur(60.dp)
-            )
-        }
+
 
         ModalNavigationDrawer(
             drawerState = drawerState,
@@ -810,14 +741,14 @@ private fun triggerAppBiometricUnlock(context: Context, viewModel: ChatViewModel
 @Composable
 fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
     val infiniteTransition = rememberInfiniteTransition(label = "thinking")
-    val alpha by infiniteTransition.animateFloat(
+    val dotAlpha by infiniteTransition.animateFloat(
         initialValue = 0.4f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(1000),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "alpha"
+        label = "dotAlpha"
     )
 
     val rotation by infiniteTransition.animateFloat(
@@ -831,36 +762,78 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
     )
 
     Row(
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
-            .alpha(alpha)
     ) {
-        if (isSearchingInternet) {
-            Icon(
-                imageVector = Icons.Default.Public,
-                contentDescription = "Searching Web",
-                tint = Color(0xFF00E5FF),
-                modifier = Modifier
-                    .size(18.dp)
-                    .graphicsLayer(rotationZ = rotation)
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF03DAC5))
-            )
+        Box(
+            modifier = Modifier
+                .padding(top = 5.dp)
+                .graphicsLayer { this.alpha = dotAlpha }
+        ) {
+            if (isSearchingInternet) {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = "Searching Web",
+                    tint = Color(0xFF00E5FF),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .graphicsLayer { rotationZ = rotation }
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF03DAC5))
+                )
+            }
         }
+        
         Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (isSearchingInternet) Color(0xFF00E5FF) else Color(0xFF03DAC5),
-            fontSize = 14.sp
-        )
+        
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            val blocks = remember(text) {
+                if (text.isBlank()) emptyList()
+                else text.split("\n").filter { it.isNotEmpty() }
+            }
+            
+            if (blocks.isEmpty()) {
+                Text(
+                    text = "...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF03DAC5),
+                    fontSize = 14.sp
+                )
+            } else {
+                blocks.forEachIndexed { index, block ->
+                    val isLast = index == blocks.lastIndex
+                    val isAgenticLabel = block.endsWith("...") && !block.startsWith(" ")
+                    val textColor = when {
+                        isSearchingInternet -> Color(0xFF00E5FF)
+                        isAgenticLabel -> Color(0xFF03DAC5)
+                        else -> Color(0xFFE4E4E7)
+                    }
+                    
+                    Text(
+                        text = if (isLast && !isAgenticLabel) block + " ▊" else block,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            lineHeight = 22.sp,
+                            fontSize = 15.sp
+                        ),
+                        color = textColor,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    if (index < blocks.lastIndex) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -934,18 +907,26 @@ fun LockedVaultScreen(
         val iconSize = if (isCompact) 18.dp else 24.dp
         val titleSpace = if (isCompact) 2.dp else 6.dp
 
-        // Futuristic mesh radial glows
+        // Subtle static radial glows (no blur)
         Box(
             modifier = Modifier
-                .size(450.dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF03DAC5).copy(alpha = 0.12f), Color.Transparent)))
-                .blur(70.dp)
+                .size(400.dp)
+                .background(Brush.radialGradient(
+                    0.0f to Color(0xFF03DAC5).copy(alpha = 0.10f),
+                    0.3f to Color(0xFF03DAC5).copy(alpha = 0.05f),
+                    0.6f to Color(0xFF03DAC5).copy(alpha = 0.01f),
+                    1.0f to Color.Transparent
+                ))
         )
         Box(
             modifier = Modifier
-                .size(350.dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF8B5CF6).copy(alpha = 0.08f), Color.Transparent)))
-                .blur(90.dp)
+                .size(300.dp)
+                .background(Brush.radialGradient(
+                    0.0f to Color(0xFF8B5CF6).copy(alpha = 0.06f),
+                    0.3f to Color(0xFF8B5CF6).copy(alpha = 0.03f),
+                    0.6f to Color(0xFF8B5CF6).copy(alpha = 0.01f),
+                    1.0f to Color.Transparent
+                ))
         )
 
         // Glassmorphic Outer Card

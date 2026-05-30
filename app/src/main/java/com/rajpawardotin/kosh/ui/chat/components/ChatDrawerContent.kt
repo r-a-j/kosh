@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
-import com.rajpawardotin.kosh.ui.components.KoshLogo
+import androidx.compose.material.icons.filled.AutoAwesome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -61,7 +61,10 @@ fun ChatDrawerContent(
                     .padding(vertical = 12.dp)
             ) {
                 Box(modifier = Modifier.size(36.dp)) {
-                    KoshLogo(
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color(0xFF03DAC5),
                         modifier = Modifier.fillMaxSize()
                     )
                 }

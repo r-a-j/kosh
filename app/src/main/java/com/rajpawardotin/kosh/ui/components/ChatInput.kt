@@ -72,29 +72,37 @@ fun ChatInput(
     )
     val inputShape = RoundedCornerShape(cornerRadius)
 
-    // Breathing border animation for active generation
-    val generatingBorderTransition = rememberInfiniteTransition(label = "generating_border")
-    val borderAlpha by generatingBorderTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "borderAlpha"
-    )
+    // Breathing border animation for active generation - ONLY runs when generating
+    val borderAlpha = if (isGenerating) {
+        val generatingBorderTransition = rememberInfiniteTransition(label = "generating_border")
+        generatingBorderTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1500, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "borderAlpha"
+        ).value
+    } else {
+        0.08f // Static border when idle
+    }
 
-    // Breathing shimmer alpha for generation placeholder
-    val generatingTextTransition = rememberInfiniteTransition(label = "generating_text")
-    val generatingAlpha by generatingTextTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "generatingAlpha"
-    )
+    // Breathing shimmer alpha for generation placeholder - ONLY runs when generating
+    val generatingAlpha = if (isGenerating) {
+        val generatingTextTransition = rememberInfiniteTransition(label = "generating_text")
+        generatingTextTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "generatingAlpha"
+        ).value
+    } else {
+        0.6f // Static placeholder when idle
+    }
 
     // Double-ended dynamic padding so text does not clash with the capsule borders or icons
     val startPadding by animateDpAsState(

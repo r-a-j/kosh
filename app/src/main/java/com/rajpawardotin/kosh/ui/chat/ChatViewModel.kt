@@ -559,6 +559,17 @@ class ChatViewModel(
             val random = java.util.Random()
 
             while (true) {
+                // Skip expensive proc reads when engine is off — no dashboard is visible
+                if (!isEngineReady) {
+                    withContext(Dispatchers.Main) {
+                        ramUsage = 0.0
+                        npuLoad = 0
+                        tokensPerSecond = 0f
+                    }
+                    delay(3000)
+                    continue
+                }
+
                 val currentRam = getRealRamUsage()
                 val currentCpuTime = try { android.os.Process.getElapsedCpuTime() } catch (e: Throwable) { 0L }
                 val currentTime = System.currentTimeMillis()
@@ -574,28 +585,22 @@ class ChatViewModel(
                 lastTime = currentTime
 
                 withContext(Dispatchers.Main) {
-                    if (isEngineReady) {
-                        ramUsage = currentRam
-                        npuLoad = if (isGenerating) {
-                            when (selectedBackend) {
-                                "NPU (Qualcomm)" -> 75 + random.nextInt(23)
-                                "GPU" -> 45 + random.nextInt(20)
-                                else -> cpuLoad.coerceAtLeast(15).coerceAtMost(98)
-                            }
-                        } else {
-                            cpuLoad.coerceAtMost(10)
+                    ramUsage = currentRam
+                    npuLoad = if (isGenerating) {
+                        when (selectedBackend) {
+                            "NPU (Qualcomm)" -> 75 + random.nextInt(23)
+                            "GPU" -> 45 + random.nextInt(20)
+                            else -> cpuLoad.coerceAtLeast(15).coerceAtMost(98)
                         }
                     } else {
-                        ramUsage = 0.0
-                        npuLoad = 0
-                        tokensPerSecond = 0f
+                        cpuLoad.coerceAtMost(10)
                     }
                 }
 
                 if (isGenerating || isInitializing) {
-                    delay(300)
+                    delay(500)
                 } else {
-                    delay(1000)
+                    delay(3000)
                 }
             }
         }
@@ -611,8 +616,7 @@ class ChatViewModel(
         viewModelScope.launch(safeIoDispatcher) {
             loadSavedSessionsInternal()
         }
-
-        startTrackingMetrics()
+        // Metrics tracking is started by MainActivity.onStart(), not here
     }
 
     private suspend fun loadSavedSessionsInternal() {
