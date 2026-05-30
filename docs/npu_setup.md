@@ -100,10 +100,10 @@ To support long hardware-specific model names (e.g. `gemma-4-E2B-it_qualcomm_sm8
 
 ## 6. Build Tools Automation & Setup Scripts
 
-To allow reproducibility and save development setup efforts, the automation scripts are version-tracked under the [build_tools/](file:///d:/Work/Testbench/temp/build_tools) folder of the project repository. 
+To allow reproducibility and save development setup efforts, a set of automation scripts are kept locally under the `build_tools/` folder of the project directory. 
 
 > [!IMPORTANT]
-> To prevent massive binary files from polluting the git tree, all compiled SDK binaries (NDK, CMake toolchain, flatc, Ninja) and the `LiteRT` source code repository are explicitly ignored in [.gitignore](file:///d:/Work/Testbench/temp/.gitignore). Only the orchestrating build and configuration scripts are committed.
+> To keep the remote repository clean and avoid tracking environment-specific scripts on Git, the entire `build_tools/` directory, all compiled SDK binaries (NDK, CMake, flatc, Ninja), and the `LiteRT` source code clone are ignored in [.gitignore](file:///d:/Work/Testbench/temp/.gitignore). These files remain strictly local on your developer machine.
 
 ### Script Catalog
 
