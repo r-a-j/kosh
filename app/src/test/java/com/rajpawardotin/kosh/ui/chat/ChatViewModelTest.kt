@@ -738,6 +738,30 @@ class ChatViewModelTest {
         assertTrue(sentPrompt.contains("### USER QUERY\nWhat did I say first?"))
     }
 
+    @Test
+    fun testStartNewChatClearsActiveSessionDocuments() = runTest(testDispatcher) {
+        val mockDoc = com.rajpawardotin.kosh.domain.model.SessionDocument(
+            id = "doc-test",
+            sessionId = "session-test",
+            fileName = "Day 9 DT.pdf",
+            fileType = "pdf",
+            fileSize = 1024L,
+            chunkIndex = 0,
+            chunkText = "This is a document sample.",
+            isEncrypted = false,
+            createdAt = 12345L
+        )
+        viewModel.activeSessionDocuments.add(mockDoc)
+        assertEquals(1, viewModel.activeSessionDocuments.size)
+
+        // Act
+        viewModel.startNewChat()
+        testScheduler.advanceUntilIdle()
+
+        // Assert that activeSessionDocuments is cleared
+        assertTrue(viewModel.activeSessionDocuments.isEmpty())
+    }
+
     class FakeAIProvider : AIProvider {
         override var isInitialized: Boolean = true
         var initializeCallCount = 0

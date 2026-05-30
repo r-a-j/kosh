@@ -117,6 +117,66 @@ class LlmUseCase(
         return rawPrompt
     }
 
+    fun tokenizeQuery(query: String): List<String> {
+        return query.trim().lowercase()
+            .split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+            .map { cleanToken(it) }
+            .filter { it.isNotBlank() && !STOP_WORDS.contains(it) }
+    }
+
+    private fun cleanToken(token: String): String {
+        return token.removeSurrounding("[", "]")
+            .removeSurrounding("(", ")")
+            .removeSurrounding("{", "}")
+            .removeSuffix(".").removeSuffix(",").removeSuffix(":")
+    }
+
+    fun scoreChunk(chunkText: String, terms: List<String>): Double {
+        if (terms.isEmpty()) return 0.0
+        val textLower = chunkText.lowercase()
+        
+        // Clean tokens in the chunk for exact word matching
+        val chunkTokens = textLower.split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+            .map { cleanToken(it) }
+            .filter { it.isNotBlank() }
+            .toSet()
+        
+        var uniqueMatched = 0
+        var totalMatchScore = 0.0
+        
+        val uniqueTerms = terms.toSet()
+        for (term in uniqueTerms) {
+            val isWordMatch = chunkTokens.contains(term)
+            val isSubstringMatch = textLower.contains(term)
+            
+            if (isWordMatch || isSubstringMatch) {
+                uniqueMatched++
+                
+                // Count occurrences to build match score
+                var count = 0
+                var index = 0
+                while (true) {
+                    index = textLower.indexOf(term, index)
+                    if (index == -1) break
+                    count++
+                    index += term.length
+                }
+                
+                // Exact word match gets weight 10.0, substring gets 1.0
+                val weight = if (isWordMatch) 10.0 else 1.0
+                totalMatchScore += count * weight
+            }
+        }
+        
+        if (uniqueMatched == 0) return 0.0
+        
+        // Unique terms coverage ratio (0.0 to 1.0)
+        val coverage = uniqueMatched.toDouble() / uniqueTerms.size.toDouble()
+        
+        // Boost coverage heavily so matching distinct terms always beats matching 1 term multiple times
+        return (coverage * 1000.0) + totalMatchScore
+    }
+
     fun retrieveContext(
         sessionId: String, 
         query: String, 
@@ -124,64 +184,49 @@ class LlmUseCase(
         activeSessionDocuments: List<SessionDocument>,
         justAttached: Boolean = false
     ): Pair<String, List<String>> {
-        val relevantDocs = if (isEncrypted) {
-            val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
-            val terms = sanitizedQuery.split(Regex("\\s+")).filter { it.isNotBlank() && !STOP_WORDS.contains(it) }
-            
-            if (terms.isEmpty() || justAttached) {
-                activeSessionDocuments.takeLast(3).reversed()
-            } else {
-                val matches = activeSessionDocuments
-                    .map { doc ->
-                        val text = doc.chunkText.lowercase()
-                        var score = 0
-                        for (term in terms) {
-                            var index = 0
-                            while (true) {
-                                index = text.indexOf(term, index)
-                                if (index == -1) break
-                                score++
-                                index += term.length
-                            }
-                        }
-                        doc to score
-                    }
-                    .filter { it.second > 0 }
-                    .sortedByDescending { it.second }
-                    .map { it.first }
-                    .take(3)
-                
-                if (matches.isEmpty()) {
-                    activeSessionDocuments.takeLast(3).reversed()
-                } else {
-                    matches
-                }
-            }
+        val terms = tokenizeQuery(query)
+        
+        val relevantDocs = if (terms.isEmpty() || justAttached) {
+            activeSessionDocuments.takeLast(3).reversed()
         } else {
-            val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
-            val terms = sanitizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() && !STOP_WORDS.contains(it) }
-
-            if (terms.isEmpty() || justAttached) {
+            // 1. Rank chunks in memory using multi-metric scoring (consistent for both encrypted & unencrypted)
+            val rankedMatches = activeSessionDocuments
+                .map { doc -> doc to scoreChunk(doc.chunkText, terms) }
+                .filter { it.second > 0.0 }
+                .sortedByDescending { it.second }
+            
+            if (rankedMatches.isEmpty()) {
                 activeSessionDocuments.takeLast(3).reversed()
             } else {
-                val docs = documentRepository.searchSessionDocumentsFTS(sessionId, query)
-                if (docs.isEmpty()) {
-                    activeSessionDocuments.takeLast(3).reversed()
-                } else {
-                    docs.take(3)
+                // 2. Select top 2 matching chunks
+                val topMatches = rankedMatches.take(2).map { it.first }
+                
+                // 3. Coherency Window: inject neighbors (index - 1 and index + 1) for the same file
+                val resultSet = mutableSetOf<SessionDocument>()
+                for (match in topMatches) {
+                    resultSet.add(match)
+                    
+                    val preceding = activeSessionDocuments.find { 
+                        it.fileName == match.fileName && it.chunkIndex == match.chunkIndex - 1 
+                    }
+                    if (preceding != null) resultSet.add(preceding)
+                    
+                    val succeeding = activeSessionDocuments.find { 
+                        it.fileName == match.fileName && it.chunkIndex == match.chunkIndex + 1 
+                    }
+                    if (succeeding != null) resultSet.add(succeeding)
                 }
+                
+                // 4. Chronological Sorting: sort by filename and chunk index to maintain reading order
+                resultSet.sortedWith(compareBy<SessionDocument> { it.fileName }.thenBy { it.chunkIndex })
             }
         }
 
         if (relevantDocs.isEmpty()) return Pair("", emptyList())
 
-        val sourceNames = mutableSetOf<String>()
+        val sourceNames = relevantDocs.map { it.fileName }.distinct()
         val sb = StringBuilder()
         
-        for (doc in relevantDocs) {
-            sourceNames.add(doc.fileName)
-        }
-
         sb.append("### ACTIVE CONVERSATION DOCUMENTS\n")
         sb.append("The user has attached the following files to this session: ")
         sb.append(sourceNames.joinToString(", ")).append("\n\n")
@@ -193,7 +238,7 @@ class LlmUseCase(
         }
         sb.append("--- END EXCERPTS ---")
 
-        return Pair(sb.toString(), sourceNames.toList())
+        return Pair(sb.toString(), sourceNames)
     }
 
     fun compileFinalPrompt(
@@ -257,6 +302,10 @@ class LlmUseCase(
             promptSb.append("If the user refers to 'the document', 'the PDF', 'the file', or 'reference doc attached earlier', ")
             promptSb.append("they are referring to these active conversation documents. ")
             promptSb.append("Always prioritize this context and answer based on it.\n")
+            promptSb.append("- IMPORTANT: The document excerpts are already provided to you in-context below under the '### ACTIVE CONVERSATION DOCUMENTS' section. ")
+            promptSb.append("You do not need to call any tool to access or read these documents. ")
+            promptSb.append("Do NOT mention, suggest, or apologize for lacking tools like 'analyze_document', 'read_document', 'open_file', or any other file/document tool. ")
+            promptSb.append("Simply read the excerpts directly from the prompt and answer the user's query.\n")
             promptSb.append("- Keep your answers factual and grounded ONLY in the provided document excerpts. ")
             promptSb.append("If the information is not in the excerpts and cannot be answered from them, say 'I cannot find that in the attached document.'\n")
         }

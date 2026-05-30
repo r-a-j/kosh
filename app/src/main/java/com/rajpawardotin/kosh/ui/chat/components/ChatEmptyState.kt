@@ -33,19 +33,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Dp
+
+import androidx.compose.foundation.ScrollState
 
 @Composable
 fun ChatEmptyState(
     isTemporarySession: Boolean,
     onSuggestionClick: (String) -> Unit,
-    onExitTemporaryClick: (() -> Unit)? = null
+    onExitTemporaryClick: (() -> Unit)? = null,
+    bottomPadding: Dp = 100.dp,
+    scrollState: ScrollState = rememberScrollState()
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .verticalScroll(scrollState)
+            .padding(
+                start = 20.dp,
+                end = 20.dp,
+                top = 24.dp,
+                bottom = 16.dp
+            )
     ) {
         Spacer(modifier = Modifier.height(8.dp))
         
@@ -261,7 +271,7 @@ fun ChatEmptyState(
             )
         }
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(bottomPadding + 16.dp))
     }
 }
 

@@ -753,6 +753,7 @@ class ChatViewModel(
         checkedItems.clear()
         lastSearchQuery = null
         prompt = ""
+        activeSessionDocuments.clear()
         if (isTemporary) {
             showToast("Temporary Vault active (history disabled)")
         } else {

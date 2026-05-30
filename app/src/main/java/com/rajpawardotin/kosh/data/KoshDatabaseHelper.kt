@@ -450,10 +450,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     }
 
     fun searchSessionDocumentsFTS(sessionId: String, query: String): List<com.rajpawardotin.kosh.domain.model.SessionDocument> {
-        val list = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
         val db = readableDatabase
         
-        // Remove common stop words and punctuation to improve RAG search relevance
         val stopWords = setOf(
             "a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "such", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "what", "how", "why", "who", "when", "where", 
             "summarize", "attached", "document", "documents", "tell", "me", "about", "please", "can", "you", "explain",
@@ -461,11 +459,21 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             "earlier", "earliest", "previous", "previously", "above", "below", "read", "view", "check", "open", "here", "there",
             "them", "yesterday", "message", "chat", "conversation", "show", "get", "give", "display", "find", "search", "lookup", "look"
         )
-        val sanitizedQuery = query.trim().lowercase().replace(Regex("[^a-z0-9\\s]"), "")
-        val terms = sanitizedQuery.split("\\s+".toRegex()).filter { it.isNotBlank() && !stopWords.contains(it) }
+        
+        val terms = query.trim().lowercase()
+            .split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+            .map { token ->
+                token.removeSurrounding("[", "]")
+                    .removeSurrounding("(", ")")
+                    .removeSurrounding("{", "}")
+                    .removeSuffix(".").removeSuffix(",").removeSuffix(":")
+            }
+            .filter { it.isNotBlank() && !stopWords.contains(it) }
 
-        // If the query is just stop words (or empty), return the most recent chunks as a fallback
-        if (terms.isEmpty()) {
+        val allDocs = getSessionDocuments(sessionId).filter { !it.isEncrypted }
+        
+        if (terms.isEmpty() || allDocs.isEmpty()) {
+            val list = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
             val fallbackSql = "SELECT * FROM session_documents WHERE session_id = ? AND is_encrypted = 0 ORDER BY created_at DESC, chunk_index ASC LIMIT 3"
             db.rawQuery(fallbackSql, arrayOf(sessionId)).use { cursor ->
                 parseSessionDocumentsCursor(cursor, list)
@@ -473,29 +481,73 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             return list
         }
 
-        // Construct FTS query using OR operator so that ANY matching term brings up the chunk
-        val matchQuery = terms.joinToString(" OR ")
-        val sql = """
-            SELECT sd.* 
-            FROM session_documents sd
-            JOIN documents_fts fts ON sd.id = fts.chunk_id
-            WHERE fts.session_id = ? AND documents_fts MATCH ?
-            ORDER BY sd.chunk_index ASC
-        """.trimIndent()
+        // Rank candidate chunks in memory using identical scoring logic
+        val rankedMatches = allDocs
+            .map { doc ->
+                val textLower = doc.chunkText.lowercase()
+                val chunkTokens = textLower.split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+                    .map { token ->
+                        token.removeSurrounding("[", "]")
+                            .removeSurrounding("(", ")")
+                            .removeSurrounding("{", "}")
+                            .removeSuffix(".").removeSuffix(",").removeSuffix(":")
+                    }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+                
+                var uniqueMatched = 0
+                var totalMatchScore = 0.0
+                val uniqueTerms = terms.toSet()
+                
+                for (term in uniqueTerms) {
+                    val isWordMatch = chunkTokens.contains(term)
+                    val isSubstringMatch = textLower.contains(term)
+                    if (isWordMatch || isSubstringMatch) {
+                        uniqueMatched++
+                        var count = 0
+                        var index = 0
+                        while (true) {
+                            index = textLower.indexOf(term, index)
+                            if (index == -1) break
+                            count++
+                            index += term.length
+                        }
+                        val weight = if (isWordMatch) 10.0 else 1.0
+                        totalMatchScore += count * weight
+                    }
+                }
+                
+                val score = if (uniqueMatched == 0) 0.0 else {
+                    val coverage = uniqueMatched.toDouble() / uniqueTerms.size.toDouble()
+                    (coverage * 1000.0) + totalMatchScore
+                }
+                
+                doc to score
+            }
+            .filter { it.second > 0.0 }
+            .sortedByDescending { it.second }
 
-        db.rawQuery(sql, arrayOf(sessionId, matchQuery)).use { cursor ->
-            parseSessionDocumentsCursor(cursor, list)
-        }
-        
-        // If FTS returned nothing (e.g. term mismatches), fallback to most recent chunks
-        if (list.isEmpty()) {
+        if (rankedMatches.isEmpty()) {
+            val list = mutableListOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
             val fallbackSql = "SELECT * FROM session_documents WHERE session_id = ? AND is_encrypted = 0 ORDER BY created_at DESC, chunk_index ASC LIMIT 3"
             db.rawQuery(fallbackSql, arrayOf(sessionId)).use { cursor ->
                 parseSessionDocumentsCursor(cursor, list)
             }
+            return list
         }
+
+        val topMatches = rankedMatches.take(2).map { it.first }
+        val resultSet = mutableSetOf<com.rajpawardotin.kosh.domain.model.SessionDocument>()
         
-        return list
+        for (match in topMatches) {
+            resultSet.add(match)
+            val preceding = allDocs.find { it.fileName == match.fileName && it.chunkIndex == match.chunkIndex - 1 }
+            if (preceding != null) resultSet.add(preceding)
+            val succeeding = allDocs.find { it.fileName == match.fileName && it.chunkIndex == match.chunkIndex + 1 }
+            if (succeeding != null) resultSet.add(succeeding)
+        }
+
+        return resultSet.sortedWith(compareBy<com.rajpawardotin.kosh.domain.model.SessionDocument> { it.fileName }.thenBy { it.chunkIndex })
     }
 
     private fun parseSessionDocumentsCursor(cursor: android.database.Cursor, list: MutableList<com.rajpawardotin.kosh.domain.model.SessionDocument>) {
