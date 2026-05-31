@@ -40,6 +40,10 @@ fun ChatBubble(
     onToggleChecklistItem: (Int, Boolean) -> Unit
 ) {
     val alignment = if (message.isUser) Alignment.End else Alignment.Start
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val onBackground = MaterialTheme.colorScheme.onBackground
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     Column(
         modifier = Modifier
@@ -62,10 +66,7 @@ fun ChatBubble(
                             drawContent()
                             drawRect(
                                 brush = Brush.linearGradient(
-                                    colors = listOf(
-                                        Color(0xFF8B5CF6),
-                                        Color(0xFF06B6D4)
-                                    )
+                                    colors = listOf(primary, secondary)
                                 ),
                                 blendMode = BlendMode.SrcAtop
                             )
@@ -79,7 +80,7 @@ fun ChatBubble(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
                     ),
-                    color = Color.White.copy(alpha = 0.6f)
+                    color = onBackground.copy(alpha = 0.6f)
                 )
             }
         }
@@ -89,8 +90,13 @@ fun ChatBubble(
                 Box(
                     modifier = Modifier
                         .widthIn(max = 280.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF2F3033)) // Sleek dark charcoal capsule
+                        .clip(RoundedCornerShape(
+                            topStart = 20.dp,
+                            topEnd = 20.dp,
+                            bottomStart = 20.dp,
+                            bottomEnd = 4.dp // Asymmetric Material 3 bubble corner for user
+                        ))
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
                     Text(
@@ -100,7 +106,7 @@ fun ChatBubble(
                             letterSpacing = 0.2.sp,
                             fontSize = 15.sp
                         ),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
                 
@@ -114,7 +120,6 @@ fun ChatBubble(
                 }
             }
         } else {
-            // Render blocks
             val blocks = remember(message.text) { ResponseParser.parse(message.text) }
             
             Column(
@@ -139,9 +144,9 @@ fun ChatBubble(
                                 Markdown(
                                     content = block.content,
                                     colors = markdownColor(
-                                        text = Color(0xFFE4E4E7),
-                                        codeBackground = Color(0xFF1E1E20),
-                                        inlineCodeBackground = Color(0xFF1E1E20)
+                                        text = onBackground,
+                                        codeBackground = surfaceVariant,
+                                        inlineCodeBackground = surfaceVariant
                                     ),
                                     typography = markdownTypography(
                                         text = MaterialTheme.typography.bodyLarge.copy(
@@ -212,8 +217,8 @@ fun ChatBubble(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF03DAC5),
-                                contentColor = Color.Black
+                                containerColor = primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.padding(horizontal = 8.dp)
@@ -233,7 +238,7 @@ fun ChatBubble(
                         text = "Kosh may make mistakes. Verify important info.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
-                            color = Color.White.copy(alpha = 0.5f)
+                            color = onBackground.copy(alpha = 0.5f)
                         ),
                         modifier = Modifier.padding(start = 12.dp, top = 2.dp, bottom = 8.dp)
                     )

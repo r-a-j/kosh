@@ -69,13 +69,13 @@ fun CodeBlockCard(language: String, code: String) {
                     Icon(
                         imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
                         contentDescription = "Copy",
-                        tint = if (copied) Color(0xFF03DAC5) else Color.Gray,
+                        tint = if (copied) MaterialTheme.colorScheme.primary else Color.Gray,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = if (copied) "Copied" else "Copy",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (copied) Color(0xFF03DAC5) else Color.Gray
+                        color = if (copied) MaterialTheme.colorScheme.primary else Color.Gray
                     )
                 }
             }

@@ -58,8 +58,16 @@ fun ChatInput(
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val outline = MaterialTheme.colorScheme.outline
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val errorColor = MaterialTheme.colorScheme.error
+    val errorContainer = MaterialTheme.colorScheme.errorContainer
 
-    // Adaptive corner radius: morphs from a capsule (26.dp) to a rounded rect (18.dp) when multi-line
     val lines = value.count { it == '\n' } + 1
     val isMultiLine = lines > 1 || value.length > 45
     val cornerRadius by animateDpAsState(
@@ -72,7 +80,6 @@ fun ChatInput(
     )
     val inputShape = RoundedCornerShape(cornerRadius)
 
-    // Breathing border animation for active generation - ONLY runs when generating
     val borderAlpha = if (isGenerating) {
         val generatingBorderTransition = rememberInfiniteTransition(label = "generating_border")
         generatingBorderTransition.animateFloat(
@@ -85,10 +92,9 @@ fun ChatInput(
             label = "borderAlpha"
         ).value
     } else {
-        0.08f // Static border when idle
+        0.12f
     }
 
-    // Breathing shimmer alpha for generation placeholder - ONLY runs when generating
     val generatingAlpha = if (isGenerating) {
         val generatingTextTransition = rememberInfiniteTransition(label = "generating_text")
         generatingTextTransition.animateFloat(
@@ -101,19 +107,18 @@ fun ChatInput(
             label = "generatingAlpha"
         ).value
     } else {
-        0.6f // Static placeholder when idle
+        0.6f
     }
 
-    // Double-ended dynamic padding so text does not clash with the capsule borders or icons
     val startPadding by animateDpAsState(
-        targetValue = if (isGenerating) 16.dp else 8.dp, // Comfort spacing when icons are visible
+        targetValue = if (isGenerating) 16.dp else 8.dp,
         animationSpec = spring(stiffness = 1200f),
         label = "textFieldStartPadding"
     )
 
     val showMic = value.isEmpty() && attachedFiles.isEmpty() && !isGenerating
     val endPadding by animateDpAsState(
-        targetValue = if (showMic) 8.dp else 16.dp, // Comfort spacing when Mic icon is visible
+        targetValue = if (showMic) 8.dp else 16.dp,
         animationSpec = spring(stiffness = 1200f),
         label = "textFieldEndPadding"
     )
@@ -141,44 +146,42 @@ fun ChatInput(
             }
         }
 
-        // Horizontal Row containing the Input Bubble and the External floating Send Button
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically // Vertically center the bubble and the Send button
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Input Box Bubble (expands to fill all space except the Send button)
             Surface(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = 56.dp) // Standard Material 3 height
+                    .heightIn(min = 56.dp)
                     .shadow(
                         elevation = if (enabled && !isGenerating) 4.dp else 0.dp,
                         shape = inputShape
                     ),
                 shape = inputShape,
-                color = if (isGenerating) Color(0xFF161619).copy(alpha = 0.95f) else Color(0xFF1E1E22).copy(alpha = 0.9f),
+                color = if (isGenerating) surfaceColor else surfaceVariant,
                 border = androidx.compose.foundation.BorderStroke(
                     width = 1.dp,
                     brush = Brush.horizontalGradient(
                         colors = if (isGenerating) {
                             listOf(
-                                Color(0xFF03DAC5).copy(alpha = borderAlpha),
-                                Color(0xFF6200EE).copy(alpha = borderAlpha)
+                                primary.copy(alpha = borderAlpha),
+                                secondary.copy(alpha = borderAlpha)
                             )
                         } else {
                             listOf(
-                                Color.White.copy(alpha = 0.08f),
-                                Color.White.copy(alpha = 0.08f)
+                                outline.copy(alpha = 0.12f),
+                                outline.copy(alpha = 0.12f)
                             )
                         }
                     )
                 )
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp), // Symmetric 6.dp padding top/bottom
-                    verticalAlignment = Alignment.CenterVertically // Center all elements vertically for absolute symmetry
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Paperclip button (left side) - borderless, no background
+                    // Paperclip button
                     AnimatedVisibility(
                         visible = !isGenerating,
                         enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
@@ -195,12 +198,12 @@ fun ChatInput(
                             Icon(
                                 imageVector = Icons.Default.AttachFile,
                                 contentDescription = "Attach Document",
-                                tint = Color(0xFF03DAC5)
+                                tint = primary
                             )
                         }
                     }
 
-                    // Web Search Toggle Button - borderless, no background
+                    // Web Search Toggle Button
                     AnimatedVisibility(
                         visible = isInternetEnabled && !isGenerating,
                         enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
@@ -217,21 +220,20 @@ fun ChatInput(
                             Icon(
                                 imageVector = Icons.Default.Public,
                                 contentDescription = "Force Web Search",
-                                tint = if (isSearchForced) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.5f)
+                                tint = if (isSearchForced) primary else onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
 
-                    // Custom BasicTextField for polished padding and alignment
                     val placeholderText = when {
                         !enabled -> "Model Offline..."
                         isGenerating -> "Kosh is composing..."
                         else -> "Ask Kosh..."
                     }
                     val placeholderColor = when {
-                        !enabled -> Color.Gray.copy(alpha = 0.3f)
-                        isGenerating -> Color(0xFF03DAC5).copy(alpha = generatingAlpha)
-                        else -> Color.Gray.copy(alpha = 0.6f)
+                        !enabled -> onSurfaceVariant.copy(alpha = 0.3f)
+                        isGenerating -> primary.copy(alpha = generatingAlpha)
+                        else -> onSurfaceVariant.copy(alpha = 0.6f)
                     }
 
                     BasicTextField(
@@ -242,11 +244,11 @@ fun ChatInput(
                             .padding(start = startPadding, end = endPadding, top = 12.dp, bottom = 12.dp),
                         enabled = enabled && !isGenerating,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = Color.White,
+                            color = onSurface,
                             platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false)
                         ),
                         keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Default, // Carriage Return for multi-line support
+                            imeAction = ImeAction.Default,
                             capitalization = KeyboardCapitalization.Sentences
                         ),
                         keyboardActions = KeyboardActions(
@@ -258,7 +260,7 @@ fun ChatInput(
                             }
                         ),
                         maxLines = 5,
-                        cursorBrush = SolidColor(Color(0xFF03DAC5)),
+                        cursorBrush = SolidColor(primary),
                         decorationBox = { innerTextField ->
                             Box(
                                 modifier = Modifier.fillMaxWidth(),
@@ -278,7 +280,7 @@ fun ChatInput(
                         }
                     )
 
-                    // Voice Mic button (right side) - borderless, no background. Hidden when typing or generating.
+                    // Voice Mic button
                     AnimatedVisibility(
                         visible = showMic,
                         enter = fadeIn(animationSpec = spring(stiffness = 1200f)) + expandHorizontally(animationSpec = spring(stiffness = 1200f)),
@@ -295,14 +297,13 @@ fun ChatInput(
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Voice Input",
-                                tint = Color(0xFF03DAC5)
+                                tint = primary
                             )
                         }
                     }
                 }
             }
 
-            // Dynamic Spacer between input bubble and Send/Stop button (only when Send button is active)
             val showSendStop = isGenerating || value.isNotEmpty() || attachedFiles.isNotEmpty()
             AnimatedVisibility(
                 visible = showSendStop,
@@ -312,7 +313,7 @@ fun ChatInput(
                 Spacer(modifier = Modifier.width(8.dp))
             }
 
-            // External Floating Send / Stop Action Button (Telegram style)
+            // External Floating Send / Stop Action Button
             AnimatedVisibility(
                 visible = showSendStop,
                 enter = scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = 1200f)) + 
@@ -333,6 +334,7 @@ fun ChatInput(
                     label = "stopPulseScale"
                 )
 
+                val buttonEnabled = enabled && (isGenerating || value.isNotBlank() || attachedFiles.isNotEmpty())
                 IconButton(
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -342,11 +344,11 @@ fun ChatInput(
                             onSend()
                         }
                     },
-                    enabled = enabled && (isGenerating || value.isNotBlank() || attachedFiles.isNotEmpty()),
+                    enabled = buttonEnabled,
                     modifier = Modifier
-                        .size(48.dp) // Removed padding to align bottom bounds perfectly
+                        .size(48.dp)
                         .shadow(
-                            elevation = if (enabled) 4.dp else 0.dp,
+                            elevation = if (buttonEnabled) 4.dp else 0.dp,
                             shape = CircleShape
                         )
                         .graphicsLayer {
@@ -357,27 +359,35 @@ fun ChatInput(
                         }
                         .clip(CircleShape)
                         .background(
-                            if (!enabled) {
-                                Brush.linearGradient(listOf(Color(0xFF222222), Color(0xFF222222)))
+                            if (!buttonEnabled) {
+                                Brush.linearGradient(listOf(
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                                ))
                             } else if (isGenerating) {
-                                Brush.linearGradient(listOf(Color(0xFFFF5252), Color(0xFFFF1744)))
+                                Brush.linearGradient(listOf(errorColor, errorContainer))
                             } else {
-                                Brush.linearGradient(listOf(Color(0xFF03DAC5), Color(0xFF6200EE)))
+                                Brush.linearGradient(listOf(primary, secondary))
                             }
                         )
                 ) {
+                    val iconTint = if (!buttonEnabled) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                    } else {
+                        Color.White
+                    }
                     if (isGenerating) {
                         Icon(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Stop",
-                            tint = Color.White,
+                            tint = iconTint,
                             modifier = Modifier.size(22.dp)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Send",
-                            tint = Color.White,
+                            tint = iconTint,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -387,7 +397,6 @@ fun ChatInput(
     }
 }
 
-
 @Composable
 fun AttachmentBadge(
     file: AttachedFile,
@@ -395,9 +404,9 @@ fun AttachmentBadge(
     modifier: Modifier = Modifier
 ) {
     val extensionColor = when (file.fileType.lowercase()) {
-        "pdf" -> Color(0xFFEF5350)     // Soft Red for PDF
-        "md" -> Color(0xFF8B5CF6)      // Violet for Markdown
-        else -> Color(0xFF03DAC5)      // Cyan for TXT/others
+        "pdf" -> MaterialTheme.colorScheme.error
+        "md" -> MaterialTheme.colorScheme.secondary
+        else -> MaterialTheme.colorScheme.primary
     }
 
     Surface(
@@ -406,11 +415,11 @@ fun AttachmentBadge(
             .border(
                 width = 1.dp,
                 brush = Brush.horizontalGradient(
-                    listOf(extensionColor.copy(alpha = 0.5f), Color.White.copy(alpha = 0.05f))
+                    listOf(extensionColor.copy(alpha = 0.5f), MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                 ),
                 shape = RoundedCornerShape(16.dp)
             ),
-        color = Color(0xFF151518).copy(alpha = 0.9f),
+        color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(
@@ -418,7 +427,6 @@ fun AttachmentBadge(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Extension tag capsule
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
@@ -436,12 +444,11 @@ fun AttachmentBadge(
                 )
             }
 
-            // File Name & Size
             Column {
                 Text(
                     text = file.fileName,
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.widthIn(max = 120.dp)
@@ -449,23 +456,22 @@ fun AttachmentBadge(
                 Text(
                     text = formatFileSize(file.fileSize),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // Detach button
             Box(
                 modifier = Modifier
                     .size(18.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                     .clickable { onDetach() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Remove",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(12.dp)
                 )
             }

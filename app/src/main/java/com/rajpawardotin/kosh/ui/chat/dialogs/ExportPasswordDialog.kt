@@ -25,14 +25,14 @@ fun ExportPasswordDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E22),
-        titleContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text("Backup Password", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Set a password to encrypt your backup file.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text("Set a password to encrypt your backup file.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -44,18 +44,18 @@ fun ExportPasswordDialog(
                             Icon(
                                 imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = null,
-                                tint = Color.Gray
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        cursorColor = Color(0xFF03DAC5)
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -66,12 +66,12 @@ fun ExportPasswordDialog(
                 enabled = password.isNotEmpty(),
                 onClick = { onExport(password) }
             ) {
-                Text("Export", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                Text("Export", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

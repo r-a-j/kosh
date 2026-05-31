@@ -46,20 +46,30 @@ fun ChatTopBar(
     onSettingsClick: () -> Unit,
     scrollProgress: () -> Float = { 0f }
 ) {
+    val barColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+    val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceMuted = MaterialTheme.colorScheme.onSurfaceVariant
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val errorColor = MaterialTheme.colorScheme.error
+    val warningColor = MaterialTheme.colorScheme.tertiary
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(top = 4.dp, start = 12.dp, end = 12.dp, bottom = 4.dp),
+            .height(64.dp)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left: 2-line Hamburger Menu (38.dp glassmorphic circle)
+        // Left: 2-line Hamburger Menu M3 styled button
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(40.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.03f))
-                .border(1.dp, Color.White.copy(alpha = 0.06f), CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                .border(1.dp, outlineColor, CircleShape)
                 .clickable { onMenuClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -68,15 +78,14 @@ fun ChatTopBar(
                 horizontalAlignment = Alignment.Start,
                 modifier = Modifier.width(18.dp)
             ) {
-                Box(modifier = Modifier.width(18.dp).height(2.dp).background(Color.White.copy(alpha = 0.9f)))
-                Box(modifier = Modifier.width(12.dp).height(2.dp).background(Color.White.copy(alpha = 0.9f)))
+                Box(modifier = Modifier.width(18.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
+                Box(modifier = Modifier.width(12.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
             }
         }
 
-        // Safety margin between left menu and center selector
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Center: Dropdown Selector (38.dp height, centering content)
+        // Center: Dropdown Selector (Model Selector)
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
@@ -84,17 +93,17 @@ fun ChatTopBar(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(19.dp))
-                    .background(Color.White.copy(alpha = 0.03f))
-                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(19.dp))
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    .border(1.dp, outlineColor, RoundedCornerShape(20.dp))
                     .clickable { onCoreSelectorClick() }
                     .padding(horizontal = 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = Color(0xFF03DAC5),
+                    tint = primary,
                     modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
@@ -119,7 +128,7 @@ fun ChatTopBar(
                         letterSpacing = 0.6.sp,
                         fontSize = 12.sp
                     ),
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = onSurface.copy(alpha = 0.9f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
@@ -128,22 +137,21 @@ fun ChatTopBar(
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = "Select Core",
-                    tint = Color.White.copy(alpha = 0.5f),
+                    tint = onSurfaceMuted,
                     modifier = Modifier.size(15.dp)
                 )
             }
         }
 
-        // Safety margin between center selector and right actions
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Right: Unified Actions Capsule (38.dp height, 32.dp buttons)
+        // Right: Unified Actions Capsule (Material 3 Compliant)
         Row(
             modifier = Modifier
-                .height(38.dp)
-                .clip(RoundedCornerShape(19.dp))
-                .background(Color.White.copy(alpha = 0.03f))
-                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(19.dp))
+                .height(40.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                .border(1.dp, outlineColor, RoundedCornerShape(20.dp))
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -159,8 +167,8 @@ fun ChatTopBar(
                         .clip(CircleShape)
                         .background(
                             if (isEncrypted) {
-                                if (isUnlocked) Color(0xFF03DAC5).copy(alpha = 0.15f)
-                                else Color(0xFFEF5350).copy(alpha = 0.15f)
+                                if (isUnlocked) primary.copy(alpha = 0.15f)
+                                else errorColor.copy(alpha = 0.15f)
                             } else Color.Transparent
                         )
                         .clickable {
@@ -176,8 +184,8 @@ fun ChatTopBar(
                         imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
                         contentDescription = "Chat Lock Settings",
                         tint = if (isEncrypted) {
-                            if (isUnlocked) Color(0xFF03DAC5) else Color(0xFFEF5350)
-                        } else Color.White.copy(alpha = 0.6f),
+                            if (isUnlocked) primary else errorColor
+                        } else onSurfaceMuted,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -189,7 +197,7 @@ fun ChatTopBar(
                     .size(32.dp)
                     .clip(CircleShape)
                     .background(
-                        if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.15f)
+                        if (isTemporarySession) warningColor.copy(alpha = 0.15f)
                         else Color.Transparent
                     )
                     .clickable(enabled = !isGenerating) {
@@ -200,7 +208,7 @@ fun ChatTopBar(
                 Icon(
                     imageVector = if (isTemporarySession) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     contentDescription = if (isTemporarySession) "Exit Temporary Chat" else "Enter Temporary Chat",
-                    tint = if (isTemporarySession) Color(0xFFFF9100) else Color.White.copy(alpha = 0.6f),
+                    tint = if (isTemporarySession) warningColor else onSurfaceMuted,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -210,11 +218,11 @@ fun ChatTopBar(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.05f))
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                     .border(
                         width = 1.dp,
                         brush = Brush.linearGradient(
-                            colors = listOf(Color(0xFF03DAC5), Color(0xFF6200EE).copy(alpha = 0.6f))
+                            colors = listOf(primary, secondary)
                         ),
                         shape = CircleShape
                     )
@@ -226,7 +234,7 @@ fun ChatTopBar(
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "New Saved Chat",
-                    tint = Color(0xFF03DAC5),
+                    tint = primary,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -242,7 +250,7 @@ fun ChatTopBar(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
-                    tint = Color.White.copy(alpha = 0.6f),
+                    tint = onSurfaceMuted,
                     modifier = Modifier.size(16.dp)
                 )
             }

@@ -39,13 +39,13 @@ fun ScreenshotUnlockDialog(
             .fillMaxWidth()
             .padding(16.dp)
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
-        containerColor = Color(0xFF16161A),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.7f),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LockOpen, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.LockOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Authorize Screenshots", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
             }
@@ -69,18 +69,18 @@ fun ScreenshotUnlockDialog(
                             Icon(
                                 imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = null,
-                                tint = Color.Gray
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.Gray,
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                        cursorColor = Color(0xFF03DAC5)
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -96,14 +96,14 @@ fun ScreenshotUnlockDialog(
                         },
                         enabled = !isProcessing,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF03DAC5).copy(alpha = 0.1f),
-                            contentColor = Color(0xFF03DAC5)
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
-                            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                     ) {
                         Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(8.dp))
@@ -120,13 +120,13 @@ fun ScreenshotUnlockDialog(
                     onUnlockSubmit(password)
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isProcessing) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 } else {
                     Text("Unlock", fontWeight = FontWeight.Black)
                 }
@@ -137,7 +137,7 @@ fun ScreenshotUnlockDialog(
                 enabled = !isProcessing,
                 onClick = onDismiss
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.4f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

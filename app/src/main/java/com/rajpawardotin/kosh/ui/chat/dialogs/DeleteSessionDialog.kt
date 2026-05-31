@@ -35,10 +35,10 @@ fun DeleteSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(28.dp)).border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(28.dp)),
-        containerColor = Color(0xFF16161A),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.8f),
+        modifier = Modifier.padding(16.dp).clip(RoundedCornerShape(28.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("Delete Chat", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -48,7 +48,7 @@ fun DeleteSessionDialog(
                     Text(
                         text = "This chat is locked. Enter your passcode to delete it.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                     OutlinedTextField(
                         value = confirmPassword,
@@ -64,18 +64,18 @@ fun DeleteSessionDialog(
                                 Icon(
                                     imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                     contentDescription = null,
-                                    tint = Color.Gray
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF03DAC5),
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
-                            focusedBorderColor = Color(0xFF03DAC5),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                            cursorColor = Color(0xFF03DAC5)
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedLabelColor = MaterialTheme.colorScheme.primary,
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            cursorColor = MaterialTheme.colorScheme.primary
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -83,7 +83,7 @@ fun DeleteSessionDialog(
                     if (errorMsg != null) {
                         Text(
                             text = errorMsg!!,
-                            color = Color(0xFFCF6679),
+                            color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -101,10 +101,10 @@ fun DeleteSessionDialog(
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF03DAC5).copy(alpha = 0.1f),
-                                contentColor = Color(0xFF03DAC5)
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                contentColor = MaterialTheme.colorScheme.primary
                             ),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null)
@@ -136,7 +136,7 @@ fun DeleteSessionDialog(
                 },
                 enabled = !isDeleting && (!isEncrypted || confirmPassword.isNotEmpty())
             ) {
-                Text("Delete", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -144,7 +144,7 @@ fun DeleteSessionDialog(
                 onClick = onDismiss,
                 enabled = !isDeleting
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

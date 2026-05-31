@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.sp
 fun DocumentSourcesView(sourceDocuments: String) {
     val documents = sourceDocuments.split(",").map { it.trim() }
     
+    val primary = MaterialTheme.colorScheme.primary
+
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -27,7 +29,7 @@ fun DocumentSourcesView(sourceDocuments: String) {
             Icon(
                 imageVector = Icons.Default.Description,
                 contentDescription = null,
-                tint = Color(0xFF03DAC5),
+                tint = primary,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -37,7 +39,7 @@ fun DocumentSourcesView(sourceDocuments: String) {
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 ),
-                color = Color(0xFF03DAC5)
+                color = primary
             )
         }
         
@@ -48,8 +50,8 @@ fun DocumentSourcesView(sourceDocuments: String) {
             documents.forEach { docName ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFF1E1E1E),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
                     modifier = Modifier.padding(start = 4.dp)
                 ) {
                     Row(
@@ -59,7 +61,7 @@ fun DocumentSourcesView(sourceDocuments: String) {
                         Text(
                             text = docName,
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

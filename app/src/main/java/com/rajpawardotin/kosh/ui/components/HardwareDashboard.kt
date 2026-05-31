@@ -30,8 +30,10 @@ fun HardwareDashboard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0F0F).copy(alpha = 0.85f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -51,7 +53,7 @@ fun HardwareDashboard(
                         label = "alpha"
                     )
                     
-                    val statusColor = if (isEngineReady) Color(0xFF03DAC5) else Color(0xFFFFB74D)
+                    val statusColor = if (isEngineReady) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                     
                     Box(
                         modifier = Modifier
@@ -72,14 +74,14 @@ fun HardwareDashboard(
                 }
                 
                 val badgeColor = when {
-                    !isEngineReady -> Color(0xFFFFB74D)
-                    selectedBackend.contains("NPU") -> Color(0xFF03DAC5)
-                    selectedBackend == "GPU" -> Color(0xFFBB86FC)
-                    else -> Color(0xFFFFB74D)
+                    !isEngineReady -> MaterialTheme.colorScheme.outline
+                    selectedBackend.contains("NPU") -> MaterialTheme.colorScheme.primary
+                    selectedBackend == "GPU" -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.tertiary
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = badgeColor.copy(alpha = 0.15f),
+                    color = badgeColor.copy(alpha = 0.12f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f))
                 ) {
                     Text(
@@ -101,13 +103,13 @@ fun HardwareDashboard(
                     Text(
                         text = "SPEED",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = String.format(java.util.Locale.US, "%.1f t/s", tokensPerSecond),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (tokensPerSecond > 0f) Color(0xFF03DAC5) else Color.White
+                        color = if (tokensPerSecond > 0f) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
                 }
                 
@@ -115,13 +117,13 @@ fun HardwareDashboard(
                     Text(
                         text = "CORE LOAD",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "$npuLoad%",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (npuLoad > 20) Color(0xFFBB86FC) else Color.White
+                        color = if (npuLoad > 20) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
                     )
                 }
                 
@@ -129,13 +131,13 @@ fun HardwareDashboard(
                     Text(
                         text = "RAM ALLOC",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = String.format(java.util.Locale.US, "%.2f GB", ramUsage),
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -146,13 +148,12 @@ fun HardwareDashboard(
                     progress = { npuLoad / 100f },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(4.dp)
                         .clip(CircleShape),
-                    color = Color(0xFF03DAC5),
-                    trackColor = Color.White.copy(alpha = 0.05f),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
             }
         }
     }
 }
-

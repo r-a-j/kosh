@@ -24,13 +24,17 @@ fun ChecklistCard(
     checkedItems: Map<String, Boolean>,
     onToggleChecklistItem: (Int, Boolean) -> Unit
 ) {
+    val primary = MaterialTheme.colorScheme.primary
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161616).copy(alpha = 0.8f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF03DAC5).copy(alpha = 0.15f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, primary.copy(alpha = 0.15f))
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -41,7 +45,7 @@ fun ChecklistCard(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF03DAC5))
+                        .background(primary)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -50,7 +54,7 @@ fun ChecklistCard(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.sp
                     ),
-                    color = Color(0xFF03DAC5)
+                    color = primary
                 )
             }
             
@@ -70,9 +74,9 @@ fun ChecklistCard(
                             checked = isChecked,
                             onCheckedChange = { onToggleChecklistItem(item.index, it) },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Color(0xFF03DAC5),
-                                uncheckedColor = Color.Gray,
-                                checkmarkColor = Color.Black
+                                checkedColor = primary,
+                                uncheckedColor = onSurfaceVariant.copy(alpha = 0.6f),
+                                checkmarkColor = MaterialTheme.colorScheme.onPrimary
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -80,7 +84,7 @@ fun ChecklistCard(
                             text = parseMarkdownToAnnotatedString(item.text),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 textDecoration = if (isChecked) androidx.compose.ui.text.style.TextDecoration.LineThrough else null,
-                                color = if (isChecked) Color.Gray else Color.White
+                                color = if (isChecked) onSurfaceVariant.copy(alpha = 0.6f) else onSurface
                             )
                         )
                     }

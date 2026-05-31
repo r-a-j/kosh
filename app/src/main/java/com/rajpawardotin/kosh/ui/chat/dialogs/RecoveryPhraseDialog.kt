@@ -40,13 +40,13 @@ fun RecoveryPhraseDialog(
             .fillMaxWidth()
             .padding(16.dp)
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
-        containerColor = Color(0xFF16161A),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.8f),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Recovery Secret", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
             }
@@ -57,16 +57,16 @@ fun RecoveryPhraseDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Surface(
-                    color = Color(0xFFFF9100).copy(alpha = 0.1f),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                     shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.2f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
                 ) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFFF9100), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
                             "If you lose your passcode, this phrase is the ONLY way to recover your data. Store it safely offline.",
-                            color = Color(0xFFFF9100).copy(alpha = 0.9f),
+                            color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
@@ -75,9 +75,9 @@ fun RecoveryPhraseDialog(
                 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = Color.Black.copy(alpha = 0.4f),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(20.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                 ) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -92,7 +92,7 @@ fun RecoveryPhraseDialog(
                                 lineHeight = 28.sp,
                                 fontFamily = FontFamily.Monospace
                             ),
-                            color = Color(0xFF03DAC5),
+                            color = MaterialTheme.colorScheme.primary,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp)
                         )
@@ -103,10 +103,10 @@ fun RecoveryPhraseDialog(
                                 Toast.makeText(context, "Mnemonic Copied", Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF03DAC5).copy(alpha = 0.1f),
-                                contentColor = Color(0xFF03DAC5)
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                contentColor = MaterialTheme.colorScheme.primary
                             ),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF03DAC5).copy(alpha = 0.25f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth().height(44.dp)
                         ) {
@@ -139,10 +139,14 @@ fun RecoveryPhraseDialog(
                         Checkbox(
                             checked = confirmedWritten,
                             onCheckedChange = { confirmedWritten = it },
-                            colors = CheckboxDefaults.colors(checkedColor = Color(0xFF03DAC5))
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                checkmarkColor = MaterialTheme.colorScheme.onPrimary,
+                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("I have secured my 12-word phrase", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                        Text("I have secured my 12-word phrase", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -152,8 +156,8 @@ fun RecoveryPhraseDialog(
                 enabled = confirmedWritten,
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()

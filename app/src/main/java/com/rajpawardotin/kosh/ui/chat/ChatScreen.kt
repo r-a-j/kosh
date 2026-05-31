@@ -275,10 +275,12 @@ fun ChatScreen(
         scrollState.scrollToItem(0)
     }
 
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0C0C0F))
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Static ambient glow — no animation, no blur, zero GPU cost
         Box(
@@ -286,9 +288,9 @@ fun ChatScreen(
                 .size(400.dp)
                 .offset(x = (-100).dp, y = (-100).dp)
                 .background(Brush.radialGradient(
-                    0.0f to Color(0xFF0F766E).copy(alpha = 0.14f),
-                    0.3f to Color(0xFF0F766E).copy(alpha = 0.07f),
-                    0.6f to Color(0xFF0F766E).copy(alpha = 0.02f),
+                    0.0f to primaryColor.copy(alpha = 0.14f),
+                    0.3f to primaryColor.copy(alpha = 0.07f),
+                    0.6f to primaryColor.copy(alpha = 0.02f),
                     1.0f to Color.Transparent
                 ))
         )
@@ -298,9 +300,9 @@ fun ChatScreen(
                 .align(Alignment.TopEnd)
                 .offset(x = 100.dp, y = (-100).dp)
                 .background(Brush.radialGradient(
-                    0.0f to Color(0xFF312E81).copy(alpha = 0.18f),
-                    0.3f to Color(0xFF312E81).copy(alpha = 0.09f),
-                    0.6f to Color(0xFF312E81).copy(alpha = 0.03f),
+                    0.0f to secondaryColor.copy(alpha = 0.18f),
+                    0.3f to secondaryColor.copy(alpha = 0.09f),
+                    0.6f to secondaryColor.copy(alpha = 0.03f),
                     1.0f to Color.Transparent
                 ))
         )
@@ -560,9 +562,9 @@ fun ChatScreen(
             ModalBottomSheet(
                 onDismissRequest = { showBottomSheet = false },
                 sheetState = sheetState,
-                containerColor = Color(0xFF1E1E1E),
-                contentColor = Color.White,
-                dragHandle = { BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f)) }
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
             ) {
                 Box(
                     modifier = Modifier
@@ -586,6 +588,8 @@ fun ChatScreen(
                         braveApiKey = viewModel.braveApiKey,
                         isAppLockEnabled = viewModel.isAppLockEnabled,
                         isScreenshotEnabled = viewModel.isScreenshotEnabled,
+                        currentTheme = viewModel.appTheme,
+                        onThemeSelected = { viewModel.updateAppTheme(it) },
                         onToggleAppLock = { viewModel.toggleAppLock(it) },
                         onToggleScreenshot = { enabled ->
                             if (!enabled) {
@@ -807,6 +811,10 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
         label = "rotation"
     )
 
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val onBackground = MaterialTheme.colorScheme.onBackground
+
     Row(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
@@ -822,7 +830,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
                 Icon(
                     imageVector = Icons.Default.Public,
                     contentDescription = "Searching Web",
-                    tint = Color(0xFF00E5FF),
+                    tint = secondary,
                     modifier = Modifier
                         .size(16.dp)
                         .graphicsLayer { rotationZ = rotation }
@@ -832,7 +840,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF03DAC5))
+                        .background(primary)
                 )
             }
         }
@@ -851,7 +859,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
                 Text(
                     text = "...",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF03DAC5),
+                    color = primary,
                     fontSize = 14.sp
                 )
             } else {
@@ -859,9 +867,9 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
                     val isLast = index == blocks.lastIndex
                     val isAgenticLabel = block.endsWith("...") && !block.startsWith(" ")
                     val textColor = when {
-                        isSearchingInternet -> Color(0xFF00E5FF)
-                        isAgenticLabel -> Color(0xFF03DAC5)
-                        else -> Color(0xFFE4E4E7)
+                        isSearchingInternet -> secondary
+                        isAgenticLabel -> primary
+                        else -> onBackground
                     }
                     
                     Text(
@@ -933,10 +941,15 @@ fun LockedVaultScreen(
         label = "pulseScale2"
     )
 
+    val primary = MaterialTheme.colorScheme.primary
+    val secondary = MaterialTheme.colorScheme.secondary
+    val outline = MaterialTheme.colorScheme.outline
+    val onSurfaceMuted = MaterialTheme.colorScheme.onSurfaceVariant
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070709))
+            .background(MaterialTheme.colorScheme.background)
             .navigationBarsPadding()
             .imePadding(),
         contentAlignment = Alignment.Center
@@ -958,9 +971,9 @@ fun LockedVaultScreen(
             modifier = Modifier
                 .size(400.dp)
                 .background(Brush.radialGradient(
-                    0.0f to Color(0xFF03DAC5).copy(alpha = 0.10f),
-                    0.3f to Color(0xFF03DAC5).copy(alpha = 0.05f),
-                    0.6f to Color(0xFF03DAC5).copy(alpha = 0.01f),
+                    0.0f to primary.copy(alpha = 0.10f),
+                    0.3f to primary.copy(alpha = 0.05f),
+                    0.6f to primary.copy(alpha = 0.01f),
                     1.0f to Color.Transparent
                 ))
         )
@@ -968,9 +981,9 @@ fun LockedVaultScreen(
             modifier = Modifier
                 .size(300.dp)
                 .background(Brush.radialGradient(
-                    0.0f to Color(0xFF8B5CF6).copy(alpha = 0.06f),
-                    0.3f to Color(0xFF8B5CF6).copy(alpha = 0.03f),
-                    0.6f to Color(0xFF8B5CF6).copy(alpha = 0.01f),
+                    0.0f to secondary.copy(alpha = 0.06f),
+                    0.3f to secondary.copy(alpha = 0.03f),
+                    0.6f to secondary.copy(alpha = 0.01f),
                     1.0f to Color.Transparent
                 ))
         )
@@ -991,16 +1004,16 @@ fun LockedVaultScreen(
                     width = 1.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF03DAC5).copy(alpha = 0.3f),
-                            Color(0xFF8B5CF6).copy(alpha = 0.1f),
-                            Color(0xFF03DAC5).copy(alpha = 0.05f),
-                            Color(0xFF8B5CF6).copy(alpha = 0.3f)
+                            primary.copy(alpha = 0.3f),
+                            secondary.copy(alpha = 0.1f),
+                            primary.copy(alpha = 0.05f),
+                            secondary.copy(alpha = 0.3f)
                         )
                     ),
                     shape = RoundedCornerShape(32.dp)
                 ),
             shape = RoundedCornerShape(32.dp),
-            color = Color(0xFF111116).copy(alpha = 0.9f),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
         ) {
             Column(
                 modifier = Modifier
@@ -1014,19 +1027,19 @@ fun LockedVaultScreen(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.size(padlockSize)
                 ) {
-                    // Outer pulsing cyan halo
+                    // Outer pulsing halo
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer(scaleX = pulseScale2, scaleY = pulseScale2)
-                            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.08f), CircleShape)
+                            .border(1.dp, primary.copy(alpha = 0.08f), CircleShape)
                     )
-                    // Inner pulsing violet halo
+                    // Inner pulsing halo
                     Box(
                         modifier = Modifier
                             .size(haloSize)
                             .graphicsLayer(scaleX = pulseScale1, scaleY = pulseScale1)
-                            .border(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.15f), CircleShape)
+                            .border(1.dp, secondary.copy(alpha = 0.15f), CircleShape)
                     )
                     // Locked Hub
                     Box(
@@ -1036,18 +1049,18 @@ fun LockedVaultScreen(
                             .background(
                                 Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF03DAC5).copy(alpha = 0.15f),
-                                        Color(0xFF8B5CF6).copy(alpha = 0.05f)
+                                        primary.copy(alpha = 0.15f),
+                                        secondary.copy(alpha = 0.05f)
                                     )
                                 )
                             )
-                            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.3f), CircleShape),
+                            .border(1.dp, primary.copy(alpha = 0.3f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Locked",
-                            tint = Color(0xFF03DAC5),
+                            tint = primary,
                             modifier = Modifier.size(iconSize)
                         )
                     }
@@ -1070,7 +1083,7 @@ fun LockedVaultScreen(
                                 letterSpacing = 2.5.sp
                             )
                         },
-                        color = Color.White.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                     Spacer(modifier = Modifier.height(titleSpace))
                     Text(
@@ -1080,7 +1093,7 @@ fun LockedVaultScreen(
                                 fontWeight = FontWeight.Black, 
                                 letterSpacing = 0.5.sp,
                                 brush = Brush.linearGradient(
-                                    colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                                    colors = listOf(primary, secondary)
                                 )
                             )
                         } else {
@@ -1088,7 +1101,7 @@ fun LockedVaultScreen(
                                 fontWeight = FontWeight.Black, 
                                 letterSpacing = 1.sp,
                                 brush = Brush.linearGradient(
-                                    colors = listOf(Color(0xFF03DAC5), Color(0xFFC084FC))
+                                    colors = listOf(primary, secondary)
                                 )
                             )
                         },
@@ -1101,7 +1114,7 @@ fun LockedVaultScreen(
                     Text(
                         text = "This conversation is protected using AES-256 local-first cryptography. Please enter your passcode.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
+                        color = onSurfaceMuted,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         modifier = Modifier.padding(horizontal = 16.dp),
                         lineHeight = 20.sp
@@ -1125,18 +1138,18 @@ fun LockedVaultScreen(
                                 Icon(
                                     imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                     contentDescription = null,
-                                    tint = Color.Gray
+                                    tint = onSurfaceMuted
                                 )
                             }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedLabelColor = Color(0xFF03DAC5),
-                            unfocusedLabelColor = Color.Gray,
-                            focusedBorderColor = Color(0xFF03DAC5),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
-                            cursorColor = Color(0xFF03DAC5)
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedLabelColor = primary,
+                            unfocusedLabelColor = onSurfaceMuted,
+                            focusedBorderColor = primary,
+                            unfocusedBorderColor = outline.copy(alpha = 0.12f),
+                            cursorColor = primary
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -1144,7 +1157,7 @@ fun LockedVaultScreen(
                     if (errorMsg != null) {
                         Text(
                             text = errorMsg!!,
-                            color = Color(0xFFCF6679),
+                            color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(start = 8.dp)
                         )
@@ -1156,7 +1169,7 @@ fun LockedVaultScreen(
                     ) {
                         Text(
                             text = "Forgot Passcode?",
-                            color = Color(0xFF03DAC5).copy(alpha = 0.8f),
+                            color = primary.copy(alpha = 0.8f),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier
                                 .clickable { if (!isProcessing) showRecoveryDialog = true }
@@ -1182,15 +1195,15 @@ fun LockedVaultScreen(
                                 }
                             },
                             shape = RoundedCornerShape(16.dp),
-                            color = Color.White.copy(alpha = 0.04f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, outline.copy(alpha = 0.12f)),
                             modifier = Modifier.size(52.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Fingerprint,
                                     contentDescription = "Biometric Unlock",
-                                    tint = Color(0xFF03DAC5),
+                                    tint = primary,
                                     modifier = Modifier.size(26.dp)
                                 )
                             }
@@ -1210,7 +1223,7 @@ fun LockedVaultScreen(
                         enabled = password.isNotEmpty() && !isProcessing,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.Transparent,
-                            contentColor = Color.Black
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         ),
                         shape = RoundedCornerShape(16.dp),
                         modifier = Modifier
@@ -1219,20 +1232,20 @@ fun LockedVaultScreen(
                             .background(
                                 brush = Brush.linearGradient(
                                     colors = if (password.isNotEmpty() && !isProcessing) {
-                                        listOf(Color(0xFF03DAC5), Color(0xFF8B5CF6))
+                                        listOf(primary, secondary)
                                     } else {
-                                        listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f))
+                                        listOf(outline.copy(alpha = 0.12f), outline.copy(alpha = 0.12f))
                                     }
                                 ),
                                 shape = RoundedCornerShape(16.dp)
                             )
                     ) {
                         if (isProcessing) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                         } else {
                             Text(
                                 "UNLOCK CHAT", 
-                                color = if (password.isNotEmpty() && !isProcessing) Color.Black else Color.White.copy(alpha = 0.3f),
+                                color = if (password.isNotEmpty() && !isProcessing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Black, 
                                     letterSpacing = 1.5.sp
@@ -1265,13 +1278,13 @@ fun LockedVaultScreen(
                         width = 1.dp,
                         brush = Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF03DAC5).copy(alpha = 0.4f),
-                                Color(0xFF8B5CF6).copy(alpha = 0.4f)
+                                primary.copy(alpha = 0.4f),
+                                secondary.copy(alpha = 0.4f)
                             )
                         ),
                         shape = RoundedCornerShape(28.dp)
                     ),
-                color = Color(0xFF141418),
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(28.dp)
             ) {
                 Column(
@@ -1289,13 +1302,13 @@ fun LockedVaultScreen(
                             modifier = Modifier
                                 .size(40.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF03DAC5).copy(alpha = 0.1f)),
+                                .background(primary.copy(alpha = 0.12f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = null,
-                                tint = Color(0xFF03DAC5),
+                                tint = primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1306,27 +1319,27 @@ fun LockedVaultScreen(
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
                             ),
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     // Warning Alert Box
                     Surface(
-                        color = Color(0xFFFF9100).copy(alpha = 0.08f),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                         shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.25f))
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
                             Icon(
                                 imageVector = Icons.Default.Security,
                                 contentDescription = null,
-                                tint = Color(0xFFFF9100),
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp).padding(top = 2.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
                                 "Enter your 12-word recovery phrase. Validating the phrase will securely rebuild your access keys and update your passcode.",
-                                color = Color(0xFFFF9100).copy(alpha = 0.9f),
+                                color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall,
                                 lineHeight = 16.sp
                             )
@@ -1356,19 +1369,19 @@ fun LockedVaultScreen(
                                     Icon(
                                         imageVector = Icons.Default.ContentPaste,
                                         contentDescription = "Paste",
-                                        tint = Color(0xFF03DAC5).copy(alpha = 0.7f),
+                                        tint = primary,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
                             },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedLabelColor = Color(0xFF03DAC5),
-                                unfocusedLabelColor = Color.Gray,
-                                focusedBorderColor = Color(0xFF03DAC5),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
-                                cursorColor = Color(0xFF03DAC5)
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                focusedLabelColor = primary,
+                                unfocusedLabelColor = onSurfaceMuted,
+                                focusedBorderColor = primary,
+                                unfocusedBorderColor = outline.copy(alpha = 0.12f),
+                                cursorColor = primary
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1386,18 +1399,18 @@ fun LockedVaultScreen(
                                     Icon(
                                         imageVector = if (newPasswordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                         contentDescription = null,
-                                        tint = Color.Gray
+                                        tint = onSurfaceMuted
                                     )
                                 }
                             },
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedLabelColor = Color(0xFF03DAC5),
-                                unfocusedLabelColor = Color.Gray,
-                                focusedBorderColor = Color(0xFF03DAC5),
-                                unfocusedBorderColor = Color.White.copy(alpha = 0.08f),
-                                cursorColor = Color(0xFF03DAC5)
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                focusedLabelColor = primary,
+                                unfocusedLabelColor = onSurfaceMuted,
+                                focusedBorderColor = primary,
+                                unfocusedBorderColor = outline.copy(alpha = 0.12f),
+                                cursorColor = primary
                             ),
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -1405,7 +1418,7 @@ fun LockedVaultScreen(
                         if (recoveryError != null) {
                             Text(
                                 text = recoveryError!!, 
-                                color = Color(0xFFCF6679), 
+                                color = MaterialTheme.colorScheme.error, 
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(start = 8.dp)
                             )
@@ -1423,7 +1436,7 @@ fun LockedVaultScreen(
                             onClick = { showRecoveryDialog = false },
                             modifier = Modifier.weight(1f).height(48.dp)
                         ) {
-                            Text("Cancel", color = Color.White.copy(alpha = 0.5f))
+                            Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
                         Button(
@@ -1441,7 +1454,7 @@ fun LockedVaultScreen(
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.Transparent,
-                                contentColor = Color.Black
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
@@ -1450,20 +1463,20 @@ fun LockedVaultScreen(
                                 .background(
                                     brush = Brush.linearGradient(
                                         colors = if (mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering) {
-                                            listOf(Color(0xFF03DAC5), Color(0xFF8B5CF6))
+                                            listOf(primary, secondary)
                                         } else {
-                                            listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.08f))
+                                            listOf(outline.copy(alpha = 0.12f), outline.copy(alpha = 0.12f))
                                         }
                                     ),
                                     shape = RoundedCornerShape(12.dp)
                                 )
                         ) {
                             if (isRecovering) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                             } else {
                                 Text(
                                     "REBUILD KEY",
-                                    color = if (mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering) Color.Black else Color.White.copy(alpha = 0.3f),
+                                    color = if (mnemonic.trim().split("\\s+".toRegex()).size == 12 && newPassword.isNotEmpty() && !isRecovering) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.sp
                                 )

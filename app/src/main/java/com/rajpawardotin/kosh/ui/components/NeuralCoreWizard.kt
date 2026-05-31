@@ -63,6 +63,8 @@ fun NeuralCoreWizard(
                 label = "scale"
             )
 
+            val primaryColor = MaterialTheme.colorScheme.primary
+
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -70,19 +72,19 @@ fun NeuralCoreWizard(
                     .background(
                         Brush.radialGradient(
                             listOf(
-                                Color(0xFF03DAC5).copy(alpha = 0.2f),
+                                primaryColor.copy(alpha = 0.2f),
                                 Color.Transparent
                             )
                         )
                     )
-                    .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.3f), CircleShape)
+                    .border(1.dp, primaryColor.copy(alpha = 0.3f), CircleShape)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
-                    tint = Color(0xFF03DAC5),
+                    tint = primaryColor,
                     modifier = Modifier
                         .size(36.dp)
                         .aspectRatio(1f)
@@ -131,8 +133,8 @@ fun Step1LoadModel(
 
     Card(
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22).copy(alpha = 0.8f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -146,18 +148,18 @@ fun Step1LoadModel(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
                 ),
-                color = Color(0xFFFFB74D), // Warning Orange
+                color = MaterialTheme.colorScheme.error, // Error color representing missing model
                 textAlign = TextAlign.Center
             )
 
             Text(
                 text = "Kosh operates 100% locally. To get started, load a compatible LiteRT (.litertlm / .bin) model file into your model library.",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.05f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
 
             Text(
                 text = "TRUSTED MODEL SOURCES",
@@ -165,7 +167,7 @@ fun Step1LoadModel(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 ),
-                color = Color(0xFF03DAC5)
+                color = MaterialTheme.colorScheme.primary
             )
 
             Column(
@@ -176,20 +178,20 @@ fun Step1LoadModel(
                 OutlinedButton(
                     onClick = { openUrl("https://www.kaggle.com/models/google/gemma/tfLite") },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudDownload,
                         contentDescription = null,
-                        tint = Color(0xFF03DAC5),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.Start, modifier = Modifier.weight(1f)) {
                         Text("Google Gemma Models (Kaggle)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text("Official Google local models (.bin / .litertlm)", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("Official Google local models (.bin / .litertlm)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -197,20 +199,20 @@ fun Step1LoadModel(
                 OutlinedButton(
                     onClick = { openUrl("https://huggingface.co/models?search=litert") },
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(
                         imageVector = Icons.Default.CloudDownload,
                         contentDescription = null,
-                        tint = Color(0xFFBB86FC),
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(horizontalAlignment = Alignment.Start, modifier = Modifier.weight(1f)) {
                         Text("Hugging Face Hub (LiteRT)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                        Text("Meta Llama 3.2, Qwen & community models", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text("Meta Llama 3.2, Qwen & community models", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -222,8 +224,8 @@ fun Step1LoadModel(
                 enabled = !isCopyingModel,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -232,7 +234,7 @@ fun Step1LoadModel(
                 if (isCopyingModel) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -258,8 +260,8 @@ fun Step2Ignite(
 ) {
     Card(
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22).copy(alpha = 0.8f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -273,16 +275,15 @@ fun Step2Ignite(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
                 ),
-                color = Color(0xFF03DAC5),
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
 
-            // Display loaded file name as a chip
             val fileName = File(modelPath).name
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.04f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
                 modifier = Modifier.padding(vertical = 4.dp)
             ) {
                 Row(
@@ -292,14 +293,14 @@ fun Step2Ignite(
                     Icon(
                         imageVector = Icons.Default.Memory,
                         contentDescription = null,
-                        tint = Color.Gray,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = fileName,
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -314,17 +315,17 @@ fun Step2Ignite(
                 backends.forEach { text ->
                     val selected = text == selectedBackend
                     val activeColor = when {
-                        text.contains("NPU") -> Color(0xFF03DAC5)
-                        text == "GPU" -> Color(0xFFBB86FC)
-                        else -> Color(0xFFFFB74D)
+                        text.contains("NPU") -> MaterialTheme.colorScheme.primary
+                        text == "GPU" -> MaterialTheme.colorScheme.secondary
+                        else -> MaterialTheme.colorScheme.tertiary
                     }
 
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selected) activeColor.copy(alpha = 0.15f) else Color.Transparent,
+                        color = if (selected) activeColor.copy(alpha = 0.12f) else Color.Transparent,
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (selected) activeColor.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.1f)
+                            if (selected) activeColor.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                         ),
                         onClick = { onSelectBackend(text) },
                         modifier = Modifier.weight(1f)
@@ -336,7 +337,7 @@ fun Step2Ignite(
                             Text(
                                 text = text.split(" ")[0],
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = if (selected) activeColor else Color.Gray
+                                color = if (selected) activeColor else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -345,14 +346,13 @@ fun Step2Ignite(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Large Ignite Button
             Button(
                 onClick = onStartEngine,
                 enabled = !isInitializing,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -361,7 +361,7 @@ fun Step2Ignite(
                 if (isInitializing) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
@@ -378,8 +378,8 @@ fun Step2Ignite(
 fun StepScanningModels() {
     Card(
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E22).copy(alpha = 0.8f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -393,25 +393,24 @@ fun StepScanningModels() {
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
                 ),
-                color = Color(0xFF03DAC5),
+                color = MaterialTheme.colorScheme.primary,
                 textAlign = TextAlign.Center
             )
 
             Text(
                 text = "Kosh is checking for offline models in your model library. Accessing files...",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             CircularProgressIndicator(
-                color = Color(0xFF03DAC5),
+                color = MaterialTheme.colorScheme.primary,
                 strokeWidth = 3.dp,
                 modifier = Modifier.size(36.dp)
             )
         }
     }
 }
-

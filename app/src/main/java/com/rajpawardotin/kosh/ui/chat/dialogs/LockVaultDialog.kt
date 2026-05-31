@@ -43,13 +43,13 @@ fun LockVaultDialog(
             .fillMaxWidth()
             .padding(16.dp)
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFF03DAC5).copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
-        containerColor = Color(0xFF16161A),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.7f),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
                 Text("Encrypt Chat", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
             }
@@ -76,18 +76,18 @@ fun LockVaultDialog(
                             Icon(
                                 imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = null,
-                                tint = Color.Gray
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.Gray,
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                        cursorColor = Color(0xFF03DAC5)
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -101,13 +101,13 @@ fun LockVaultDialog(
                     shape = RoundedCornerShape(16.dp),
                     visualTransformation = PasswordVisualTransformation(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.Gray,
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
-                        cursorColor = Color(0xFF03DAC5)
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -115,10 +115,10 @@ fun LockVaultDialog(
                 Surface(
                     onClick = { if (!isProcessing) enableBiometric = !enableBiometric },
                     shape = RoundedCornerShape(16.dp),
-                    color = if (enableBiometric) Color(0xFF03DAC5).copy(alpha = 0.1f) else Color.White.copy(alpha = 0.05f),
+                    color = if (enableBiometric) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
                     border = androidx.compose.foundation.BorderStroke(
                         1.dp, 
-                        if (enableBiometric) Color(0xFF03DAC5).copy(alpha = 0.5f) else Color.Transparent
+                        if (enableBiometric) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Transparent
                     )
                 ) {
                     Row(
@@ -130,15 +130,15 @@ fun LockVaultDialog(
                             onCheckedChange = { enableBiometric = it },
                             enabled = !isProcessing,
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Color(0xFF03DAC5),
-                                checkmarkColor = Color.Black,
-                                uncheckedColor = Color.White.copy(alpha = 0.4f)
+                                checkedColor = MaterialTheme.colorScheme.primary,
+                                checkmarkColor = MaterialTheme.colorScheme.onPrimary,
+                                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Column {
-                            Text("Biometric Unlock", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = Color.White)
-                            Text("Allow fingerprint to bypass passcode", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                            Text("Biometric Unlock", style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                            Text("Allow fingerprint to bypass passcode", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                         }
                     }
                 }
@@ -152,13 +152,13 @@ fun LockVaultDialog(
                     onLockSubmit(password, enableBiometric)
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isProcessing) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
                 } else {
                     Text("Encrypt Chat", fontWeight = FontWeight.Black)
                 }
@@ -169,7 +169,7 @@ fun LockVaultDialog(
                 enabled = !isProcessing,
                 onClick = onDismiss
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.4f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

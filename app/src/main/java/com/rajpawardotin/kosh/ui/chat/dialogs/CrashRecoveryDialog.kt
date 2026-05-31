@@ -26,13 +26,13 @@ fun CrashRecoveryDialog(
             .fillMaxWidth()
             .padding(16.dp)
             .clip(RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFFCF6679).copy(alpha = 0.5f), RoundedCornerShape(28.dp)),
-        containerColor = Color(0xFF1E1E1E),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.8f),
+            .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(28.dp)),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Warning, contentDescription = "Warning", tint = Color(0xFFCF6679), modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Warning, contentDescription = "Warning", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Critical Error Detected", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             }
@@ -42,12 +42,12 @@ fun CrashRecoveryDialog(
         },
         confirmButton = {
             TextButton(onClick = onTryAgain) {
-                Text("Try Again", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                Text("Try Again", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDisableModel) {
-                Text("Disable Model", color = Color(0xFFCF6679), fontWeight = FontWeight.Bold)
+                Text("Disable Model", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
         }
     )

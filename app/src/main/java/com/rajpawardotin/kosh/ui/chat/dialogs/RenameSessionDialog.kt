@@ -19,8 +19,8 @@ fun RenameSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF1E1E22),
-        titleContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text("Rename Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             OutlinedTextField(
@@ -29,13 +29,13 @@ fun RenameSessionDialog(
                 label = { Text("Title") },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedLabelColor = Color(0xFF03DAC5),
-                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
-                    focusedBorderColor = Color(0xFF03DAC5),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                    cursorColor = Color(0xFF03DAC5)
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary,
+                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    cursorColor = MaterialTheme.colorScheme.primary
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -47,12 +47,12 @@ fun RenameSessionDialog(
                     onDismiss()
                 }
             ) {
-                Text("Save", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

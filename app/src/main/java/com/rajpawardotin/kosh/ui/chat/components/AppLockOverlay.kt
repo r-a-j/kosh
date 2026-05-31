@@ -25,7 +25,7 @@ fun AppLockOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF070709).copy(alpha = 0.96f))
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
             .clickable(enabled = true) {},
         contentAlignment = Alignment.Center
     ) {
@@ -33,9 +33,9 @@ fun AppLockOverlay(
             modifier = Modifier
                 .size(300.dp)
                 .background(Brush.radialGradient(
-                    0.0f to Color(0xFF03DAC5).copy(alpha = 0.12f),
-                    0.3f to Color(0xFF03DAC5).copy(alpha = 0.06f),
-                    0.6f to Color(0xFF03DAC5).copy(alpha = 0.02f),
+                    0.0f to MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    0.3f to MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
+                    0.6f to MaterialTheme.colorScheme.primary.copy(alpha = 0.02f),
                     1.0f to Color.Transparent
                 ))
         )
@@ -48,7 +48,7 @@ fun AppLockOverlay(
             Icon(
                 imageVector = Icons.Default.Security,
                 contentDescription = "App Secured",
-                tint = Color(0xFF03DAC5),
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(72.dp)
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -59,13 +59,13 @@ fun AppLockOverlay(
                     letterSpacing = 2.sp,
                     fontSize = 20.sp
                 ),
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Authentication required to access secure chats",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(48.dp))
@@ -73,8 +73,8 @@ fun AppLockOverlay(
             Button(
                 onClick = onUnlockClick,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF03DAC5),
-                    contentColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

@@ -276,6 +276,9 @@ class ChatViewModel(
     var isTemporarySession by mutableStateOf(false)
         private set
 
+    var appTheme by mutableStateOf(settingsProvider.getString("app_theme", "SYSTEM"))
+        private set
+
     var isAppLockEnabled by mutableStateOf(settingsProvider.getString("app_lock_enabled", "false") == "true")
         private set
     var isAppLocked by mutableStateOf(isAppLockEnabled)
@@ -1250,6 +1253,12 @@ class ChatViewModel(
     fun updateBraveApiKey(key: String) {
         braveApiKey = key
         settingsProvider.putString("brave_api_key", key)
+    }
+
+    fun updateAppTheme(theme: String) {
+        appTheme = theme
+        settingsProvider.putString("app_theme", theme)
+        showToast("Theme changed to ${theme.replace("_", " ")}")
     }
 
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)

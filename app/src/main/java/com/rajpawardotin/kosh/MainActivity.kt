@@ -72,7 +72,7 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            KoshTheme(darkTheme = true) {
+            KoshTheme(themeType = chatViewModel.appTheme) {
                 val isScreenshotEnabled = chatViewModel.isScreenshotEnabled
                 LaunchedEffect(isScreenshotEnabled) {
                     if (isScreenshotEnabled) {

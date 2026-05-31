@@ -35,7 +35,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
             Icon(
                 imageVector = Icons.Default.Link,
                 contentDescription = null,
-                tint = Color(0xFFBB86FC),
+                tint = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -45,7 +45,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp
                 ),
-                color = Color(0xFFBB86FC)
+                color = MaterialTheme.colorScheme.secondary
             )
         }
         
@@ -66,8 +66,8 @@ fun SourcesCarousel(items: List<SourceItem>) {
                             }
                         },
                     shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.9f)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -81,7 +81,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFF222225))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f))
                             ) {
                                 AsyncImage(
                                     model = item.imageUrl,
@@ -112,7 +112,11 @@ fun SourcesCarousel(items: List<SourceItem>) {
                         } else {
                             // Fallback colored box with initial letter
                             val initialLetter = item.title.firstOrNull()?.uppercaseChar()?.toString() ?: "W"
-                            val domainColors = listOf(Color(0xFF03DAC5), Color(0xFFBB86FC), Color(0xFF6200EE))
+                            val domainColors = listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.secondary,
+                                MaterialTheme.colorScheme.tertiary
+                            )
                             val circleColor = domainColors[item.title.length % domainColors.size]
                             
                             Box(
@@ -150,7 +154,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
                                         modifier = Modifier
                                             .size(14.dp)
                                             .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.1f))
+                                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                     ) {
                                         AsyncImage(
                                             model = "https://www.google.com/s2/favicons?sz=64&domain=$domain",
@@ -162,7 +166,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
                                 Text(
                                     text = item.title,
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
@@ -171,7 +175,7 @@ fun SourcesCarousel(items: List<SourceItem>) {
                             Text(
                                 text = item.url.replace("https://", "").replace("http://", ""),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )

@@ -258,6 +258,19 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun testAppThemeSettingUpdates() {
+        assertEquals("SYSTEM", viewModel.appTheme)
+        
+        viewModel.updateAppTheme("OLED_OBSIDIAN")
+        assertEquals("OLED_OBSIDIAN", viewModel.appTheme)
+        assertEquals("OLED_OBSIDIAN", fakeSettings.getString("app_theme", "SYSTEM"))
+        
+        viewModel.updateAppTheme("MINIMALIST_SAND")
+        assertEquals("MINIMALIST_SAND", viewModel.appTheme)
+        assertEquals("MINIMALIST_SAND", fakeSettings.getString("app_theme", "SYSTEM"))
+    }
+
+    @Test
     fun testLockAndUnlockSessionWithPassword() = runTest(testDispatcher) {
         val sessionId = "vault-1"
         val session = ChatSession(

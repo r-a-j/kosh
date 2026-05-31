@@ -27,14 +27,14 @@ fun ImportPasswordDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isProcessing) onDismiss() },
-        containerColor = Color(0xFF1E1E22),
-        titleContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         title = { Text("Restore Password", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Enter the password that was used to encrypt this backup file.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text("Enter the password that was used to encrypt this backup file.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
@@ -47,18 +47,18 @@ fun ImportPasswordDialog(
                             Icon(
                                 imageVector = if (passwordVisibility) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                                 contentDescription = null,
-                                tint = Color.Gray
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedLabelColor = Color(0xFF03DAC5),
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
-                        focusedBorderColor = Color(0xFF03DAC5),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        cursorColor = Color(0xFF03DAC5)
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        focusedLabelColor = MaterialTheme.colorScheme.primary,
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        cursorColor = MaterialTheme.colorScheme.primary
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -77,9 +77,9 @@ fun ImportPasswordDialog(
                 }
             ) {
                 if (isProcessing) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFF03DAC5), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                 } else {
-                    Text("Restore", color = Color(0xFF03DAC5), fontWeight = FontWeight.Bold)
+                    Text("Restore", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -88,7 +88,7 @@ fun ImportPasswordDialog(
                 enabled = !isProcessing,
                 onClick = onDismiss
             ) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.6f))
+                Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +41,10 @@ fun ResponseActionsRow(
     var isCopied by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    val defaultIconTint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+    val activeGoodColor = MaterialTheme.colorScheme.primary
+    val activeBadColor = MaterialTheme.colorScheme.error
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -57,7 +62,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = if (isThumbUpSelected) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                 contentDescription = "Good response",
-                tint = if (isThumbUpSelected) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.5f),
+                tint = if (isThumbUpSelected) activeGoodColor else defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -72,7 +77,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = if (isThumbDownSelected) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
                 contentDescription = "Bad response",
-                tint = if (isThumbDownSelected) Color(0xFFCF6679) else Color.White.copy(alpha = 0.5f),
+                tint = if (isThumbDownSelected) activeBadColor else defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -91,7 +96,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = if (isCopied) Icons.Filled.Check else Icons.Outlined.ContentCopy,
                 contentDescription = "Copy text",
-                tint = if (isCopied) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.5f),
+                tint = if (isCopied) activeGoodColor else defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -103,7 +108,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = Icons.Outlined.Share,
                 contentDescription = "Share",
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -115,7 +120,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = Icons.Outlined.VolumeUp,
                 contentDescription = "Speak",
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -127,7 +132,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = Icons.Outlined.MoreVert,
                 contentDescription = "More",
-                tint = Color.White.copy(alpha = 0.5f),
+                tint = defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -145,7 +150,7 @@ fun ResponseActionsRow(
             Icon(
                 imageVector = if (isCurrentlySpeaking) Icons.Filled.Stop else Icons.Filled.VolumeUp,
                 contentDescription = if (isCurrentlySpeaking) "Stop speaking" else "Read aloud",
-                tint = if (isCurrentlySpeaking) Color(0xFF03DAC5) else Color.White.copy(alpha = 0.5f),
+                tint = if (isCurrentlySpeaking) activeGoodColor else defaultIconTint,
                 modifier = Modifier.size(20.dp)
             )
         }

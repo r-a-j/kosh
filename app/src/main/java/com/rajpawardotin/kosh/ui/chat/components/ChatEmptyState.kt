@@ -101,7 +101,7 @@ fun ChatEmptyState(
                 letterSpacing = (-0.5).sp,
                 fontSize = 22.sp
             ),
-            color = if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.95f),
+            color = if (isTemporarySession) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
         
@@ -114,7 +114,7 @@ fun ChatEmptyState(
                 fontSize = 13.sp,
                 lineHeight = 18.sp
             ),
-            color = Color.White.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
         )
@@ -124,9 +124,9 @@ fun ChatEmptyState(
             OutlinedButton(
                 onClick = onExitTemporaryClick,
                 shape = RoundedCornerShape(10.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.4f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFFFF9100)
+                    contentColor = MaterialTheme.colorScheme.error
                 ),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
@@ -170,14 +170,14 @@ fun ChatEmptyState(
                     letterSpacing = 1.sp,
                     fontSize = 11.sp
                 ),
-                color = Color.White.copy(alpha = 0.4f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .height(0.5.dp)
-                    .background(Color.White.copy(alpha = 0.1f))
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             )
         }
 
@@ -281,10 +281,10 @@ private fun StatusChip(label: String, value: String, color: Color) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF141416).copy(alpha = 0.5f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
             .border(
                 width = 0.5.dp,
-                color = Color.White.copy(alpha = 0.08f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                 shape = RoundedCornerShape(8.dp)
             )
             .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -302,7 +302,7 @@ private fun StatusChip(label: String, value: String, color: Color) {
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             ),
-            color = Color.White.copy(alpha = 0.4f)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
@@ -310,7 +310,7 @@ private fun StatusChip(label: String, value: String, color: Color) {
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             ),
-            color = Color.White.copy(alpha = 0.85f)
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -331,15 +331,10 @@ private fun SuggestionCard(
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick(promptText) },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         border = androidx.compose.foundation.BorderStroke(
             0.8.dp,
-            Brush.linearGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.1f),
-                    Color.White.copy(alpha = 0.02f)
-                )
-            )
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
         )
     ) {
         Column(
@@ -366,7 +361,7 @@ private fun SuggestionCard(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 ),
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(3.dp))
             Text(
@@ -375,7 +370,7 @@ private fun SuggestionCard(
                     lineHeight = 14.sp,
                     fontSize = 11.sp
                 ),
-                color = Color.White.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -396,15 +391,10 @@ private fun SuggestionCardFullWidth(
             .clip(RoundedCornerShape(14.dp))
             .clickable { onClick(promptText) },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161618).copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
         border = androidx.compose.foundation.BorderStroke(
             0.8.dp,
-            Brush.linearGradient(
-                listOf(
-                    Color.White.copy(alpha = 0.1f),
-                    Color.White.copy(alpha = 0.02f)
-                )
-            )
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
         )
     ) {
         Row(
@@ -437,7 +427,7 @@ private fun SuggestionCardFullWidth(
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     ),
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -446,7 +436,7 @@ private fun SuggestionCardFullWidth(
                         lineHeight = 14.sp,
                         fontSize = 11.sp
                     ),
-                    color = Color.White.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

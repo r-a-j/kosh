@@ -17,17 +17,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 
 @Composable
 fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val textColorHex = String.format(java.util.Locale.US, "#%06X", textColor.toArgb() and 0xFFFFFF)
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF131316)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
     ) {
         Box(
             modifier = Modifier
@@ -76,7 +80,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                                         margin: 0;
                                         padding: 8px;
                                         background-color: transparent !important;
-                                        color: #E4E4E7;
+                                        color: $textColorHex;
                                         font-family: 'Courier New', Courier, monospace;
                                         display: flex;
                                         justify-content: center;
@@ -137,7 +141,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                                     margin: 0;
                                     padding: 8px;
                                     background-color: transparent !important;
-                                    color: #E4E4E7;
+                                    color: $textColorHex;
                                     font-family: 'Courier New', Courier, monospace;
                                     display: flex;
                                     justify-content: center;

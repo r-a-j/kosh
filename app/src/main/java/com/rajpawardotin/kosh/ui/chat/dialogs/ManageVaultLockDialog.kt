@@ -26,15 +26,15 @@ fun ManageVaultLockDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isProcessing) onDismiss() },
-        containerColor = Color(0xFF1E1E22),
-        titleContentColor = Color.White,
-        textContentColor = Color.White.copy(alpha = 0.8f),
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
         title = { Text("Chat Security Settings", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("Manage encryption options for this chat.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text("Manage encryption options for this chat.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                 
                 // Option 1: Lock Now
                 Button(
@@ -45,13 +45,13 @@ fun ManageVaultLockDialog(
                         Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.05f),
-                        contentColor = Color.White
+                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                        contentColor = MaterialTheme.colorScheme.onSurface
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
-                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF03DAC5))
+                    Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Lock Chat Now", fontWeight = FontWeight.Bold)
                 }
@@ -72,16 +72,16 @@ fun ManageVaultLockDialog(
                     },
                     enabled = !isProcessing,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFEF4444).copy(alpha = 0.15f),
-                        contentColor = Color(0xFFEF4444)
+                        containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                        contentColor = MaterialTheme.colorScheme.error
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().height(48.dp)
                 ) {
                     if (isProcessing) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color(0xFFEF4444), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), color = MaterialTheme.colorScheme.error, strokeWidth = 2.dp)
                     } else {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFEF4444))
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.error)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Remove Password Lock", fontWeight = FontWeight.Bold)
                     }
@@ -93,7 +93,7 @@ fun ManageVaultLockDialog(
                 enabled = !isProcessing,
                 onClick = onDismiss
             ) {
-                Text("Close", color = Color.White.copy(alpha = 0.6f))
+                Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     )

@@ -41,12 +41,17 @@ fun ChatDrawerContent(
     onLockSession: (ChatSession) -> Unit
 ) {
     ModalDrawerSheet(
-        drawerContainerColor = Color(0xFF0F0F12),
-        drawerContentColor = Color.White,
+        drawerContainerColor = MaterialTheme.colorScheme.surface,
+        drawerContentColor = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.width(320.dp).fillMaxHeight()
     ) {
         var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
         var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+
+        val primary = MaterialTheme.colorScheme.primary
+        val secondary = MaterialTheme.colorScheme.secondary
+        val outline = MaterialTheme.colorScheme.outline
+        val onSurfaceMuted = MaterialTheme.colorScheme.onSurfaceVariant
 
         Column(
             modifier = Modifier
@@ -64,7 +69,7 @@ fun ChatDrawerContent(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = Color(0xFF03DAC5),
+                        tint = primary,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -76,18 +81,18 @@ fun ChatDrawerContent(
                         letterSpacing = 1.5.sp,
                         fontSize = 14.sp
                     ),
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             HorizontalDivider(
-                color = Color.White.copy(alpha = 0.1f),
+                color = outline.copy(alpha = 0.12f),
                 thickness = 1.dp,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
             // New Brainstorm button
-            Button(
+            OutlinedButton(
                 onClick = {
                     viewModel.startNewChat()
                     scope.launch { drawerState.close() }
@@ -96,20 +101,19 @@ fun ChatDrawerContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.05f),
-                    contentColor = Color.White
-                ),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(
                     1.dp,
-                    Brush.linearGradient(listOf(Color(0xFF03DAC5), Color(0xFF6200EE)))
+                    Brush.linearGradient(listOf(primary, secondary))
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = primary
                 )
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
-                    tint = Color(0xFF03DAC5),
+                    tint = primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -125,7 +129,7 @@ fun ChatDrawerContent(
             Text(
                 text = "HISTORY",
                 style = MaterialTheme.typography.labelSmall.copy(
-                    color = Color.Gray,
+                    color = onSurfaceMuted,
                     letterSpacing = 1.sp,
                     fontWeight = FontWeight.SemiBold
                 ),
@@ -141,7 +145,7 @@ fun ChatDrawerContent(
                 ) {
                     Text(
                         text = "No secure chats yet.",
-                        color = Color.Gray,
+                        color = onSurfaceMuted,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -170,7 +174,7 @@ fun ChatDrawerContent(
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
-                                    if (isActive) Color.White.copy(alpha = 0.08f)
+                                    if (isActive) MaterialTheme.colorScheme.surfaceVariant
                                     else Color.Transparent
                                 )
                                 .clickable(enabled = !viewModel.isGenerating) {
@@ -189,7 +193,7 @@ fun ChatDrawerContent(
                                     Icons.AutoMirrored.Filled.Chat
                                 },
                                 contentDescription = null,
-                                tint = if (isActive) Color(0xFF03DAC5) else if (isEncrypted) Color(0xFF03DAC5).copy(alpha = 0.7f) else Color.Gray,
+                                tint = if (isActive) primary else if (isEncrypted) primary.copy(alpha = 0.7f) else onSurfaceMuted,
                                 modifier = Modifier.size(18.dp)
                             )
 
@@ -201,14 +205,14 @@ fun ChatDrawerContent(
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
                                     ),
-                                    color = if (isActive) Color.White else Color.White.copy(alpha = 0.7f),
+                                    color = if (isActive) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                     maxLines = 1,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = relativeTime,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color.Gray
+                                    color = onSurfaceMuted
                                 )
                             }
 
@@ -219,7 +223,7 @@ fun ChatDrawerContent(
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Rename",
-                                    tint = Color.Gray,
+                                    tint = onSurfaceMuted,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -243,7 +247,7 @@ fun ChatDrawerContent(
                                 Icon(
                                     imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
                                     contentDescription = "Lock Status",
-                                    tint = if (isEncrypted) Color(0xFF03DAC5) else Color.Gray,
+                                    tint = if (isEncrypted) primary else onSurfaceMuted,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
@@ -257,7 +261,7 @@ fun ChatDrawerContent(
                                 Icon(
                                     imageVector = Icons.Default.Delete,
                                     contentDescription = "Delete",
-                                    tint = Color.Gray,
+                                    tint = onSurfaceMuted,
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
