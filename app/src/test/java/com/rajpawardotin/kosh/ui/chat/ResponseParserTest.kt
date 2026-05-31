@@ -200,5 +200,75 @@ class ResponseParserTest {
         assertEquals("y = mx + c\nc = 10", (blocks[1] as ChatContentBlock.MathBlock).formula.replace("\r\n", "\n"))
         assertEquals("End of formula.", (blocks[2] as ChatContentBlock.Text).content)
     }
+
+    @Test
+    fun testResponseParserThinkingBlockXml() {
+        val text = """
+            Hello!
+            <thinking>
+            Need to solve math.
+            Let's calculate.
+            </thinking>
+            Here is the answer: 42
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+
+        assertEquals(3, blocks.size)
+        assertEquals("Hello!", (blocks[0] as ChatContentBlock.Text).content)
+        assertEquals("Need to solve math.\nLet's calculate.", (blocks[1] as ChatContentBlock.Thinking).content.replace("\r\n", "\n"))
+        assertEquals("Here is the answer: 42", (blocks[2] as ChatContentBlock.Text).content)
+    }
+
+    @Test
+    fun testResponseParserThinkingBlockCodeFence() {
+        val text = """
+            Here is the reasoning:
+            ```thinking
+            This is a reasoning chunk.
+            ```
+            Hope it helps!
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+
+        assertEquals(3, blocks.size)
+        assertEquals("Here is the reasoning:", (blocks[0] as ChatContentBlock.Text).content)
+        assertEquals("This is a reasoning chunk.", (blocks[1] as ChatContentBlock.Thinking).content.replace("\r\n", "\n"))
+        assertEquals("Hope it helps!", (blocks[2] as ChatContentBlock.Text).content)
+    }
+
+    @Test
+    fun testResponseParserThinkingBlockXmlWithBulletPrefix() {
+        val text = """
+            Here is the response:
+            * <thinking>
+            Analyze request
+            </thinking>
+            Actual response text here.
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+
+        assertEquals(3, blocks.size)
+        assertEquals("Here is the response:", (blocks[0] as ChatContentBlock.Text).content)
+        assertEquals("Analyze request", (blocks[1] as ChatContentBlock.Thinking).content)
+        assertEquals("Actual response text here.", (blocks[2] as ChatContentBlock.Text).content)
+    }
+
+    @Test
+    fun testParseStreamState() {
+        val chunk1 = "* <thinking>\nNeed to solve logic"
+        val state1 = ResponseParser.parseStreamState(chunk1)
+        assertTrue(state1.isThinking)
+        assertEquals("Need to solve logic", state1.thinkingContent)
+        assertEquals("", state1.cleanResponse)
+
+        val chunk2 = "* <thinking>\nReasoning\n</thinking>\nSky is blue"
+        val state2 = ResponseParser.parseStreamState(chunk2)
+        assertFalse(state2.isThinking)
+        assertEquals("Reasoning", state2.thinkingContent)
+        assertEquals("Sky is blue", state2.cleanResponse)
+    }
 }
 

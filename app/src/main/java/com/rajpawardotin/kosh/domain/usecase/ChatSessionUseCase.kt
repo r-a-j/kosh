@@ -24,7 +24,25 @@ class ChatSessionUseCase(
                     null
                 }
             }
-            session.copy(lastSearchQuery = decryptedLastSearchQuery)
+            val decryptedSummary = session.summary?.let {
+                try {
+                    CryptoUtils.decryptMessage(it, key)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            val decryptedFacts = session.facts?.let {
+                try {
+                    CryptoUtils.decryptMessage(it, key)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            session.copy(
+                lastSearchQuery = decryptedLastSearchQuery,
+                summary = decryptedSummary,
+                facts = decryptedFacts
+            )
         } else {
             session
         }
@@ -40,7 +58,25 @@ class ChatSessionUseCase(
                     it
                 }
             }
-            sessionRepository.saveSession(session.copy(lastSearchQuery = encryptedLastSearchQuery))
+            val encryptedSummary = session.summary?.let {
+                try {
+                    CryptoUtils.encryptMessage(it, key)
+                } catch (e: Exception) {
+                    it
+                }
+            }
+            val encryptedFacts = session.facts?.let {
+                try {
+                    CryptoUtils.encryptMessage(it, key)
+                } catch (e: Exception) {
+                    it
+                }
+            }
+            sessionRepository.saveSession(session.copy(
+                lastSearchQuery = encryptedLastSearchQuery,
+                summary = encryptedSummary,
+                facts = encryptedFacts
+            ))
         } else {
             sessionRepository.saveSession(session)
         }

@@ -6,6 +6,7 @@ import com.rajpawardotin.kosh.domain.provider.AIProvider
 import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import com.rajpawardotin.kosh.domain.repository.SessionRepository
 import com.rajpawardotin.kosh.domain.repository.DocumentRepository
+import com.rajpawardotin.kosh.ui.chat.ResponseParser
 
 class LlmUseCase(
     private val aiProvider: AIProvider,
@@ -241,6 +242,70 @@ class LlmUseCase(
         return Pair(sb.toString(), sourceNames)
     }
 
+    fun searchHistoryMessages(query: String, messages: List<ChatMessage>): List<ChatMessage> {
+        val stopWords = STOP_WORDS
+        val terms = query.trim().lowercase()
+            .split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+            .map { token ->
+                token.removeSurrounding("[", "]")
+                    .removeSurrounding("(", ")")
+                    .removeSurrounding("{", "}")
+                    .removeSuffix(".").removeSuffix(",").removeSuffix(":")
+            }
+            .filter { it.isNotBlank() && !stopWords.contains(it) }
+
+        if (terms.isEmpty() || messages.isEmpty()) {
+            return emptyList()
+        }
+
+        val rankedMatches = messages
+            .map { msg ->
+                val textLower = msg.text.lowercase()
+                val chunkTokens = textLower.split(Regex("[\\s,;!?()\"'<>#\$^*%&@~\\[\\]]+"))
+                    .map { token ->
+                        token.removeSurrounding("[", "]")
+                            .removeSurrounding("(", ")")
+                            .removeSurrounding("{", "}")
+                            .removeSuffix(".").removeSuffix(",").removeSuffix(":")
+                    }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+
+                var uniqueMatched = 0
+                var totalMatchScore = 0.0
+                val uniqueTerms = terms.toSet()
+
+                for (term in uniqueTerms) {
+                    val isWordMatch = chunkTokens.contains(term)
+                    val isSubstringMatch = textLower.contains(term)
+                    if (isWordMatch || isSubstringMatch) {
+                        uniqueMatched++
+                        var count = 0
+                        var index = 0
+                        while (true) {
+                            index = textLower.indexOf(term, index)
+                            if (index == -1) break
+                            count++
+                            index += term.length
+                        }
+                        val weight = if (isWordMatch) 10.0 else 1.0
+                        totalMatchScore += count * weight
+                    }
+                }
+
+                val score = if (uniqueMatched == 0) 0.0 else {
+                    val coverage = uniqueMatched.toDouble() / uniqueTerms.size.toDouble()
+                    (coverage * 1000.0) + totalMatchScore
+                }
+
+                msg to score
+            }
+            .filter { it.second > 0.0 }
+            .sortedByDescending { it.second }
+
+        return rankedMatches.take(2).map { it.first }
+    }
+
     fun compileFinalPrompt(
         chatMessages: List<ChatMessage>,
         rawPrompt: String,
@@ -248,22 +313,63 @@ class LlmUseCase(
         searchResults: String?,
         searchQuery: String?,
         toolSchemas: List<String> = emptyList(),
-        maxContextChars: Int = 8000 // approx 2048 tokens
+        maxContextChars: Int = 8000, // approx 2048 tokens
+        summary: String? = null,
+        facts: String? = null
     ): String {
-        val budgetForHistory = maxContextChars - rawPrompt.length - documentContext.length - (searchResults?.length ?: 0) - 1500
+        val budgetForHistory = maxContextChars - rawPrompt.length - documentContext.length - (searchResults?.length ?: 0) - (summary?.length ?: 0) - (facts?.length ?: 0) - 1500
         
         val selectedHistory = mutableListOf<String>()
         var currentUsedChars = 0
 
-        if (budgetForHistory > 0) {
+        if (budgetForHistory > 0 && chatMessages.isNotEmpty()) {
             val historyMessages = chatMessages.dropLast(1)
-            for (msg in historyMessages.reversed()) {
+            val verbatimLimit = 8
+            val slidingWindow = historyMessages.takeLast(verbatimLimit)
+            val olderHistory = historyMessages.dropLast(slidingWindow.size)
+            
+            val relevantPastTurns = if (olderHistory.isNotEmpty()) {
+                searchHistoryMessages(rawPrompt, olderHistory)
+            } else {
+                emptyList()
+            }
+            
+            val dynamicHistory = mutableListOf<ChatMessage>()
+            dynamicHistory.addAll(relevantPastTurns)
+            for (msg in slidingWindow) {
+                if (dynamicHistory.none { it.id == msg.id }) {
+                    dynamicHistory.add(msg)
+                }
+            }
+            
+            val sortedDynamicHistory = dynamicHistory.sortedBy { msg ->
+                historyMessages.indexOfFirst { it.id == msg.id }
+            }
+
+            for (msg in sortedDynamicHistory.reversed()) {
                 val role = if (msg.isUser) "User" else "Assistant"
-                val cleanText = msg.text.trim()
+                val cleanText = if (msg.isUser) {
+                    msg.text.trim()
+                } else {
+                    ResponseParser.extractThinkingSegments(msg.text).second.trim()
+                }
                 if (cleanText.startsWith("Error:") || cleanText.isEmpty()) continue
                 
                 val formattedMsg = "- $role: $cleanText\n"
                 if (currentUsedChars + formattedMsg.length > budgetForHistory) {
+                    // Truncate the message to fit the remaining budget instead of breaking and discarding the entire history
+                    val remainingBytes = budgetForHistory - currentUsedChars
+                    val prefix = "- $role: "
+                    val overhead = prefix.length + 1 // prefix + \n
+                    if (remainingBytes > overhead + 20) {
+                        val maxCleanTextLen = remainingBytes - overhead - 16 // for "... [truncated]"
+                        if (maxCleanTextLen > 0) {
+                            val truncatedText = cleanText.take(maxCleanTextLen) + "... [truncated]"
+                            val truncatedMsg = "$prefix$truncatedText\n"
+                            selectedHistory.add(0, truncatedMsg)
+                            currentUsedChars += truncatedMsg.length
+                        }
+                    }
                     break
                 }
                 selectedHistory.add(0, formattedMsg)
@@ -277,6 +383,9 @@ class LlmUseCase(
         promptSb.append("### SYSTEM INSTRUCTIONS\n")
         promptSb.append("You are Kosh, a private, secure offline personal assistant running on the user's device. ")
         promptSb.append("You help the user brainstorm, study, and analyze information.\n")
+        promptSb.append("- Before answering the user's query or calling any tool, you MUST write down your detailed step-by-step reasoning process wrapped inside <thinking> and </thinking> tags. ")
+        promptSb.append("Once your reasoning process is complete, output your final response (or tool call) outside of the <thinking> tags. ")
+        promptSb.append("Always include this reasoning block for all responses to allow Kosh to render your thought process card.\n")
         
         if (toolSchemas.isNotEmpty()) {
             promptSb.append("\n### AVAILABLE AGENT TOOLS\n")
@@ -329,7 +438,20 @@ class LlmUseCase(
             promptSb.append("--- END SEARCH RESULTS ---\n\n")
         }
 
-        // 4. Conversation History Context
+        // 4. Active User Profile / Facts
+        if (!facts.isNullOrBlank()) {
+            promptSb.append("### EXTRACTED USER FACTS\n")
+            promptSb.append(facts.trim()).append("\n\n")
+        }
+        
+        // 5. Conversation Summary
+        if (!summary.isNullOrBlank()) {
+            promptSb.append("### CONVERSATION SUMMARY\n")
+            promptSb.append("The following is a running summary of the conversation up to the older history:\n")
+            promptSb.append(summary.trim()).append("\n\n")
+        }
+
+        // 6. Conversation History Context
         if (selectedHistory.isNotEmpty()) {
             promptSb.append("### CONVERSATION HISTORY\n")
             promptSb.append("--- START HISTORY ---\n")
@@ -339,7 +461,7 @@ class LlmUseCase(
             promptSb.append("--- END HISTORY ---\n\n")
         }
 
-        // 5. Current User Query
+        // 7. Current User Query
         promptSb.append("### USER QUERY\n")
         promptSb.append(rawPrompt.trim())
         

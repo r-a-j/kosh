@@ -743,7 +743,7 @@ class ChatViewModelTest {
         viewModel.sendMessage(context)
         testScheduler.advanceUntilIdle()
 
-         val sentPrompt = fakeAI.lastSentPrompt
+        val sentPrompt = fakeAI.sentPrompts.firstOrNull()
         assertNotNull(sentPrompt)
         assertTrue(sentPrompt!!.contains("--- START HISTORY ---"))
         assertTrue(sentPrompt.contains("- User: Hello"))
@@ -779,6 +779,7 @@ class ChatViewModelTest {
         override var isInitialized: Boolean = true
         var initializeCallCount = 0
         var lastSentPrompt: String? = null
+        val sentPrompts = mutableListOf<String>()
         var customFlow: Flow<String>? = null
         override suspend fun initialize(modelPath: String, backend: String): Result<Unit> {
             initializeCallCount++
@@ -787,6 +788,7 @@ class ChatViewModelTest {
         }
         override fun sendMessage(prompt: String): Flow<String> {
             lastSentPrompt = prompt
+            sentPrompts.add(prompt)
             return customFlow ?: flowOf("Mock", " response", " from", " Kosh")
         }
         override fun close() {}

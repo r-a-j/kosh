@@ -55,6 +55,7 @@ import com.rajpawardotin.kosh.ui.components.ChatInput
 import com.rajpawardotin.kosh.ui.components.ModelConfigCard
 import com.rajpawardotin.kosh.ui.components.NeuralCoreWizard
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -475,7 +476,8 @@ fun ChatScreen(
                                                         viewModel.currentResponseChunk.isNotEmpty() -> viewModel.currentResponseChunk
                                                         else -> viewModel.agenticStateLabel
                                                     },
-                                                    isSearchingInternet = viewModel.isSearchingInternet
+                                                    isSearchingInternet = viewModel.isSearchingInternet,
+                                                    isGenerating = viewModel.isGenerating
                                                 )
                                             }
                                         }
@@ -856,31 +858,31 @@ private fun triggerAppBiometricUnlock(context: Context, viewModel: ChatViewModel
 }
 
 @Composable
-fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
-    val infiniteTransition = rememberInfiniteTransition(label = "thinking")
-    val dotAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "dotAlpha"
-    )
-
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
+fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: Boolean = false) {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val onBackground = MaterialTheme.colorScheme.onBackground
+
+    val rotation = if (isSearchingInternet) {
+        val infiniteTransition = rememberInfiniteTransition(label = "searching")
+        val rot by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rotation"
+        )
+        rot
+    } else {
+        0f
+    }
+
+    // Parse the stream state in real-time
+    val streamState = remember(text) {
+        ResponseParser.parseStreamState(text)
+    }
 
     Row(
         verticalAlignment = Alignment.Top,
@@ -891,7 +893,6 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
         Box(
             modifier = Modifier
                 .padding(top = 5.dp)
-                .graphicsLayer { this.alpha = dotAlpha }
         ) {
             if (isSearchingInternet) {
                 Icon(
@@ -907,7 +908,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(primary)
+                        .background(primary.copy(alpha = 0.8f))
                 )
             }
         }
@@ -917,41 +918,55 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean) {
         Column(
             modifier = Modifier.weight(1f)
         ) {
-            val blocks = remember(text) {
-                if (text.isBlank()) emptyList()
-                else text.split("\n").filter { it.isNotEmpty() }
-            }
-            
-            if (blocks.isEmpty()) {
+            if (isSearchingInternet && streamState.cleanResponse.isEmpty() && !streamState.isThinking) {
                 Text(
-                    text = "...",
+                    text = "Searching the web...",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = primary,
+                    color = secondary,
                     fontSize = 14.sp
                 )
-            } else {
-                blocks.forEachIndexed { index, block ->
-                    val isLast = index == blocks.lastIndex
-                    val isAgenticLabel = block.endsWith("...") && !block.startsWith(" ")
-                    val textColor = when {
-                        isSearchingInternet -> secondary
-                        isAgenticLabel -> primary
-                        else -> onBackground
-                    }
-                    
+            } else if (streamState.isThinking) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Memory,
+                        contentDescription = "Thinking",
+                        tint = primary.copy(alpha = 0.8f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isLast && !isAgenticLabel) block + " ▊" else block,
+                        text = "Thinking...",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                        color = primary.copy(alpha = 0.8f)
+                    )
+                }
+            } else {
+                // Completed thinking block (or no thinking tags at all)
+                if (streamState.thinkingContent.isNotEmpty()) {
+                    com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = streamState.thinkingContent)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                
+                if (streamState.cleanResponse.isNotEmpty()) {
+                    val suffix = if (isGenerating) " ▊" else ""
+                    Text(
+                        text = streamState.cleanResponse + suffix,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             lineHeight = 22.sp,
                             fontSize = 15.sp
                         ),
-                        color = textColor,
+                        color = onBackground,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    
-                    if (index < blocks.lastIndex) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                    }
+                } else if (isGenerating && !isSearchingInternet) {
+                    Text(
+                        text = "▊",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = primary
+                    )
                 }
             }
         }

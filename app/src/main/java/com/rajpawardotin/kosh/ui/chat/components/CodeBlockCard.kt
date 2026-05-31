@@ -80,17 +80,49 @@ fun CodeBlockCard(language: String, code: String) {
                 }
             }
             
+            val commentRegex = "(//.*|/\\*[\\s\\S]*?\\*/|#.*)"
+            val stringRegex = "(\"(?:\\\\.|[^\"\\\\])*\"|'(?:\\\\.|[^'\\\\])*')"
+            val numberRegex = "(\\b\\d+(?:\\.\\d+)?\\b)"
+            val keywordRegex = "(\\b(?:val|var|fun|class|interface|object|import|package|return|if|else|for|while|when|true|false|null|private|protected|public|internal|override|this|super|throw|try|catch|finally|def|from|as|elif|in|is|not|and|or|except|with|lambda|None|True|False|let|const|function|export|default|switch|case|break|continue|undefined|async|await|yield)\\b)"
+            val annotationRegex = "(@[a-zA-Z_]\\w*)"
+            val combinedRegex = remember { Regex("$commentRegex|$stringRegex|$numberRegex|$keywordRegex|$annotationRegex") }
+
+            val highlightedCode = remember(code, language) {
+                val builder = AnnotatedString.Builder(code)
+                val commentColor = Color(0xFF6A9955)
+                val stringColor = Color(0xFFCE9178)
+                val numberColor = Color(0xFFB5CEA8)
+                val keywordColor = Color(0xFF569CD6)
+                val annotationColor = Color(0xFFC586C0)
+
+                combinedRegex.findAll(code).forEach { matchResult ->
+                    val range = matchResult.range
+                    val style = when {
+                        matchResult.groups[1] != null -> androidx.compose.ui.text.SpanStyle(color = commentColor)
+                        matchResult.groups[2] != null -> androidx.compose.ui.text.SpanStyle(color = stringColor)
+                        matchResult.groups[3] != null -> androidx.compose.ui.text.SpanStyle(color = numberColor)
+                        matchResult.groups[4] != null -> androidx.compose.ui.text.SpanStyle(color = keywordColor, fontWeight = FontWeight.Bold)
+                        matchResult.groups[5] != null -> androidx.compose.ui.text.SpanStyle(color = annotationColor)
+                        else -> null
+                    }
+                    if (style != null) {
+                        builder.addStyle(style, range.first, range.last + 1)
+                    }
+                }
+                builder.toAnnotatedString()
+            }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
             ) {
                 Text(
-                    text = code,
+                    text = highlightedCode,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         fontSize = 13.sp,
-                        color = Color(0xFF80CBC4),
+                        color = Color(0xFFD4D4D4),
                         lineHeight = 18.sp
                     ),
                     modifier = Modifier.horizontalScroll(rememberScrollState())

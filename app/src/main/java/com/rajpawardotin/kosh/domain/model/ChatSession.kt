@@ -19,7 +19,9 @@ data class ChatSession(
     val encryptedKeyPassword: String? = null,
     val encryptedKeyBiometric: String? = null,
     val encryptedKeyRecovery: String? = null,
-    val tags: List<ChatTag> = emptyList()
+    val tags: List<ChatTag> = emptyList(),
+    val summary: String? = null,
+    val facts: String? = null
 )
 
 data class AttachedFile(

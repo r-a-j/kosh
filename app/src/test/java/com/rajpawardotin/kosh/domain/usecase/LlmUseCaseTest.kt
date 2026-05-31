@@ -146,4 +146,98 @@ class LlmUseCaseTest {
         assertFalse(prompt.contains("Hello! I am Kosh."))
         assertTrue(prompt.contains("### USER QUERY\nCurrent question"))
     }
+
+    @Test
+    fun testCompileFinalPromptStripsThinkingFromHistory() {
+        val messages = listOf(
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Hello Kosh", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "<thinking>Let's think. The user says Hello.</thinking>Hello! I am Kosh.", isUser = false),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Current question", isUser = true)
+        )
+
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null
+        )
+
+        val historySection = prompt.substringAfter("--- START HISTORY ---").substringBefore("--- END HISTORY ---")
+        assertTrue(historySection.contains("- Assistant: Hello! I am Kosh."))
+        assertFalse(historySection.contains("Let's think"))
+        assertFalse(historySection.contains("<thinking>"))
+    }
+
+    @Test
+    fun testCompileFinalPromptTruncatesExceedingHistory() {
+        val messages = listOf(
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Very long query that should be truncated to fit budget", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(text = "Current question", isUser = true)
+        )
+
+        // Set maxContextChars so budgetForHistory is small, e.g. 1550:
+        // budgetForHistory = 1550 - 16 - 0 - 0 - 1500 = 34 chars.
+        // Prefix "- User: " is 8 chars, \n is 1 char. Remaining budget for text is 34 - 9 = 25 chars.
+        // The text is "Very long query that should be truncated to fit budget" (54 chars).
+        // Since budget is 34 chars, it should be truncated.
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            maxContextChars = 1550
+        )
+
+        assertTrue(prompt.contains("... [truncated]"))
+        assertFalse(prompt.contains("truncated to fit budget"))
+    }
+
+    @Test
+    fun testSearchHistoryMessagesRanksCorrectly() {
+        val messages = listOf(
+            com.rajpawardotin.kosh.domain.model.ChatMessage(id = "m1", text = "I love programming in Kotlin.", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(id = "m2", text = "The weather today is sunny.", isUser = true),
+            com.rajpawardotin.kosh.domain.model.ChatMessage(id = "m3", text = "Kotlin is a modern static language.", isUser = false)
+        )
+
+        val matches = llmUseCase.searchHistoryMessages("Tell me about Kotlin coding", messages)
+
+        org.junit.Assert.assertEquals(2, matches.size)
+        assertTrue(matches.any { it.id == "m1" })
+        assertTrue(matches.any { it.id == "m3" })
+        assertFalse(matches.any { it.id == "m2" })
+    }
+
+    @Test
+    fun testCompileFinalPromptIncorporateSummaryAndFacts() {
+        val messages = mutableListOf<com.rajpawardotin.kosh.domain.model.ChatMessage>()
+        // Add 10 turns so that sliding window of 8 is exceeded and search/RAG is triggered
+        for (i in 1..10) {
+            messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(id = "user_$i", text = "User turn $i with Kotlin code", isUser = true))
+            messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(id = "assistant_$i", text = "Assistant response $i", isUser = false))
+        }
+        messages.add(com.rajpawardotin.kosh.domain.model.ChatMessage(id = "curr_user", text = "Current question about Kotlin", isUser = true))
+
+        val prompt = llmUseCase.compileFinalPrompt(
+            chatMessages = messages,
+            rawPrompt = "Current question about Kotlin",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            summary = "This is a running summary of older turns.",
+            facts = "- User is learning Kotlin on Android.",
+            maxContextChars = 8000
+        )
+
+        // 1. Check summary and facts are present
+        assertTrue(prompt.contains("### CONVERSATION SUMMARY"))
+        assertTrue(prompt.contains("This is a running summary of older turns."))
+        assertTrue(prompt.contains("### EXTRACTED USER FACTS"))
+        assertTrue(prompt.contains("- User is learning Kotlin on Android."))
+
+        // 2. Check that relevant past turns were fetched (containing 'Kotlin')
+        assertTrue(prompt.contains("- User: User turn 1 with Kotlin code"))
+    }
 }

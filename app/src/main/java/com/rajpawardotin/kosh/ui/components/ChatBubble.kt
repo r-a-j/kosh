@@ -180,6 +180,9 @@ fun ChatBubble(
                         is ChatContentBlock.MathBlock -> {
                             MathFormulaCard(formula = block.formula)
                         }
+                        is ChatContentBlock.Thinking -> {
+                            ThinkingBlockCard(content = block.content)
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                 }

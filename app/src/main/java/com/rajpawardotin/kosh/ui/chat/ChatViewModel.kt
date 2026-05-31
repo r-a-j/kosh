@@ -1714,13 +1714,16 @@ class ChatViewModel(
 
                 val agentExecutor = com.rajpawardotin.kosh.domain.agent.AgentLoopExecutor(aiProvider, registeredSkills)
 
+                val currentSession = savedSessions.find { it.id == sessionId }
                 val finalPrompt = llmUseCase.compileFinalPrompt(
                     chatMessages = chatMessages,
                     rawPrompt = rawPrompt,
                     documentContext = documentContext,
                     searchResults = searchResults,
                     searchQuery = lastQueryUsed,
-                    toolSchemas = registeredSkills.map { it.getSchema() }
+                    toolSchemas = registeredSkills.map { it.getSchema() },
+                    summary = currentSession?.summary,
+                    facts = currentSession?.facts
                 )
 
                 if (lastQueryUsed != null) {
@@ -1819,6 +1822,7 @@ class ChatViewModel(
                             ))
                         }
                         loadSavedSessionsInternal()
+                        runBackgroundMemoryUpdates(sessionId!!)
                     }
                 }
             } catch (e: Exception) {
@@ -1923,6 +1927,85 @@ class ChatViewModel(
             }
         } catch (e: Exception) {
             3.25
+        }
+    }
+
+    private fun runBackgroundMemoryUpdates(sessionId: String) {
+        viewModelScope.launch(safeIoDispatcher) {
+            try {
+                val currentSession = savedSessions.find { it.id == sessionId } ?: return@launch
+                val messages = chatMessages.toList()
+                if (messages.size < 2) return@launch
+
+                val lastUserMsg = messages.reversed().find { it.isUser }?.text ?: ""
+                val lastAssistantMsg = messages.reversed().find { !it.isUser }?.text ?: ""
+                if (lastUserMsg.isEmpty() || lastAssistantMsg.isEmpty()) return@launch
+
+                // 1. Fact Extraction
+                val factsPrompt = """
+                    Extract any key user preferences, facts, or context from the following interaction. Keep it extremely brief and format as a bulleted list.
+                    Interaction:
+                    User: $lastUserMsg
+                    Assistant: ${ResponseParser.extractThinkingSegments(lastAssistantMsg).second.trim()}
+                    Extracted facts:
+                """.trimIndent()
+
+                var extractedFacts = ""
+                aiProvider.sendMessage(factsPrompt).collect { token ->
+                    extractedFacts += token
+                }
+                extractedFacts = ResponseParser.extractThinkingSegments(extractedFacts).second.trim()
+
+                // Merge with existing facts
+                val updatedFacts = if (extractedFacts.isNotEmpty() && !extractedFacts.startsWith("Error:")) {
+                    val currentFacts = currentSession.facts ?: ""
+                    val merged = (currentFacts + "\n" + extractedFacts).trim()
+                    merged.lines().map { it.trim() }.filter { it.isNotEmpty() }.distinct().joinToString("\n")
+                } else {
+                    currentSession.facts
+                }
+
+                // 2. Rolling Summarization
+                val summaryLimit = 10
+                val updatedSummary = if (messages.size > summaryLimit) {
+                    val verbatimLimit = 8
+                    val olderMessages = messages.dropLast(verbatimLimit + 1)
+                    val olderHistoryText = olderMessages.joinToString("\n") { msg ->
+                        val role = if (msg.isUser) "User" else "Assistant"
+                        val cleanText = if (msg.isUser) msg.text else ResponseParser.extractThinkingSegments(msg.text).second
+                        "- $role: ${cleanText.trim()}"
+                    }
+
+                    val currentSummary = currentSession.summary ?: "No summary yet."
+                    val summaryPrompt = """
+                        Update the following running summary of the conversation to incorporate these older messages. Keep the summary highly condensed and focus on the topics discussed and decisions made.
+                        Current Summary: $currentSummary
+                        Older Messages:
+                        $olderHistoryText
+                        New Summary:
+                    """.trimIndent()
+
+                    var newSummary = ""
+                    aiProvider.sendMessage(summaryPrompt).collect { token ->
+                        newSummary += token
+                    }
+                    newSummary = ResponseParser.extractThinkingSegments(newSummary).second.trim()
+                    if (newSummary.isNotEmpty() && !newSummary.startsWith("Error:")) newSummary else currentSession.summary
+                } else {
+                    currentSession.summary
+                }
+
+                // Save updated session
+                withContext(Dispatchers.Main) {
+                    val updatedSession = currentSession.copy(
+                        summary = updatedSummary,
+                        facts = updatedFacts
+                    )
+                    saveSessionEncrypted(updatedSession)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("KOSH_MEMORY", "Error running background memory updates: ${e.message}", e)
+            }
         }
     }
 

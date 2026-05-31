@@ -6,6 +6,7 @@ sealed interface ChatContentBlock {
     data class CodeBlock(val language: String, val code: String) : ChatContentBlock
     data class Sources(val items: List<SourceItem>) : ChatContentBlock
     data class MathBlock(val formula: String) : ChatContentBlock
+    data class Thinking(val content: String) : ChatContentBlock
 }
 
 data class ChecklistItem(
@@ -74,7 +75,180 @@ object ResponseParser {
     private val markdownLinkRegex = """\[([^\]]+)\]\((https?://[^\s)]+)\)""".toRegex()
     private val plainUrlRegex = """(?<!\]\()https?://[^\s)]+""".toRegex()
 
+    data class StreamState(
+        val isThinking: Boolean,
+        val thinkingContent: String,
+        val cleanResponse: String
+    )
+
+    fun parseStreamState(text: String): StreamState {
+        val state = parseStreamStateInternal(text)
+        return StreamState(
+            isThinking = state.isThinking,
+            thinkingContent = state.thinkingContent.trim(),
+            cleanResponse = state.cleanResponse.trim()
+        )
+    }
+
+    private fun parseStreamStateInternal(text: String): StreamState {
+        val xmlStart = text.indexOf("<thinking>")
+        val fenceStart = text.indexOf("```thinking")
+        
+        if (xmlStart == -1 && fenceStart == -1) {
+            return StreamState(isThinking = false, thinkingContent = "", cleanResponse = text)
+        }
+        
+        if (xmlStart != -1 && (fenceStart == -1 || xmlStart < fenceStart)) {
+            val xmlEnd = text.indexOf("</thinking>", xmlStart + 10)
+            val prefix = text.substring(0, xmlStart).trim()
+            if (xmlEnd != -1) {
+                val thinking = text.substring(xmlStart + 10, xmlEnd).trim()
+                val remaining = text.substring(xmlEnd + 11)
+                val subState = parseStreamStateInternal(remaining)
+                val cleanPrefix = stripTrailingListMarker(prefix)
+                return StreamState(
+                    isThinking = subState.isThinking,
+                    thinkingContent = if (thinking.isNotEmpty()) thinking + (if (subState.thinkingContent.isNotEmpty()) "\n" + subState.thinkingContent else "") else subState.thinkingContent,
+                    cleanResponse = cleanPrefix + (if (cleanPrefix.isNotEmpty() && subState.cleanResponse.isNotEmpty()) "\n" else "") + subState.cleanResponse
+                )
+            } else {
+                val thinking = text.substring(xmlStart + 10).trim()
+                val cleanPrefix = stripTrailingListMarker(prefix)
+                return StreamState(
+                    isThinking = true,
+                    thinkingContent = thinking,
+                    cleanResponse = cleanPrefix
+                )
+            }
+        } else {
+            val fenceEnd = text.indexOf("```", fenceStart + 11)
+            val prefix = text.substring(0, fenceStart).trim()
+            if (fenceEnd != -1) {
+                val thinking = text.substring(fenceStart + 11, fenceEnd).trim()
+                val remaining = text.substring(fenceEnd + 3)
+                val subState = parseStreamStateInternal(remaining)
+                val cleanPrefix = stripTrailingListMarker(prefix)
+                return StreamState(
+                    isThinking = subState.isThinking,
+                    thinkingContent = if (thinking.isNotEmpty()) thinking + (if (subState.thinkingContent.isNotEmpty()) "\n" + subState.thinkingContent else "") else subState.thinkingContent,
+                    cleanResponse = cleanPrefix + (if (cleanPrefix.isNotEmpty() && subState.cleanResponse.isNotEmpty()) "\n" else "") + subState.cleanResponse
+                )
+            } else {
+                val thinking = text.substring(fenceStart + 11).trim()
+                val cleanPrefix = stripTrailingListMarker(prefix)
+                return StreamState(
+                    isThinking = true,
+                    thinkingContent = thinking,
+                    cleanResponse = cleanPrefix
+                )
+            }
+        }
+    }
+
+    private fun stripTrailingListMarker(text: String): String {
+        return text.replace("""(?:\n|^)\s*[-*+•]\s*$""".toRegex(), "")
+                   .replace("""(?:\n|^)\s*\d+\.\s*$""".toRegex(), "")
+                   .trim()
+    }
+
+    fun extractThinkingSegments(text: String): Pair<List<String>, String> {
+        val xmlMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?<thinking>(.*?)(?:</thinking>|$)""".toRegex().findAll(text)
+        val fenceMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?```thinking\s*\n(.*?)(?:\n```|$)""".toRegex().findAll(text)
+        
+        val allMatches = (xmlMatches + fenceMatches).sortedBy { it.range.first }.toList()
+        
+        if (allMatches.isEmpty()) {
+            return Pair(emptyList(), text)
+        }
+        
+        val thinkingContents = mutableListOf<String>()
+        val cleanTextBuilder = java.lang.StringBuilder()
+        var lastIndex = 0
+        
+        for (match in allMatches) {
+            if (match.range.first < lastIndex) continue
+            if (match.range.first > lastIndex) {
+                cleanTextBuilder.append(text.substring(lastIndex, match.range.first))
+            }
+            thinkingContents.add(match.groupValues[1].trim())
+            lastIndex = match.range.last + 1
+        }
+        
+        if (lastIndex < text.length) {
+            cleanTextBuilder.append(text.substring(lastIndex))
+        }
+        
+        return Pair(thinkingContents, cleanTextBuilder.toString().trim())
+    }
+
     fun parse(text: String): List<ChatContentBlock> {
+        val xmlMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?<thinking>(.*?)(?:</thinking>|$)""".toRegex().findAll(text)
+        val fenceMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?```thinking\s*\n(.*?)(?:\n```|$)""".toRegex().findAll(text)
+        
+        val allMatches = (xmlMatches + fenceMatches).sortedBy { it.range.first }.toList()
+        val blocks = mutableListOf<ChatContentBlock>()
+        
+        if (allMatches.isEmpty()) {
+            val cleanBlocks = parseCleanText(text)
+            blocks.addAll(cleanBlocks)
+        } else {
+            var lastIndex = 0
+            for (match in allMatches) {
+                if (match.range.first < lastIndex) continue
+                
+                // Parse the clean text before this thinking block
+                if (match.range.first > lastIndex) {
+                    val subText = text.substring(lastIndex, match.range.first)
+                    blocks.addAll(parseCleanText(subText))
+                }
+                
+                val thinking = match.groupValues[1].trim()
+                if (thinking.isNotEmpty()) {
+                    blocks.add(ChatContentBlock.Thinking(thinking))
+                }
+                lastIndex = match.range.last + 1
+            }
+            
+            if (lastIndex < text.length) {
+                val remainingText = text.substring(lastIndex)
+                blocks.addAll(parseCleanText(remainingText))
+            }
+        }
+        
+        // Parse sources from the entire text
+        val sources = parseSources(text)
+        if (sources.isNotEmpty()) {
+            blocks.add(ChatContentBlock.Sources(sources))
+        }
+        
+        return blocks
+    }
+
+    private fun parseSources(text: String): List<SourceItem> {
+        val sources = mutableListOf<SourceItem>()
+        markdownLinkRegex.findAll(text).forEach { match ->
+            val title = match.groupValues[1]
+            val url = match.groupValues[2]
+            if (sources.none { it.url == url }) {
+                sources.add(SourceItem(title, url))
+            }
+        }
+        plainUrlRegex.findAll(text).forEach { match ->
+            val url = match.value
+            if (sources.none { it.url == url }) {
+                val title = try {
+                    val domain = java.net.URI(url).host ?: ""
+                    domain.replace("www.", "")
+                } catch (e: Exception) {
+                    "Web Link"
+                }
+                sources.add(SourceItem(title, url))
+            }
+        }
+        return sources
+    }
+
+    private fun parseCleanText(text: String): List<ChatContentBlock> {
         val blocks = mutableListOf<ChatContentBlock>()
         val lines = text.lines()
         
@@ -217,36 +391,6 @@ object ResponseParser {
         } else {
             flushText()
             flushChecklist()
-        }
-        
-        // Parse sources from the entire text
-        val sources = mutableListOf<SourceItem>()
-        
-        // Find markdown links
-        markdownLinkRegex.findAll(text).forEach { match ->
-            val title = match.groupValues[1]
-            val url = match.groupValues[2]
-            if (sources.none { it.url == url }) {
-                sources.add(SourceItem(title, url))
-            }
-        }
-        
-        // Find plain URLs
-        plainUrlRegex.findAll(text).forEach { match ->
-            val url = match.value
-            if (sources.none { it.url == url }) {
-                val title = try {
-                    val domain = java.net.URI(url).host ?: ""
-                    domain.replace("www.", "")
-                } catch (e: Exception) {
-                    "Web Link"
-                }
-                sources.add(SourceItem(title, url))
-            }
-        }
-        
-        if (sources.isNotEmpty()) {
-            blocks.add(ChatContentBlock.Sources(sources))
         }
         
         return blocks

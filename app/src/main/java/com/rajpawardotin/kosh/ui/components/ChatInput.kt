@@ -365,7 +365,7 @@ fun ChatInput(
                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                                 ))
                             } else if (isGenerating) {
-                                Brush.linearGradient(listOf(errorColor, errorContainer))
+                                SolidColor(errorColor)
                             } else {
                                 Brush.linearGradient(listOf(primary, secondary))
                             }
