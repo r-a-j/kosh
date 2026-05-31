@@ -72,6 +72,36 @@ fun ChatScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+
+    val activity = remember(context) {
+        var ctx = context
+        while (ctx is android.content.ContextWrapper) {
+            if (ctx is android.app.Activity) break
+            ctx = ctx.baseContext
+        }
+        ctx as? android.app.Activity
+    }
+
+    var lastBackPressTime by remember { mutableStateOf(0L) }
+
+    androidx.activity.compose.BackHandler(enabled = true) {
+        if (drawerState.isOpen) {
+            scope.launch { drawerState.close() }
+        } else if (showBottomSheet) {
+            showBottomSheet = false
+        } else if (viewModel.currentSessionId != null) {
+            viewModel.startNewChat()
+        } else {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastBackPressTime < 2000) {
+                activity?.finish()
+            } else {
+                lastBackPressTime = currentTime
+                Toast.makeText(context, "Press back one more time to exit", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val scrollState = rememberLazyListState()
     val emptyStateScrollState = rememberScrollState()
     val density = LocalDensity.current

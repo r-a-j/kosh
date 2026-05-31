@@ -17,6 +17,7 @@ Kosh is an offline-first, strictly private AI cognitive vault designed to operat
 - **Reactive State**: The UI consumes state from `ChatViewModel` via `StateFlow` and `mutableStateOf`. 
 - **Dynamic Renderers**: Uses a custom Markdown parser to format AI output. It supports live "Thinking" indicators, typing effects, and dynamically updates when chunks are streamed from the LiteRT engine.
 - **Visual Web Previews & Math**: Renders rich webpage favicon icons and OpenGraph images/videos inside the web sources carousel, alongside typesetting LaTeX block expressions.
+- **Double Back Exit & Navigation (BackHandler)**: Intercepts system back press events to drive intuitive, hardware-button navigation. It closes the side navigation drawer or settings bottom sheets if open. If inside a chat session, pressing back redirects to the home empty-state dashboard (resetting session state to a new chat). From the home dashboard, pressing back prompts the user with a `"Press back one more time to exit"` Toast, closing the activity if pressed again within 2 seconds.
 
 ## 2. Neural Core (Local LLM)
 - **LiteRT (TensorFlow Lite)**: The `LiteRTModelProvider` handles loading quantized `.litertlm` or `.bin` models into memory.
