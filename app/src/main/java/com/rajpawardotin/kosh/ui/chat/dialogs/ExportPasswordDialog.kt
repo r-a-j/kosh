@@ -32,7 +32,7 @@ fun ExportPasswordDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Set a password to encrypt your cognitive vault backup file.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text("Set a password to encrypt your backup file.", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },

@@ -224,9 +224,9 @@ fun ChatInput(
 
                     // Custom BasicTextField for polished padding and alignment
                     val placeholderText = when {
-                        !enabled -> "Neural Core Offline..."
+                        !enabled -> "Model Offline..."
                         isGenerating -> "Kosh is composing..."
-                        else -> "Neural Command..."
+                        else -> "Ask Kosh..."
                     }
                     val placeholderColor = when {
                         !enabled -> Color.Gray.copy(alpha = 0.3f)

@@ -30,7 +30,7 @@ class SearchProviderImpl(private val context: Context) : SearchProvider {
             val memoryInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memoryInfo)
             val freeRamGb = memoryInfo.availMem.toDouble() / (1024.0 * 1024.0 * 1024.0)
-            onStatusUpdate(String.format("Core RAM: %.1fGB free • Dynamic context optimized", freeRamGb))
+            onStatusUpdate(String.format("System RAM: %.1fGB free • Context optimized", freeRamGb))
             delay(600)
             
             if (urlsInQuery.isNotEmpty()) {

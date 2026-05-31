@@ -51,7 +51,7 @@ fun LockVaultDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFF03DAC5), modifier = Modifier.size(24.dp))
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Lock Vault", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
+                Text("Encrypt Chat", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp))
             }
         },
         text = {
@@ -61,7 +61,7 @@ fun LockVaultDialog(
                     .padding(top = 8.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                Text("Secure this conversation with AES-256 encryption. This will mask the title and content in history.", style = MaterialTheme.typography.bodyMedium)
+                Text("Secure this conversation with AES-256 encryption. This will mask the title and content in your history.", style = MaterialTheme.typography.bodyMedium)
                 
                 OutlinedTextField(
                     value = password,
@@ -160,7 +160,7 @@ fun LockVaultDialog(
                 if (isProcessing) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.Black, strokeWidth = 2.dp)
                 } else {
-                    Text("Seal Vault", fontWeight = FontWeight.Black)
+                    Text("Encrypt Chat", fontWeight = FontWeight.Black)
                 }
             }
         },

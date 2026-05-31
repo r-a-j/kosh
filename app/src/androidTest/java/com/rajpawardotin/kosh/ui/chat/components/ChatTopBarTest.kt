@@ -35,7 +35,7 @@ class ChatTopBarTest {
             )
         }
 
-        // We expect the model path file name (without extension and mapped "model" -> "Neural Core") to be uppercase
+        // We expect the model path file name (without extension and mapped "model" -> "Model") to be uppercase
         composeTestRule.onNodeWithText("GEMINI-1.5-PRO").assertExists()
     }
 
@@ -58,14 +58,14 @@ class ChatTopBarTest {
             )
         }
 
-        composeTestRule.onNodeWithText("SELECT CORE").assertExists()
+        composeTestRule.onNodeWithText("SELECT MODEL").assertExists()
     }
 
     @Test
     fun chatTopBar_showsLockSettingsIconWhenEncryptedAndLocked() {
         val session = ChatSession(
             id = "test-session",
-            title = "Secure Vault",
+            title = "Secure Chat",
             createdAt = 123456789L,
             lastActive = 123456789L,
             modelPath = null,
@@ -90,8 +90,8 @@ class ChatTopBarTest {
             )
         }
 
-        // Icon should have contentDescription "Vault Lock Settings"
-        composeTestRule.onNodeWithContentDescription("Vault Lock Settings").assertExists()
+        // Icon should have contentDescription "Chat Lock Settings"
+        composeTestRule.onNodeWithContentDescription("Chat Lock Settings").assertExists()
     }
 
     @Test
@@ -152,7 +152,7 @@ class ChatTopBarTest {
     fun chatTopBar_temporarySession_hidesLockIcon() {
         val session = ChatSession(
             id = "test-session",
-            title = "Secure Vault",
+            title = "Secure Chat",
             createdAt = 123456789L,
             lastActive = 123456789L,
             modelPath = null,
@@ -177,7 +177,7 @@ class ChatTopBarTest {
             )
         }
 
-        // Vault Lock Settings button should not be displayed in temporary sessions
-        composeTestRule.onNodeWithContentDescription("Vault Lock Settings").assertDoesNotExist()
+        // Chat Lock Settings button should not be displayed in temporary sessions
+        composeTestRule.onNodeWithContentDescription("Chat Lock Settings").assertDoesNotExist()
     }
 }

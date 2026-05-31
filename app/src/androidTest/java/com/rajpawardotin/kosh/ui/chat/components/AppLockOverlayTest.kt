@@ -22,8 +22,8 @@ class AppLockOverlayTest {
             )
         }
 
-        // The overlay should have a button with text "UNLOCK VAULT"
-        composeTestRule.onNodeWithText("UNLOCK VAULT").assertExists()
+        // The overlay should have a button with text "UNLOCK CHAT"
+        composeTestRule.onNodeWithText("UNLOCK CHAT").assertExists()
     }
 
     @Test
@@ -35,7 +35,7 @@ class AppLockOverlayTest {
             )
         }
 
-        composeTestRule.onNodeWithText("UNLOCK VAULT").performClick()
+        composeTestRule.onNodeWithText("UNLOCK CHAT").performClick()
         assert(clicked)
     }
 }

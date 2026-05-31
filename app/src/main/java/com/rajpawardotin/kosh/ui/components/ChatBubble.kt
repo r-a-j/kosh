@@ -74,7 +74,7 @@ fun ChatBubble(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = if (message.isSystemMessage) "System Core" else "Neural AI",
+                    text = if (message.isSystemMessage) "System" else "Assistant",
                     style = MaterialTheme.typography.labelMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
@@ -230,7 +230,7 @@ fun ChatBubble(
                         onStopTts = { onStopTts?.invoke() }
                     )
                     Text(
-                        text = "Neural OS is an AI and can make mistakes. Verify important info.",
+                        text = "Kosh may make mistakes. Verify important info.",
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 11.sp,
                             color = Color.White.copy(alpha = 0.5f)

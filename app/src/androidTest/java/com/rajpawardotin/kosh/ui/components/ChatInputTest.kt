@@ -62,7 +62,7 @@ class ChatInputTest {
         }
 
         // Initially value is empty, click to focus and type
-        val inputNode = composeTestRule.onNodeWithText("Neural Command...")
+        val inputNode = composeTestRule.onNodeWithText("Ask Kosh...")
         inputNode.performTextInput("Hello Kosh")
         assert(typedText == "Hello Kosh")
     }
@@ -137,7 +137,7 @@ class ChatInputTest {
             )
         }
 
-        composeTestRule.onNodeWithText("Neural Core Offline...").assertExists()
+        composeTestRule.onNodeWithText("Model Offline...").assertExists()
     }
 
     @Test

@@ -30,23 +30,23 @@ class LockVaultDialogTest {
         }
 
         // Initially submit button should be disabled because passwords are empty
-        composeTestRule.onNodeWithText("Seal Vault").assertExists()
+        composeTestRule.onNodeWithText("Encrypt Chat").assertExists()
         
         // Enter password
         composeTestRule.onNodeWithText("Set Passcode").performTextInput("secure123")
-        composeTestRule.onNodeWithText("Seal Vault").performClick()
+        composeTestRule.onNodeWithText("Encrypt Chat").performClick()
         
         // Should not have submitted yet because confirm password is empty
         assert(submittedPassword.isEmpty())
 
         // Enter wrong confirm password
         composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("secure12")
-        composeTestRule.onNodeWithText("Seal Vault").performClick()
+        composeTestRule.onNodeWithText("Encrypt Chat").performClick()
         assert(submittedPassword.isEmpty())
 
         // Enter correct confirm password
         composeTestRule.onNodeWithText("Confirm Passcode").performTextInput("3") // "secure123"
-        composeTestRule.onNodeWithText("Seal Vault").performClick()
+        composeTestRule.onNodeWithText("Encrypt Chat").performClick()
         
         // Should submit successfully
         assert(submittedPassword == "secure123")

@@ -169,7 +169,7 @@ class ChatViewModel(
                                         modelPath = profile.filePath
                                         isEngineReady = false
                                         isCopyingModel = false
-                                        showToast("Core ${profile.name} ready for ignition")
+                                        showToast("Model ${profile.name} ready")
                                     }
                                 }
                             } else {
@@ -232,7 +232,7 @@ class ChatViewModel(
     
     // New UX states for 2026 Edition
     var isThinking by mutableStateOf(false)
-    var agenticStateLabel by mutableStateOf("Neural Standby")
+    var agenticStateLabel by mutableStateOf("Ready")
     
     // Performance Dashboard Metrics
     var npuLoad by mutableStateOf(0)
@@ -296,7 +296,7 @@ class ChatViewModel(
         generationJob = null
         isGenerating = false
         isThinking = false
-        agenticStateLabel = "Neural Standby"
+        agenticStateLabel = "Ready"
     }
 
     fun clearActiveSessionKeys() {
@@ -1314,10 +1314,10 @@ class ChatViewModel(
                 isInitializing = false
                 isEngineReady = aiProvider.isInitialized
                 if (isEngineReady) {
-                    showToast("Neural Core ignited successfully!")
+                    showToast("Model loaded successfully!")
                 } else {
                     val error = result.exceptionOrNull()?.localizedMessage ?: "Unknown configuration error"
-                    showToast("Ignition failed: $error")
+                    showToast("Failed to load model: $error")
                 }
             }
         }
@@ -1374,7 +1374,7 @@ class ChatViewModel(
         prompt = ""
         isGenerating = true
         isThinking = true
-        agenticStateLabel = "Initiating Neural Path..."
+        agenticStateLabel = "Initializing..."
         currentResponseChunk = ""
 
         generationJob = viewModelScope.launch(safeIoDispatcher) {
@@ -1384,14 +1384,14 @@ class ChatViewModel(
                 if (!aiProvider.isInitialized) {
                     withContext(Dispatchers.Main) {
                         isThinking = true
-                        agenticStateLabel = "Igniting Neural Core..."
+                        agenticStateLabel = "Loading model..."
                     }
                     val initResult = aiProvider.initialize(currentPath, selectedBackend)
                     withContext(Dispatchers.Main) {
                         isEngineReady = aiProvider.isInitialized
                         if (!initResult.isSuccess || !aiProvider.isInitialized) {
                             val errorMsg = initResult.exceptionOrNull()?.localizedMessage ?: "Unknown initialization error"
-                            showToast("Ignition failed: $errorMsg")
+                            showToast("Failed to load model: $errorMsg")
                         }
                     }
                     if (!aiProvider.isInitialized) {
@@ -1431,7 +1431,7 @@ class ChatViewModel(
                             showToast("Failed to process ${file.fileName}: ${e.localizedMessage}")
                             isGenerating = false
                             isThinking = false
-                            agenticStateLabel = "Neural Standby"
+                            agenticStateLabel = "Ready"
                         }
                         return@launch
                     }
@@ -1465,7 +1465,7 @@ class ChatViewModel(
                 if (shouldSearch) {
                     withContext(Dispatchers.Main) { 
                         isSearchingInternet = true 
-                        agenticStateLabel = "Querying Web Knowledge..."
+                        agenticStateLabel = "Searching the web..."
                     }
                     
                     searchQuery = determineSearchQuery(rawPrompt)
@@ -1476,7 +1476,7 @@ class ChatViewModel(
                     }
                     
                     withContext(Dispatchers.Main) { 
-                        agenticStateLabel = "Integrating Search Context..."
+                        agenticStateLabel = "Adding search results..."
                     }
                     delay(300)
                     withContext(Dispatchers.Main) {
@@ -1549,7 +1549,7 @@ class ChatViewModel(
 
                 withContext(Dispatchers.Main) { 
                     isThinking = true
-                    agenticStateLabel = "Processing Token Graphs..." 
+                    agenticStateLabel = "Thinking..." 
                 }
 
                 // Small delay to make the "Thinking" animation visible and organic
@@ -1571,13 +1571,13 @@ class ChatViewModel(
                     onTokenReceived = { token ->
                         withContext(Dispatchers.Main) {
                             if (currentResponseChunk.isEmpty()) {
-                                agenticStateLabel = "Structuring Output..."
+                                agenticStateLabel = "Formatting response..."
                             }
                             currentResponseChunk += token
                             
                             // Check repetition loop synchronously on Main thread
                             if (hasRepetitionLoop(currentResponseChunk)) {
-                                currentResponseChunk += "\n\n[Neural Loop Protection: Repetition halted]"
+                                currentResponseChunk += "\n\n[Repetition halted]"
                                 stopGeneration()
                                 showToast("Repetition loop detected. Halting generation.")
                             }
@@ -1669,7 +1669,7 @@ class ChatViewModel(
                 withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
                     isGenerating = false
                     isThinking = false
-                    agenticStateLabel = "Neural Standby"
+                    agenticStateLabel = "Ready"
                     tokensPerSecond = 0f
                 }
             }

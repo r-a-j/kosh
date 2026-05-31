@@ -95,7 +95,7 @@ fun ChatEmptyState(
         Spacer(modifier = Modifier.height(14.dp))
         
         Text(
-            text = if (isTemporarySession) "Temporary Vault" else "Kosh Neural Vault",
+            text = if (isTemporarySession) "Temporary Session" else "Kosh Private Chat",
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = (-0.5).sp,
@@ -107,9 +107,9 @@ fun ChatEmptyState(
         
         Text(
             text = if (isTemporarySession) 
-                "History is disabled. Session keys will be shredded upon lock." 
+                "History is disabled. Session keys will be deleted when locked." 
             else 
-                "Private, local intelligence dashboard running strictly on-device.",
+                "Secure local chat running entirely on your device.",
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 13.sp,
                 lineHeight = 18.sp
@@ -131,7 +131,7 @@ fun ChatEmptyState(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = "EXIT TEMPORARY VAULT",
+                    text = "EXIT TEMPORARY SESSION",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.8.sp,
@@ -149,8 +149,8 @@ fun ChatEmptyState(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            StatusChip(label = "Core", value = "LiteRT", color = Color(0xFF10B981))
-            StatusChip(label = "Vault", value = "AES-GCM", color = Color(0xFF06B6D4))
+            StatusChip(label = "Engine", value = "LiteRT", color = Color(0xFF10B981))
+            StatusChip(label = "Encryption", value = "AES-GCM", color = Color(0xFF06B6D4))
             StatusChip(label = "Hardware", value = "NPU", color = Color(0xFF8B5CF6))
         }
 
@@ -164,7 +164,7 @@ fun ChatEmptyState(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "CONNECTED SKILLS & AGENTS",
+                text = "CONNECTED TOOLS",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
@@ -262,7 +262,7 @@ fun ChatEmptyState(
 
             // A final full-width featured card for general coding/logic assistant
             SuggestionCardFullWidth(
-                title = "Neural Logic & Coding",
+                title = "Code & Logic Helper",
                 desc = "Write classes, debug logic, or run local brainstorming routines",
                 promptText = "Write a Kotlin class to handle binary search recursively.",
                 icon = Icons.Default.Lightbulb,

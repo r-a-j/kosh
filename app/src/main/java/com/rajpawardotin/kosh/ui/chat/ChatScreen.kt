@@ -78,7 +78,7 @@ fun ChatScreen(
     var inputHeightDp by remember { mutableStateOf(80.dp) }
     
     // Configurable fading edge thickness/height
-    var topFadeHeightDp by remember { mutableStateOf(32.dp) }
+    var topFadeHeightDp by remember { mutableStateOf(16.dp) }
     var headerHeightDp by remember { mutableStateOf(80.dp) }
 
     val isHistoryEmpty = viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()
@@ -124,7 +124,7 @@ fun ChatScreen(
             if (isSessionLocked && currentSession.encryptedKeyBiometric != null) {
                 viewModel.unlockSessionWithBiometrics(currentSessionId, context) { success ->
                     if (success) {
-                        Toast.makeText(context, "Vault Unlocked via Biometrics", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Chat Unlocked via Biometrics", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -505,7 +505,7 @@ fun ChatScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp),
+                                .padding(bottom = 4.dp),
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Surface(
@@ -525,7 +525,7 @@ fun ChatScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "TEMPORARY VAULT (NOT SAVED)",
+                                        text = "TEMPORARY SESSION (NOT SAVED)",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
                                             letterSpacing = 1.sp
@@ -667,7 +667,7 @@ fun ChatScreen(
                 onDismiss = {
                     showRecoveryPhraseDialog = false
                     sessionRecoveryMnemonic = null
-                    Toast.makeText(context, "Neural Vault Secured", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Chat Locked & Secured", Toast.LENGTH_SHORT).show()
                 }
             )
         }
@@ -1058,7 +1058,7 @@ fun LockedVaultScreen(
                     modifier = Modifier.padding(horizontal = 12.dp)
                 ) {
                     Text(
-                        text = "COGNITIVE VAULT SEALED",
+                        text = "SECURE CHAT LOCKED",
                         style = if (isCompact) {
                             MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Black, 
@@ -1231,7 +1231,7 @@ fun LockedVaultScreen(
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
                         } else {
                             Text(
-                                "UNLOCK VAULT", 
+                                "UNLOCK CHAT", 
                                 color = if (password.isNotEmpty() && !isProcessing) Color.Black else Color.White.copy(alpha = 0.3f),
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.Black, 
@@ -1301,7 +1301,7 @@ fun LockedVaultScreen(
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            "VAULT RECOVERY",
+                            "CHAT RECOVERY",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -1325,7 +1325,7 @@ fun LockedVaultScreen(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Text(
-                                "Enter your offline 12-word mnemonic phrase. Correct entropy validation will securely rebuild your access keys and update your passcode.",
+                                "Enter your 12-word recovery phrase. Validating the phrase will securely rebuild your access keys and update your passcode.",
                                 color = Color(0xFFFF9100).copy(alpha = 0.9f),
                                 style = MaterialTheme.typography.bodySmall,
                                 lineHeight = 16.sp

@@ -50,13 +50,13 @@ fun ChatTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
+            .padding(top = 4.dp, start = 12.dp, end = 12.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left: 2-line Hamburger Menu (40.dp glassmorphic circle)
+        // Left: 2-line Hamburger Menu (38.dp glassmorphic circle)
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(38.dp)
                 .clip(CircleShape)
                 .background(Color.White.copy(alpha = 0.03f))
                 .border(1.dp, Color.White.copy(alpha = 0.06f), CircleShape)
@@ -64,19 +64,19 @@ fun ChatTopBar(
             contentAlignment = Alignment.Center
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.5.dp),
                 horizontalAlignment = Alignment.Start,
                 modifier = Modifier.width(18.dp)
             ) {
-                Box(modifier = Modifier.width(18.dp).height(1.5.dp).background(Color.White.copy(alpha = 0.9f)))
-                Box(modifier = Modifier.width(12.dp).height(1.5.dp).background(Color.White.copy(alpha = 0.9f)))
+                Box(modifier = Modifier.width(18.dp).height(2.dp).background(Color.White.copy(alpha = 0.9f)))
+                Box(modifier = Modifier.width(12.dp).height(2.dp).background(Color.White.copy(alpha = 0.9f)))
             }
         }
 
         // Safety margin between left menu and center selector
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
-        // Center: Dropdown Selector (40.dp height, centering content)
+        // Center: Dropdown Selector (38.dp height, centering content)
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
@@ -84,18 +84,18 @@ fun ChatTopBar(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .height(40.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(19.dp))
                     .background(Color.White.copy(alpha = 0.03f))
-                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(19.dp))
                     .clickable { onCoreSelectorClick() }
-                    .padding(horizontal = 14.dp)
+                    .padding(horizontal = 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
                     tint = Color(0xFF03DAC5),
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -104,20 +104,20 @@ fun ChatTopBar(
                             File(it).name
                                 .replace(".litertlm", "")
                                 .replace(".bin", "")
-                                .replace("model", "Neural Core")
+                                .replace("model", "Model")
                                 .uppercase()
                                 .replace("_QUALCOMM_SM8750", " (NPU)")
                                 .replace("_QUALCOMM", " (NPU)")
                                 .replace("_SM8750", " (NPU)")
                                 .replace("-IT", "")
-                        } ?: "NEURAL CORE"
+                        } ?: "LOCAL MODEL"
                     } else {
-                        "SELECT CORE"
+                        "SELECT MODEL"
                     },
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
-                        fontSize = 11.5.sp
+                        letterSpacing = 0.6.sp,
+                        fontSize = 12.sp
                     ),
                     color = Color.White.copy(alpha = 0.9f),
                     maxLines = 1,
@@ -129,23 +129,23 @@ fun ChatTopBar(
                     imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = "Select Core",
                     tint = Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }
 
         // Safety margin between center selector and right actions
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(8.dp))
 
-        // Right: Unified Actions Capsule (40.dp height, 34.dp buttons)
+        // Right: Unified Actions Capsule (38.dp height, 32.dp buttons)
         Row(
             modifier = Modifier
-                .height(40.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .height(38.dp)
+                .clip(RoundedCornerShape(19.dp))
                 .background(Color.White.copy(alpha = 0.03f))
-                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(20.dp))
-                .padding(horizontal = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(19.dp))
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Action 1: Chat Lock Management Button
@@ -155,7 +155,7 @@ fun ChatTopBar(
 
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(
                             if (isEncrypted) {
@@ -174,7 +174,7 @@ fun ChatTopBar(
                 ) {
                     Icon(
                         imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                        contentDescription = "Vault Lock Settings",
+                        contentDescription = "Chat Lock Settings",
                         tint = if (isEncrypted) {
                             if (isUnlocked) Color(0xFF03DAC5) else Color(0xFFEF5350)
                         } else Color.White.copy(alpha = 0.6f),
@@ -186,7 +186,7 @@ fun ChatTopBar(
             // Action 2: Temporary Chat Button
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(
                         if (isTemporarySession) Color(0xFFFF9100).copy(alpha = 0.15f)
@@ -208,7 +208,7 @@ fun ChatTopBar(
             // Action 3: New Saved Chat Button
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.05f))
                     .border(
@@ -234,7 +234,7 @@ fun ChatTopBar(
             // Action 4: Settings & Core Configuration Button
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .clickable { onSettingsClick() },
                 contentAlignment = Alignment.Center

@@ -94,7 +94,7 @@ fun NeuralCoreWizard(
             if (isCheckingModels) {
                 StepScanningModels()
             } else if (modelPath == null) {
-                // Step 1: Load Core Intelligence
+                // Step 1: Load Model
                 Step1LoadModel(
                     isCopyingModel = isCopyingModel,
                     onPickModel = onPickModel
@@ -141,7 +141,7 @@ fun Step1LoadModel(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "NEURAL OS OFFLINE",
+                text = "NO MODEL LOADED",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
@@ -151,7 +151,7 @@ fun Step1LoadModel(
             )
 
             Text(
-                text = "Kosh operates 100% locally. To get started, load a compatible LiteRT (.litertlm / .bin) model file into your secure vault library.",
+                text = "Kosh operates 100% locally. To get started, load a compatible LiteRT (.litertlm / .bin) model file into your model library.",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                 color = Color.Gray,
                 textAlign = TextAlign.Center
@@ -236,11 +236,11 @@ fun Step1LoadModel(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Copying Core...", fontWeight = FontWeight.Bold)
+                    Text("Copying model...", fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Default.FolderOpen, contentDescription = null)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("LOAD CORE MODEL", fontWeight = FontWeight.Bold)
+                    Text("LOAD MODEL", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -268,7 +268,7 @@ fun Step2Ignite(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "CORE READY FOR SYNC",
+                text = "MODEL READY",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
@@ -365,9 +365,9 @@ fun Step2Ignite(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("SYNCHRONIZING CORE...", fontWeight = FontWeight.Bold)
+                    Text("INITIALIZING MODEL...", fontWeight = FontWeight.Bold)
                 } else {
-                    Text("IGNITE NEURAL CORE", fontWeight = FontWeight.Bold)
+                    Text("INITIALIZE MODEL", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -388,7 +388,7 @@ fun StepScanningModels() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                text = "SCANNING SYSTEM LIBRARY...",
+                text = "SCANNING MODEL LIBRARY...",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Black,
                     letterSpacing = 2.sp
@@ -398,7 +398,7 @@ fun StepScanningModels() {
             )
 
             Text(
-                text = "Kosh is scanning for offline intelligence cores in your secure vault library. Accessing files...",
+                text = "Kosh is checking for offline models in your model library. Accessing files...",
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
                 color = Color.Gray,
                 textAlign = TextAlign.Center

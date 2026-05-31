@@ -53,7 +53,7 @@ fun AppLockOverlay(
             )
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "KOSH SECURE VAULT",
+                text = "KOSH SECURE CHAT",
                 style = MaterialTheme.typography.titleLarge.copy(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp,
@@ -63,7 +63,7 @@ fun AppLockOverlay(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Authentication required to access cognitive vaults",
+                text = "Authentication required to access secure chats",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray,
                 textAlign = TextAlign.Center
@@ -88,7 +88,7 @@ fun AppLockOverlay(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "UNLOCK VAULT",
+                    text = "UNLOCK CHAT",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }

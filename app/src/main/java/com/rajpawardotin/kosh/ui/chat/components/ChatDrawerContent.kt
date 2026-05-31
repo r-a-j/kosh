@@ -70,7 +70,7 @@ fun ChatDrawerContent(
                 }
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "COGNITIVE VAULTS",
+                    text = "SECURE CHATS",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 1.5.sp,
@@ -114,7 +114,7 @@ fun ChatDrawerContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    "New Brainstorm",
+                    "New Chat",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -140,7 +140,7 @@ fun ChatDrawerContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No cognitive vaults yet.",
+                        text = "No secure chats yet.",
                         color = Color.Gray,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -235,7 +235,7 @@ fun ChatDrawerContent(
                                         if (viewModel.currentSessionId == session.id) {
                                             viewModel.loadSession(session.id)
                                         }
-                                        Toast.makeText(context, "Vault Locked", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 modifier = Modifier.size(24.dp)

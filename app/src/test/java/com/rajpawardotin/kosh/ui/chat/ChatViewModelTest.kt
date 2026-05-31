@@ -422,7 +422,7 @@ class ChatViewModelTest {
         // Active states should be reset
         assertFalse(viewModel.isGenerating)
         assertFalse(viewModel.isThinking)
-        assertEquals("Neural Standby", viewModel.agenticStateLabel)
+        assertEquals("Ready", viewModel.agenticStateLabel)
     }
 
     @Test
@@ -447,7 +447,7 @@ class ChatViewModelTest {
         // The last message in chatMessages must have the Neural Loop Protection warning
         assertTrue(viewModel.chatMessages.isNotEmpty())
         val lastMsg = viewModel.chatMessages.last()
-        assertTrue(lastMsg.text.contains("[Neural Loop Protection: Repetition halted]"))
+        assertTrue(lastMsg.text.contains("[Repetition halted]"))
         
         // Clean up
         fakeAI.customFlow = null

@@ -108,16 +108,16 @@ fun ModelConfigCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (modelPath == null) "Load Intelligence" else File(modelPath).name,
+                        text = if (modelPath == null) "Load Model" else File(modelPath).name,
                         style = MaterialTheme.typography.titleMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = when {
-                            isEngineReady -> "Neural Core Active"
+                            isEngineReady -> "Model Active"
                             modelPath != null -> "Standby • Ready for Init"
-                            else -> "No Active Core"
+                            else -> "No Active Model"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isEngineReady) Color(0xFF03DAC5) else Color.Gray
@@ -358,7 +358,7 @@ fun ModelConfigCard(
                             Spacer(modifier = Modifier.width(12.dp))
                             Text("Ignition...", fontWeight = FontWeight.Bold)
                         } else {
-                            Text("Ignite Neural Engine", fontWeight = FontWeight.Bold)
+                            Text("Initialize Model", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -374,7 +374,7 @@ fun ModelConfigCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Cognitive Library",
+                    text = "Model Library",
                     style = MaterialTheme.typography.labelMedium,
                     color = Color.Gray,
                     fontWeight = FontWeight.Bold

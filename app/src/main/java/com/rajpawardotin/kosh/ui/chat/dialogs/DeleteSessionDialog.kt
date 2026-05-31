@@ -39,14 +39,14 @@ fun DeleteSessionDialog(
         containerColor = Color(0xFF16161A),
         titleContentColor = Color.White,
         textContentColor = Color.White.copy(alpha = 0.8f),
-        title = { Text("Delete Cognitive Vault", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+        title = { Text("Delete Chat", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Are you sure you want to permanently delete this chat history?")
 
                 if (isEncrypted) {
                     Text(
-                        text = "This vault is locked. Provide your passcode to authorize deletion.",
+                        text = "This chat is locked. Enter your passcode to delete it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.Gray
                     )
