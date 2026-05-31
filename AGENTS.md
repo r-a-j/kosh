@@ -2,6 +2,8 @@
 
 > [!IMPORTANT]
 > **ABSOLUTE RULE FOR ALL AGENTS:** Do NOT commit or push code to GitHub without explicit permission from the user. Even if you have generated documentation or completed verification tests, you must stop, summarize your changes, and ask the user if they would like to commit and push. Never execute a commit or push command without this explicit user directive.
+>
+> **ABSOLUTE RULE FOR ALL AGENTS:** Do NOT write project-specific documentation or knowledge base entries to the global `.gemini` folder or global agent knowledge directories (e.g., `C:\Users\raj24\.gemini\antigravity\knowledge`). All technical specifications, architecture blueprints, execution flows, and project-specific knowledge base documents must be saved strictly under Kosh's local `docs/` folder in this repository.
 
 This file contains concise, actionable guidance for AI coding agents working in this repository. Focus on discoverable patterns, key integration points, and exact commands.
 

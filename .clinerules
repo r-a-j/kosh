@@ -1,0 +1,20 @@
+# Kosh Agent Rules
+
+## Absolute Rules
+- **Do NOT commit or push code to GitHub without explicit permission from the user.** Even if you have generated documentation or completed verification tests, you must stop, summarize your changes, and ask the user if they would like to commit and push. Never execute a commit or push command without this explicit user directive.
+- **Do NOT write project-specific documentation or knowledge base entries to the global `.gemini` folder or global agent knowledge directories** (e.g., `C:\Users\raj24\.gemini\antigravity\knowledge`). All technical specifications, architecture blueprints, execution flows, and project-specific knowledge base documents must be saved strictly under Kosh's local `docs/` folder in this repository.
+
+## Developer Workflows
+- **Build (Windows PowerShell):**
+  ```powershell
+  # Assemble debug APK and run unit tests
+  .\gradlew.bat assembleDebug; .\gradlew.bat test
+  # Run instrumentation tests (device/emulator connected)
+  .\gradlew.bat connectedAndroidTest
+  ```
+
+## Project Conventions
+- **Models:** Treat as first-class assets under `context.filesDir/models`. Imports enforce exact byte size check (`ModelLibraryManager.importModel`). Minimum valid model size is 100 MB (`100 * 1024 * 1024` bytes).
+- **Backend Strings:** Must be exactly `"CPU"`, `"GPU"`, or `"NPU (Qualcomm)"` when calling `aiProvider.initialize(...)`.
+- **Engine Crash Sentinel:** Writes `engine_crashed=true` synchronously before JNI initialization and clears it on return. Preserve the resilience flow in `ChatViewModel.initializeEngine()` and `docs/resilience.md`.
+- **JNI Shutdown:** `LiteRTModelProvider.close()` performs JNI close on a background thread to avoid deadlocks. Do not close on the UI thread.
