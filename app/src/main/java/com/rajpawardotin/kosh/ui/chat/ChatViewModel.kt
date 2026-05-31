@@ -1226,6 +1226,18 @@ class ChatViewModel(
         }
     }
 
+    fun updateMessageFeedback(messageId: String, feedback: Int) {
+        val index = chatMessages.indexOfFirst { it.id == messageId }
+        if (index != -1) {
+            chatMessages[index] = chatMessages[index].copy(feedback = feedback)
+        }
+        if (!isTemporarySession) {
+            viewModelScope.launch(safeIoDispatcher) {
+                messageRepository.updateMessageFeedback(messageId, feedback)
+            }
+        }
+    }
+
     var selectedBackend by mutableStateOf(
         settingsProvider.getString("selected_backend", "GPU")
     )

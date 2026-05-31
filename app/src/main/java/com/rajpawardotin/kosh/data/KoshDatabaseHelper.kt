@@ -37,7 +37,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
 
 
@@ -67,6 +67,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         private const val KEY_MESSAGE_IS_SYSTEM = "is_system"
         private const val KEY_MESSAGE_CREATED_AT = "created_at"
         private const val KEY_MESSAGE_SOURCE_DOCUMENTS = "source_documents"
+        private const val KEY_MESSAGE_FEEDBACK = "feedback"
 
         // Checklist Table
         private const val TABLE_CHECKLIST = "checklist_states"
@@ -107,6 +108,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $KEY_MESSAGE_IS_SYSTEM INTEGER,
                 $KEY_MESSAGE_CREATED_AT INTEGER,
                 $KEY_MESSAGE_SOURCE_DOCUMENTS TEXT,
+                $KEY_MESSAGE_FEEDBACK INTEGER DEFAULT 0,
                 FOREIGN KEY($KEY_MESSAGE_SESSION_ID) REFERENCES $TABLE_SESSIONS($KEY_SESSION_ID) ON DELETE CASCADE
             )
         """.trimIndent()
@@ -277,6 +279,9 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('ideas', 'Ideas', '#F59E0B')")
             db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('notes', 'Notes', '#10B981')")
         }
+        if (oldVersion < 7) {
+            db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $KEY_MESSAGE_FEEDBACK INTEGER DEFAULT 0")
+        }
     }
 
 
@@ -394,6 +399,7 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(KEY_MESSAGE_IS_SYSTEM, if (message.isSystemMessage) 1 else 0)
             put(KEY_MESSAGE_CREATED_AT, System.currentTimeMillis())
             put(KEY_MESSAGE_SOURCE_DOCUMENTS, message.sourceDocuments)
+            put(KEY_MESSAGE_FEEDBACK, message.feedback)
         }
         val rowsUpdated = db.update(TABLE_MESSAGES, values, "$KEY_MESSAGE_ID = ?", arrayOf(message.id))
         if (rowsUpdated == 0) {
@@ -412,9 +418,11 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 val userIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_USER)
                 val systemIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_IS_SYSTEM)
                 val sourceDocsIdx = cursor.getColumnIndex(KEY_MESSAGE_SOURCE_DOCUMENTS)
+                val feedbackIdx = cursor.getColumnIndexOrThrow(KEY_MESSAGE_FEEDBACK)
 
                 do {
                     val sourceDocs = if (sourceDocsIdx != -1 && !cursor.isNull(sourceDocsIdx)) cursor.getString(sourceDocsIdx) else null
+                    val feedbackVal = cursor.getInt(feedbackIdx)
                     messagesList.add(
                         ChatMessage(
                             id = cursor.getString(idIdx),
@@ -422,13 +430,22 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                             isUser = cursor.getInt(userIdx) == 1,
                             isSystemMessage = cursor.getInt(systemIdx) == 1,
                             isStreaming = false,
-                            sourceDocuments = sourceDocs
+                            sourceDocuments = sourceDocs,
+                            feedback = feedbackVal
                         )
                     )
                 } while (cursor.moveToNext())
             }
         }
         return messagesList
+    }
+
+    fun updateMessageFeedback(messageId: String, feedback: Int) = synchronized(this) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(KEY_MESSAGE_FEEDBACK, feedback)
+        }
+        db.update(TABLE_MESSAGES, values, "$KEY_MESSAGE_ID = ?", arrayOf(messageId))
     }
 
     fun saveChecklistState(messageId: String, itemIndex: Int, isChecked: Boolean) = synchronized(this) {

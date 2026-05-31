@@ -169,6 +169,15 @@ class FakeMessageRepository : MessageRepository {
         }
         return result
     }
+
+    override fun updateMessageFeedback(messageId: String, feedback: Int) {
+        messages.forEach { (sessionId, list) ->
+            val index = list.indexOfFirst { it.id == messageId }
+            if (index != -1) {
+                list[index] = list[index].copy(feedback = feedback)
+            }
+        }
+    }
 }
 
 class FakeDocumentRepository : DocumentRepository {

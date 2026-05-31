@@ -22,4 +22,8 @@ class SQLiteMessageRepository(
     override fun getChecklistStatesForSession(sessionId: String): Map<String, Boolean> {
         return dbHelper.getChecklistStatesForSession(sessionId)
     }
+
+    override fun updateMessageFeedback(messageId: String, feedback: Int) {
+        dbHelper.updateMessageFeedback(messageId, feedback)
+    }
 }

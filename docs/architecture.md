@@ -64,3 +64,15 @@ Kosh is an offline-first, strictly private AI cognitive vault designed to operat
 - **Sandbox WebView & Execution Guards**: Executes untrusted JS plugins on a headless WebView with timeout bounds and limits turn count to 5 to avoid infinite loops.
 - **For details, see [agent_and_skills.md](agent_and_skills.md)**.
 
+## 9. Relational Chat Tagging System
+- **SQLite Schema Relations**: Implemented in database version 6. It manages tags through a `tags` table (storing unique `id`, human-readable `name`, and custom `color` hex string) and a `session_tags` mapping table (connecting `session_id` and `tag_id` with foreign keys and cascade constraints).
+- **Curated Theme Colors**: Users can assign one of 20 logical, high-contrast, theme-adaptive colors using a dynamic slider/carousel to visually differentiate sessions on the home empty-state dashboard.
+- **Single-Query Session Joins**: To keep session loading efficient, `KoshDatabaseHelper` loads all `session_tags` and `tags` via a single joined query, caching them into a memory map to populate `ChatSession.tags` in a single pass.
+- **Cascaded Integrity Checks**: Removing a tag queries the database for session associations first. If the association count $N > 0$, the app prompts with a warning confirmation dialog before executing the SQLite cascade deletion to clean up junction rows automatically.
+
+## 10. Response Feedback & SQLite Persistence
+- **DB Schema Upgrade (v7)**: Introduces database version 7, adding an unencrypted `feedback` `INTEGER` column to the `messages` table defaulting to `0` (Neutral).
+- **Feedback Representation**: Represents thumbs-up/down ratings numerically: `0` for neutral, `1` for Helpful (Like), and `-1` for Unhelpful (Dislike).
+- **Asynchronous Safe Writes**: Rating changes are immediately written to the ViewModel's local Compose state on the Main thread for zero UI latency, while the persistence update is scheduled asynchronously to SQLite on Kosh's `safeIoDispatcher`.
+- **Decoupled UI state**: Removes local transient state inside the response actions row, binding feedback highlights dynamically to the database records to ensure states are retained when sessions are reloaded or the app is rebooted.
+

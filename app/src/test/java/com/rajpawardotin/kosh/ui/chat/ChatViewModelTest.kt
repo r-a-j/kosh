@@ -949,5 +949,35 @@ class ChatViewModelTest {
         assertEquals(1, viewModel.activeSessionTags.size)
         assertEquals("Journal", viewModel.activeSessionTags[0].name)
     }
+
+    @Test
+    fun testUpdateMessageFeedback() = runTest(testDispatcher) {
+        viewModel.startNewChat()
+        viewModel.prompt = "Test feedback message"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+
+        val sessionId = viewModel.currentSessionId!!
+        val messages = fakeMessageRepo.getMessagesForSession(sessionId)
+        assertFalse(messages.isEmpty())
+        val messageId = messages[0].id
+
+        // 1. Initial feedback should be 0
+        assertEquals(0, messages[0].feedback)
+
+        // 2. Update to helpful (1)
+        viewModel.updateMessageFeedback(messageId, 1)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.chatMessages.find { it.id == messageId }?.feedback)
+        assertEquals(1, fakeMessageRepo.getMessagesForSession(sessionId).find { it.id == messageId }?.feedback)
+
+        // 3. Reset to neutral (0)
+        viewModel.updateMessageFeedback(messageId, 0)
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(0, viewModel.chatMessages.find { it.id == messageId }?.feedback)
+        assertEquals(0, fakeMessageRepo.getMessagesForSession(sessionId).find { it.id == messageId }?.feedback)
+    }
 }
 

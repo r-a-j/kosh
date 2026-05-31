@@ -460,6 +460,9 @@ fun ChatScreen(
                                                 checkedItems = viewModel.checkedItems,
                                                 onToggleChecklistItem = { index, checked ->
                                                     viewModel.toggleChecklistItem(message.id, index, checked)
+                                                },
+                                                onFeedbackChanged = { feedback ->
+                                                    viewModel.updateMessageFeedback(message.id, feedback)
                                                 }
                                             )
                                         }
