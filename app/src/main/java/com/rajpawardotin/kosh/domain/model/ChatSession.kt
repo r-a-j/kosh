@@ -1,5 +1,11 @@
 package com.rajpawardotin.kosh.domain.model
 
+data class ChatTag(
+    val id: String,
+    val name: String,
+    val colorHex: String
+)
+
 data class ChatSession(
     val id: String,
     val title: String,
@@ -12,7 +18,8 @@ data class ChatSession(
     val validationToken: String? = null,
     val encryptedKeyPassword: String? = null,
     val encryptedKeyBiometric: String? = null,
-    val encryptedKeyRecovery: String? = null
+    val encryptedKeyRecovery: String? = null,
+    val tags: List<ChatTag> = emptyList()
 )
 
 data class AttachedFile(

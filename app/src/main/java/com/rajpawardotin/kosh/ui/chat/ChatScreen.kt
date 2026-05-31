@@ -104,6 +104,8 @@ fun ChatScreen(
 
     var sessionToLock by remember { mutableStateOf<ChatSession?>(null) }
     var showManageLockDialog by remember { mutableStateOf(false) }
+    var showManageTagsDialog by remember { mutableStateOf(false) }
+
     
     var sessionRecoveryMnemonic by remember { mutableStateOf<String?>(null) }
     var showRecoveryPhraseDialog by remember { mutableStateOf(false) }
@@ -391,7 +393,26 @@ fun ChatScreen(
                                                 viewModel.startNewChat(isTemporary = false)
                                             },
                                             bottomPadding = inputHeightDp,
-                                            scrollState = emptyStateScrollState
+                                            scrollState = emptyStateScrollState,
+                                            modelPath = viewModel.modelPath,
+                                            isEngineReady = viewModel.isEngineReady,
+                                            attachedFilesCount = viewModel.attachedFiles.size,
+                                            savedSessions = viewModel.savedSessions,
+                                            allTags = viewModel.allTags,
+                                            onStartTemporarySession = { viewModel.startNewChat(isTemporary = true) },
+                                            onStartJournalSession = {
+                                                val existingJournal = viewModel.savedSessions.find { sess ->
+                                                    sess.tags.any { it.id == "journal" }
+                                                }
+                                                if (existingJournal != null) {
+                                                    viewModel.loadSession(existingJournal.id)
+                                                } else {
+                                                    viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
+                                                }
+                                            },
+                                            onLoadSession = { viewModel.loadSession(it) },
+                                            onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
+                                            onSealVaultClick = { viewModel.lockAppOnBackground() }
                                         )
                                     }
                                 } else {
@@ -495,6 +516,7 @@ fun ChatScreen(
                         onManageLockClick = { showManageLockDialog = true },
                         onNewChatClick = { isTemp -> viewModel.startNewChat(isTemporary = isTemp) },
                         onSettingsClick = { showBottomSheet = true },
+                        onManageTagsClick = { showManageTagsDialog = true },
                         scrollProgress = { scrollProgress }
                     )
 
@@ -623,7 +645,11 @@ fun ChatScreen(
                         models = viewModel.models,
                         onSelectModel = { viewModel.selectModel(it.filePath) },
                         onSetModelTag = { name, tag -> viewModel.setModelTag(name, tag) },
-                        onDeleteModelFile = { viewModel.deleteModelFile(it) }
+                        onDeleteModelFile = { viewModel.deleteModelFile(it) },
+                        allTags = viewModel.allTags,
+                        onCreateTag = { name, color -> viewModel.createTag(name, color) },
+                        onRenameTag = { old, new, color, onWarning -> viewModel.updateTag(old, new, color, onWarning) },
+                        onDeleteTag = { name, onWarning -> viewModel.deleteTag(name, onWarning) }
                     )
                 }
             }
@@ -750,6 +776,14 @@ fun ChatScreen(
                         }
                     }
                 }
+            )
+        }
+
+        // Manage Tags Dialog
+        if (showManageTagsDialog) {
+            com.rajpawardotin.kosh.ui.chat.dialogs.ManageTagsDialog(
+                viewModel = viewModel,
+                onDismiss = { showManageTagsDialog = false }
             )
         }
     }

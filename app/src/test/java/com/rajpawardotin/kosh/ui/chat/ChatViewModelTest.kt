@@ -818,4 +818,136 @@ class ChatViewModelTest {
         override fun shutdown() {}
     }
 
+    @Test
+    fun testCreateTagAndRetrieve() = runTest(testDispatcher) {
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        assertEquals(1, viewModel.allTags.size)
+        assertEquals("Journal", viewModel.allTags[0].name)
+        assertEquals("#8B5CF6", viewModel.allTags[0].colorHex)
+    }
+
+    @Test
+    fun testCreateDuplicateTagFails() = runTest(testDispatcher) {
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.createTag("Journal", "#EF4444")
+        testScheduler.advanceUntilIdle()
+        
+        // Count should still be 1
+        assertEquals(1, viewModel.allTags.size)
+    }
+
+    @Test
+    fun testUpdateTagNoWarningWhenNotAssociated() = runTest(testDispatcher) {
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        var warningCalled = false
+        viewModel.updateTag("Journal", "Journal Log", "#EF4444") { _, _ ->
+            warningCalled = true
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertFalse(warningCalled)
+        assertEquals(1, viewModel.allTags.size)
+        assertEquals("Journal Log", viewModel.allTags[0].name)
+        assertEquals("#EF4444", viewModel.allTags[0].colorHex)
+    }
+
+    @Test
+    fun testUpdateTagWithWarningWhenAssociated() = runTest(testDispatcher) {
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        // Start a chat session and associate the tag
+        viewModel.startNewChat()
+        viewModel.prompt = "Test chat message"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.addTagToActiveSession("Journal")
+        testScheduler.advanceUntilIdle()
+        
+        var warningCalled = false
+        var warningCount = 0
+        var proceedCallback: (() -> Unit)? = null
+        
+        viewModel.updateTag("Journal", "Journal Log", "#EF4444") { count, proceed ->
+            warningCalled = true
+            warningCount = count
+            proceedCallback = proceed
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(warningCalled)
+        assertEquals(1, warningCount)
+        assertNotNull(proceedCallback)
+        
+        // Before proceeding, tag name should still be the old one
+        assertEquals("Journal", viewModel.allTags[0].name)
+        
+        // Now trigger proceed
+        proceedCallback!!.invoke()
+        testScheduler.advanceUntilIdle()
+        
+        // Tag name should be updated
+        assertEquals("Journal Log", viewModel.allTags[0].name)
+    }
+
+    @Test
+    fun testDeleteTagWithWarningAndDisassociate() = runTest(testDispatcher) {
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.startNewChat()
+        viewModel.prompt = "Test reflection journal"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.addTagToActiveSession("Journal")
+        testScheduler.advanceUntilIdle()
+        
+        var warningCalled = false
+        var warningCount = 0
+        var proceedCallback: (() -> Unit)? = null
+        
+        viewModel.deleteTag("Journal") { count, proceed ->
+            warningCalled = true
+            warningCount = count
+            proceedCallback = proceed
+        }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(warningCalled)
+        assertEquals(1, warningCount)
+        assertNotNull(proceedCallback)
+        
+        // Proceed with deletion
+        proceedCallback!!.invoke()
+        testScheduler.advanceUntilIdle()
+        
+        // Tag should be deleted from allTags and activeSessionTags
+        assertTrue(viewModel.allTags.isEmpty())
+        assertTrue(viewModel.activeSessionTags.isEmpty())
+    }
+
+    @Test
+    fun testStartNewChatWithTagsAssociatesCorrectly() = runTest(testDispatcher) {
+        // Create the tag first so it is valid
+        viewModel.createTag("Journal", "#8B5CF6")
+        testScheduler.advanceUntilIdle()
+        
+        viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
+        viewModel.prompt = "Write my day"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+        
+        // The active session tags should contain "Journal"
+        assertEquals(1, viewModel.activeSessionTags.size)
+        assertEquals("Journal", viewModel.activeSessionTags[0].name)
+    }
 }
+

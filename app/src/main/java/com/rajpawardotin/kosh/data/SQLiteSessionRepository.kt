@@ -31,4 +31,37 @@ class SQLiteSessionRepository(
     override fun mergeDatabaseBackup(tempDecryptedDbPath: String) {
         dbHelper.mergeFromAttachedDatabase(tempDecryptedDbPath)
     }
+
+    override fun getTags(): List<com.rajpawardotin.kosh.domain.model.ChatTag> {
+        return dbHelper.getTags()
+    }
+
+    override fun createTag(name: String, colorHex: String): Boolean {
+        return dbHelper.createTag(name, colorHex)
+    }
+
+    override fun updateTag(oldName: String, newName: String, colorHex: String): Boolean {
+        return dbHelper.updateTag(oldName, newName, colorHex)
+    }
+
+    override fun deleteTag(name: String): Boolean {
+        return dbHelper.deleteTag(name)
+    }
+
+    override fun addTagToSession(sessionId: String, tagName: String) {
+        dbHelper.addTagToSession(sessionId, tagName)
+    }
+
+    override fun removeTagFromSession(sessionId: String, tagName: String) {
+        dbHelper.removeTagFromSession(sessionId, tagName)
+    }
+
+    override fun getTagsForSession(sessionId: String): List<com.rajpawardotin.kosh.domain.model.ChatTag> {
+        return dbHelper.getTagsForSession(sessionId)
+    }
+
+    override fun getSessionTagsCount(tagName: String): Int {
+        return dbHelper.getSessionTagsCount(tagName)
+    }
+
 }

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -44,6 +45,7 @@ fun ChatTopBar(
     onManageLockClick: () -> Unit,
     onNewChatClick: (isTemporary: Boolean) -> Unit,
     onSettingsClick: () -> Unit,
+    onManageTagsClick: () -> Unit = {},
     scrollProgress: () -> Float = { 0f }
 ) {
     val barColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
@@ -186,6 +188,24 @@ fun ChatTopBar(
                         tint = if (isEncrypted) {
                             if (isUnlocked) primary else errorColor
                         } else onSurfaceMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            // Action 1.5: Chat Tags Management Button
+            if (currentSession != null && !isTemporarySession && isCurrentSessionUnlocked) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .clickable { onManageTagsClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Label,
+                        contentDescription = "Session Tags",
+                        tint = primary,
                         modifier = Modifier.size(16.dp)
                     )
                 }

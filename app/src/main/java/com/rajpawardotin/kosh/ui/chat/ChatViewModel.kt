@@ -17,6 +17,8 @@ import com.rajpawardotin.kosh.data.TtsProvider
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.model.AttachedFile
 import com.rajpawardotin.kosh.domain.model.SessionDocument
+import com.rajpawardotin.kosh.domain.model.ChatTag
+
 import com.rajpawardotin.kosh.data.DocumentParser
 import com.rajpawardotin.kosh.domain.provider.AIProvider
 
@@ -272,6 +274,12 @@ class ChatViewModel(
 
     var currentSessionId by mutableStateOf<String?>(null)
     val savedSessions = androidx.compose.runtime.mutableStateListOf<ChatSession>()
+    
+    val allTags = androidx.compose.runtime.mutableStateListOf<ChatTag>()
+    val activeSessionTags = androidx.compose.runtime.mutableStateListOf<ChatTag>()
+    val nextSessionTags = androidx.compose.runtime.mutableStateListOf<String>()
+
+
     
     var isTemporarySession by mutableStateOf(false)
         private set
@@ -644,6 +652,7 @@ class ChatViewModel(
         refreshModelsList()
         viewModelScope.launch(safeIoDispatcher) {
             loadSavedSessionsInternal()
+            loadAllTags()
         }
         // Metrics tracking is started by MainActivity.onStart(), not here
     }
@@ -718,6 +727,8 @@ class ChatViewModel(
             sessionDocs
         }
 
+        val sessionTags = sessionRepository.getTagsForSession(sessionId)
+
         withContext(Dispatchers.Main) {
             currentSessionId = sessionId
             chatMessages.clear()
@@ -728,6 +739,9 @@ class ChatViewModel(
             
             checkedItems.clear()
             checkedItems.putAll(checklist)
+            
+            activeSessionTags.clear()
+            activeSessionTags.addAll(sessionTags)
             
             lastSearchQuery = session?.lastSearchQuery
         }
@@ -757,12 +771,20 @@ class ChatViewModel(
         lastSearchQuery = null
         prompt = ""
         activeSessionDocuments.clear()
+        activeSessionTags.clear()
         if (isTemporary) {
             showToast("Temporary Vault active (history disabled)")
         } else {
             showToast("New saved brainstorm active")
         }
     }
+
+    fun startNewChatWithTags(isTemporary: Boolean = false, tags: List<String>) {
+        startNewChat(isTemporary)
+        nextSessionTags.clear()
+        nextSessionTags.addAll(tags)
+    }
+
 
     fun loadSession(sessionId: String) {
         if (isGenerating) return
@@ -1261,12 +1283,144 @@ class ChatViewModel(
         showToast("Theme changed to ${theme.replace("_", " ")}")
     }
 
+    fun loadAllTags() {
+        viewModelScope.launch(safeIoDispatcher) {
+            val tags = sessionRepository.getTags()
+            withContext(Dispatchers.Main) {
+                allTags.clear()
+                allTags.addAll(tags)
+            }
+        }
+    }
+
+    fun createTag(name: String, colorHex: String) {
+        if (name.isBlank()) {
+            showToast("Tag name cannot be empty")
+            return
+        }
+        viewModelScope.launch(safeIoDispatcher) {
+            val success = sessionRepository.createTag(name, colorHex)
+            withContext(Dispatchers.Main) {
+                if (success) {
+                    loadAllTags()
+                    showToast("Tag '$name' created")
+                } else {
+                    showToast("Tag already exists or is invalid")
+                }
+            }
+        }
+    }
+
+    fun updateTag(oldName: String, newName: String, colorHex: String, onWarning: (Int, () -> Unit) -> Unit) {
+        if (newName.isBlank()) {
+            showToast("Tag name cannot be empty")
+            return
+        }
+        viewModelScope.launch(safeIoDispatcher) {
+            val count = sessionRepository.getSessionTagsCount(oldName)
+            val updateAction = {
+                viewModelScope.launch(safeIoDispatcher) {
+                    val success = sessionRepository.updateTag(oldName, newName, colorHex)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            loadAllTags()
+                            loadSavedSessionsInternal()
+                            currentSessionId?.let { loadActiveSessionTagsInternal(it) }
+                            showToast("Tag updated")
+                        } else {
+                            showToast("Failed to rename tag")
+                        }
+                    }
+                }
+            }
+            
+            withContext(Dispatchers.Main) {
+                if (count > 0) {
+                    onWarning(count) { updateAction() }
+                } else {
+                    updateAction()
+                }
+            }
+        }
+    }
+
+    fun deleteTag(name: String, onWarning: (Int, () -> Unit) -> Unit) {
+        viewModelScope.launch(safeIoDispatcher) {
+            val count = sessionRepository.getSessionTagsCount(name)
+            val deleteAction = {
+                viewModelScope.launch(safeIoDispatcher) {
+                    val success = sessionRepository.deleteTag(name)
+                    withContext(Dispatchers.Main) {
+                        if (success) {
+                            loadAllTags()
+                            loadSavedSessionsInternal()
+                            currentSessionId?.let { loadActiveSessionTagsInternal(it) }
+                            showToast("Tag deleted and disassociated")
+                        } else {
+                            showToast("Failed to delete tag")
+                        }
+                    }
+                }
+            }
+            
+            withContext(Dispatchers.Main) {
+                if (count > 0) {
+                    onWarning(count) { deleteAction() }
+                } else {
+                    deleteAction()
+                }
+            }
+        }
+    }
+
+    fun addTagToActiveSession(tagName: String) {
+        val sessionId = currentSessionId ?: return
+        viewModelScope.launch(safeIoDispatcher) {
+            sessionRepository.addTagToSession(sessionId, tagName)
+            withContext(Dispatchers.Main) {
+                loadActiveSessionTagsInternal(sessionId)
+                loadSavedSessionsInternal()
+            }
+        }
+    }
+
+    fun removeTagFromActiveSession(tagName: String) {
+        val sessionId = currentSessionId ?: return
+        viewModelScope.launch(safeIoDispatcher) {
+            sessionRepository.removeTagFromSession(sessionId, tagName)
+            withContext(Dispatchers.Main) {
+                loadActiveSessionTagsInternal(sessionId)
+                loadSavedSessionsInternal()
+            }
+        }
+    }
+
+    private suspend fun loadActiveSessionTagsInternal(sessionId: String) {
+        val tags = sessionRepository.getTagsForSession(sessionId)
+        withContext(Dispatchers.Main) {
+            activeSessionTags.clear()
+            activeSessionTags.addAll(tags)
+        }
+    }
+
+
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
         private set
 
     fun setModel(path: String?) {
         modelPath = path
     }
+
+    fun unloadEngine() {
+        viewModelScope.launch(safeIoDispatcher) {
+            aiProvider.close()
+            withContext(Dispatchers.Main) {
+                isEngineReady = false
+                showToast("Engine unloaded from RAM")
+            }
+        }
+    }
+
 
     fun deleteModel() {
         modelPath?.let { path ->
@@ -1420,8 +1574,15 @@ class ChatViewModel(
                             modelPath = modelPath,
                             lastSearchQuery = null
                         )
-                        sessionRepository.saveSession(newSession)
+                        for (tagId in nextSessionTags) {
+                            sessionRepository.addTagToSession(sessionId!!, tagId)
+                        }
+                        val dbTags = sessionRepository.getTagsForSession(sessionId!!)
+                        val newSessionWithTags = newSession.copy(tags = dbTags)
+                        sessionRepository.saveSession(newSessionWithTags)
+                        nextSessionTags.clear()
                         loadSavedSessionsInternal()
+                        loadActiveSessionTagsInternal(sessionId!!)
                     }
                 }
 

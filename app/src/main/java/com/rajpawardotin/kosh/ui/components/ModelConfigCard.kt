@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -19,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Language
@@ -81,7 +85,11 @@ fun ModelConfigCard(
     models: List<com.rajpawardotin.kosh.data.ModelProfile> = emptyList(),
     onSelectModel: (com.rajpawardotin.kosh.data.ModelProfile) -> Unit = {},
     onSetModelTag: (String, com.rajpawardotin.kosh.data.ModelTag) -> Unit = { _, _ -> },
-    onDeleteModelFile: (String) -> Unit = {}
+    onDeleteModelFile: (String) -> Unit = {},
+    allTags: List<com.rajpawardotin.kosh.domain.model.ChatTag> = emptyList(),
+    onCreateTag: (String, String) -> Unit = { _, _ -> },
+    onRenameTag: (String, String, String, (Int, () -> Unit) -> Unit) -> Unit = { _, _, _, _ -> },
+    onDeleteTag: (String, (Int, () -> Unit) -> Unit) -> Unit = { _, _ -> }
 ) {
     val scrollState = rememberScrollState()
     val primary = MaterialTheme.colorScheme.primary
@@ -735,6 +743,412 @@ fun ModelConfigCard(
                 }
             }
         }
+
+        // Category 3.5: Chat Tags Management
+        var newTagName by remember { mutableStateOf("") }
+        val colorOptions = listOf(
+            "#EF4444", // Crimson Red
+            "#F97316", // Sunset Orange
+            "#F59E0B", // Amber Gold
+            "#84CC16", // Lime Zing
+            "#10B981", // Emerald Green
+            "#14B8A6", // Teal Aurora
+            "#06B6D4", // Cyan Wave
+            "#0EA5E9", // Sky Blue
+            "#3B82F6", // Cobalt Blue
+            "#6366F1", // Royal Indigo
+            "#8B5CF6", // Electric Purple
+            "#D946EF", // Orchid Magenta
+            "#EC4899", // Hot Pink
+            "#F43F5E", // Rose Coral
+            "#C2410C", // Terracotta Rust
+            "#4D7C0F", // Olive Green
+            "#15803D", // Forest Green
+            "#1D4ED8", // Navy Blue
+            "#6B21A8", // Plum Purple
+            "#475569"  // Slate Gunmetal
+        )
+        var selectedColor by remember { mutableStateOf(colorOptions[10]) } // default purple
+        var tagWarningDialog by remember { mutableStateOf<com.rajpawardotin.kosh.ui.chat.dialogs.TagWarningInfo?>(null) }
+        var editingTag by remember { mutableStateOf<com.rajpawardotin.kosh.domain.model.ChatTag?>(null) }
+        var editTagName by remember { mutableStateOf("") }
+        var editTagColor by remember { mutableStateOf("") }
+
+        // Local inline Warning Dialog
+        if (tagWarningDialog != null) {
+            AlertDialog(
+                onDismissRequest = { tagWarningDialog = null },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text("Warning", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                text = { Text(tagWarningDialog!!.message) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            tagWarningDialog!!.onConfirm()
+                            tagWarningDialog = null
+                        }
+                    ) {
+                        Text("Confirm", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tagWarningDialog = null }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            )
+        }
+
+        // Inline Rename Tag Dialog
+        if (editingTag != null) {
+            AlertDialog(
+                onDismissRequest = { editingTag = null },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text("Edit Tag", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedTextField(
+                            value = editTagName,
+                            onValueChange = { editTagName = it },
+                            label = { Text("Tag Name") },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        // Live tag preview for editing
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "LIVE PREVIEW",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val editColorParsed = try { Color(android.graphics.Color.parseColor(editTagColor)) } catch (e: Exception) { Color.Gray }
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = editColorParsed.copy(alpha = 0.12f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, editColorParsed.copy(alpha = 0.3f))
+                            ) {
+                                Text(
+                                    text = if (editTagName.isBlank()) "Preview" else editTagName,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = editColorParsed,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        // Slideable Carousel Color Picker for Edit
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            colorOptions.forEach { hex ->
+                                val color = Color(android.graphics.Color.parseColor(hex))
+                                val isSelected = editTagColor == hex
+                                val scale by animateFloatAsState(targetValue = if (isSelected) 1.2f else 1.0f)
+                                Box(
+                                    modifier = Modifier
+                                        .padding(4.dp)
+                                        .size(28.dp)
+                                        .graphicsLayer(scaleX = scale, scaleY = scale)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .border(
+                                            width = if (isSelected) 2.5.dp else 1.dp,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                            shape = CircleShape
+                                        )
+                                        .clickable { editTagColor = hex },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.White)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val targetTag = editingTag!!
+                            onRenameTag(targetTag.name, editTagName, editTagColor) { count, proceed ->
+                                tagWarningDialog = com.rajpawardotin.kosh.ui.chat.dialogs.TagWarningInfo(
+                                    title = "Associated Chats Warning",
+                                    message = "This tag is associated with $count chats. Renaming it will update all associated sessions. Are you sure you want to proceed?",
+                                    onConfirm = proceed
+                                )
+                            }
+                            editingTag = null
+                        }
+                    ) {
+                        Text("Save", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingTag = null }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            )
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = cardColors,
+            border = androidx.compose.foundation.BorderStroke(1.dp, outlineVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Header
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Label,
+                        contentDescription = null,
+                        tint = primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "TAGS MANAGEMENT",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        ),
+                        color = primary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Live preview and label
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "CREATE NEW TAG",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    val selectedColorParsed = remember(selectedColor) {
+                        try { Color(android.graphics.Color.parseColor(selectedColor)) } catch (e: Exception) { Color.Gray }
+                    }
+                    
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = selectedColorParsed.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, selectedColorParsed.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = if (newTagName.isBlank()) "Preview" else newTagName,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = selectedColorParsed,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Create Tag Input Row
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val selectedColorParsed = remember(selectedColor) {
+                        try { Color(android.graphics.Color.parseColor(selectedColor)) } catch (e: Exception) { Color.Gray }
+                    }
+                    OutlinedTextField(
+                        value = newTagName,
+                        onValueChange = { newTagName = it },
+                        placeholder = { Text("New tag name...") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Label,
+                                contentDescription = null,
+                                tint = selectedColorParsed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                            focusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f)
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (newTagName.isNotBlank()) selectedColorParsed
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                            )
+                            .clickable(enabled = newTagName.isNotBlank()) {
+                                onCreateTag(newTagName, selectedColor)
+                                newTagName = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Create Tag",
+                            tint = if (newTagName.isNotBlank()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Slideable Carousel Color Picker
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    colorOptions.forEach { hex ->
+                        val color = remember(hex) { Color(android.graphics.Color.parseColor(hex)) }
+                        val isSelected = selectedColor == hex
+                        val scale by animateFloatAsState(targetValue = if (isSelected) 1.2f else 1.0f)
+                        
+                        Box(
+                            modifier = Modifier
+                                .padding(4.dp)
+                                .size(28.dp)
+                                .graphicsLayer(scaleX = scale, scaleY = scale)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (isSelected) 2.5.dp else 1.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                    shape = CircleShape
+                                )
+                                .clickable { selectedColor = hex },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (allTags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = outlineVariant)
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Existing Tags list
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        allTags.forEach { tag ->
+                            val tagColor = try { Color(android.graphics.Color.parseColor(tag.colorHex)) } catch (e: Exception) { Color.Gray }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = tagColor.copy(alpha = 0.12f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, tagColor.copy(alpha = 0.3f))
+                                ) {
+                                    Text(
+                                        text = tag.name,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = tagColor,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    IconButton(
+                                        onClick = {
+                                            editingTag = tag
+                                            editTagName = tag.name
+                                            editTagColor = tag.colorHex
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Rename Tag",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            onDeleteTag(tag.name) { count, proceed ->
+                                                tagWarningDialog = com.rajpawardotin.kosh.ui.chat.dialogs.TagWarningInfo(
+                                                    title = "Delete Tag confirmation",
+                                                    message = "This tag is associated with $count chats. Deleting it will disassociate it from all of them. Are you sure you want to delete it?",
+                                                    onConfirm = proceed
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete Tag",
+                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Category 4: Appearance & Theming
         Card(

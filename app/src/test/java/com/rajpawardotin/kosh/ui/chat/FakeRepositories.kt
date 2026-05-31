@@ -35,6 +35,108 @@ class FakeSessionRepository : SessionRepository {
 
     override fun mergeDatabaseBackup(tempDecryptedDbPath: String) {
     }
+
+    val tagsList = mutableListOf<com.rajpawardotin.kosh.domain.model.ChatTag>()
+    val sessionTags = mutableMapOf<String, MutableSet<String>>()
+
+    override fun getTags(): List<com.rajpawardotin.kosh.domain.model.ChatTag> {
+        return tagsList.sortedBy { it.name }
+    }
+
+    override fun createTag(name: String, colorHex: String): Boolean {
+        val id = name.trim().lowercase()
+        if (tagsList.any { it.id == id }) return false
+        tagsList.add(com.rajpawardotin.kosh.domain.model.ChatTag(id, name.trim(), colorHex))
+        return true
+    }
+
+    override fun updateTag(oldName: String, newName: String, colorHex: String): Boolean {
+        val oldId = oldName.trim().lowercase()
+        val newId = newName.trim().lowercase()
+        if (oldId != newId && tagsList.any { it.id == newId }) return false
+        
+        val index = tagsList.indexOfFirst { it.id == oldId }
+        if (index == -1) return false
+        
+        tagsList[index] = com.rajpawardotin.kosh.domain.model.ChatTag(newId, newName.trim(), colorHex)
+        
+        if (oldId != newId) {
+            sessionTags.forEach { (_, set) ->
+                if (set.remove(oldId)) {
+                    set.add(newId)
+                }
+            }
+            for (i in sessions.indices) {
+                val s = sessions[i]
+                if (s.tags.any { it.id == oldId }) {
+                    val updatedTags = s.tags.map {
+                        if (it.id == oldId) com.rajpawardotin.kosh.domain.model.ChatTag(newId, newName.trim(), colorHex) else it
+                    }
+                    sessions[i] = s.copy(tags = updatedTags)
+                }
+            }
+        } else {
+            for (i in sessions.indices) {
+                val s = sessions[i]
+                if (s.tags.any { it.id == oldId }) {
+                    val updatedTags = s.tags.map {
+                        if (it.id == oldId) com.rajpawardotin.kosh.domain.model.ChatTag(oldId, newName.trim(), colorHex) else it
+                    }
+                    sessions[i] = s.copy(tags = updatedTags)
+                }
+            }
+        }
+        return true
+    }
+
+    override fun deleteTag(name: String): Boolean {
+        val id = name.trim().lowercase()
+        tagsList.removeAll { it.id == id }
+        sessionTags.values.forEach { it.remove(id) }
+        for (i in sessions.indices) {
+            val s = sessions[i]
+            if (s.tags.any { it.id == id }) {
+                sessions[i] = s.copy(tags = s.tags.filter { it.id != id })
+            }
+        }
+        return true
+    }
+
+    override fun addTagToSession(sessionId: String, tagName: String) {
+        val tagId = tagName.trim().lowercase()
+        val tag = tagsList.find { it.id == tagId } ?: return
+        sessionTags.getOrPut(sessionId) { mutableSetOf() }.add(tagId)
+        
+        val index = sessions.indexOfFirst { it.id == sessionId }
+        if (index != -1) {
+            val currentTags = sessions[index].tags.toMutableList()
+            if (!currentTags.any { it.id == tagId }) {
+                currentTags.add(tag)
+                sessions[index] = sessions[index].copy(tags = currentTags)
+            }
+        }
+    }
+
+    override fun removeTagFromSession(sessionId: String, tagName: String) {
+        val tagId = tagName.trim().lowercase()
+        sessionTags[sessionId]?.remove(tagId)
+        
+        val index = sessions.indexOfFirst { it.id == sessionId }
+        if (index != -1) {
+            val currentTags = sessions[index].tags.filter { it.id != tagId }
+            sessions[index] = sessions[index].copy(tags = currentTags)
+        }
+    }
+
+    override fun getTagsForSession(sessionId: String): List<com.rajpawardotin.kosh.domain.model.ChatTag> {
+        val ids = sessionTags[sessionId] ?: return emptyList()
+        return tagsList.filter { ids.contains(it.id) }.sortedBy { it.name }
+    }
+
+    override fun getSessionTagsCount(tagName: String): Int {
+        val id = tagName.trim().lowercase()
+        return sessionTags.values.count { it.contains(id) }
+    }
 }
 
 class FakeMessageRepository : MessageRepository {

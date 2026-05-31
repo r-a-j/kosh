@@ -37,7 +37,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "kosh_vault.db"
-        private const val DATABASE_VERSION = 5
+        private const val DATABASE_VERSION = 6
+
 
 
         // Sessions Table
@@ -171,6 +172,27 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.execSQL(createDocumentsFtsTable)
         db.execSQL(createInsertTrigger)
         db.execSQL(createDeleteTrigger)
+
+        db.execSQL("""
+            CREATE TABLE tags (
+                id TEXT PRIMARY KEY,
+                name TEXT UNIQUE,
+                color TEXT
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE session_tags (
+                session_id TEXT,
+                tag_id TEXT,
+                PRIMARY KEY(session_id, tag_id),
+                FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+            )
+        """.trimIndent())
+        db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('journal', 'Journal', '#8B5CF6')")
+        db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('work', 'Work', '#3B82F6')")
+        db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('ideas', 'Ideas', '#F59E0B')")
+        db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('notes', 'Notes', '#10B981')")
     }
 
 
@@ -233,6 +255,28 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         if (oldVersion < 5) {
             db.execSQL("ALTER TABLE $TABLE_MESSAGES ADD COLUMN $KEY_MESSAGE_SOURCE_DOCUMENTS TEXT")
         }
+        if (oldVersion < 6) {
+            db.execSQL("""
+                CREATE TABLE tags (
+                    id TEXT PRIMARY KEY,
+                    name TEXT UNIQUE,
+                    color TEXT
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TABLE session_tags (
+                    session_id TEXT,
+                    tag_id TEXT,
+                    PRIMARY KEY(session_id, tag_id),
+                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+                    FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                )
+            """.trimIndent())
+            db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('journal', 'Journal', '#8B5CF6')")
+            db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('work', 'Work', '#3B82F6')")
+            db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('ideas', 'Ideas', '#F59E0B')")
+            db.execSQL("INSERT OR IGNORE INTO tags (id, name, color) VALUES ('notes', 'Notes', '#10B981')")
+        }
     }
 
 
@@ -274,6 +318,31 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     fun getSessionsOrderedByLastActive(): List<ChatSession> {
         val sessionsList = mutableListOf<ChatSession>()
         val db = readableDatabase
+
+        // Load all session tag mappings in a single query
+        val sessionTagsMap = mutableMapOf<String, MutableList<com.rajpawardotin.kosh.domain.model.ChatTag>>()
+        db.rawQuery("""
+            SELECT st.session_id, t.id, t.name, t.color 
+            FROM session_tags st
+            JOIN tags t ON st.tag_id = t.id
+        """.trimIndent(), null).use { tagCursor ->
+            if (tagCursor.moveToFirst()) {
+                val sessIdIdx = tagCursor.getColumnIndexOrThrow("session_id")
+                val idIdx = tagCursor.getColumnIndexOrThrow("id")
+                val nameIdx = tagCursor.getColumnIndexOrThrow("name")
+                val colIdx = tagCursor.getColumnIndexOrThrow("color")
+                do {
+                    val sessId = tagCursor.getString(sessIdIdx)
+                    val tag = com.rajpawardotin.kosh.domain.model.ChatTag(
+                        id = tagCursor.getString(idIdx),
+                        name = tagCursor.getString(nameIdx),
+                        colorHex = tagCursor.getString(colIdx)
+                    )
+                    sessionTagsMap.getOrPut(sessId) { mutableListOf() }.add(tag)
+                } while (tagCursor.moveToNext())
+            }
+        }
+
         val query = "SELECT * FROM $TABLE_SESSIONS ORDER BY $KEY_SESSION_LAST_ACTIVE DESC"
         db.rawQuery(query, null).use { cursor ->
             if (cursor.moveToFirst()) {
@@ -291,9 +360,10 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 val encRecIdx = cursor.getColumnIndexOrThrow(KEY_SESSION_ENCRYPTED_KEY_RECOVERY)
 
                 do {
+                    val sessionId = cursor.getString(idIdx)
                     sessionsList.add(
                         ChatSession(
-                            id = cursor.getString(idIdx),
+                            id = sessionId,
                             title = cursor.getString(titleIdx),
                             createdAt = cursor.getLong(createdIdx),
                             lastActive = cursor.getLong(activeIdx),
@@ -304,7 +374,8 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                             validationToken = cursor.getString(tokenIdx),
                             encryptedKeyPassword = cursor.getString(encPassIdx),
                             encryptedKeyBiometric = cursor.getString(encBioIdx),
-                            encryptedKeyRecovery = cursor.getString(encRecIdx)
+                            encryptedKeyRecovery = cursor.getString(encRecIdx),
+                            tags = sessionTagsMap[sessionId] ?: emptyList()
                         )
                     )
                 } while (cursor.moveToNext())
@@ -602,6 +673,157 @@ class KoshDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun getTags(): List<com.rajpawardotin.kosh.domain.model.ChatTag> = synchronized(this) {
+        val list = mutableListOf<com.rajpawardotin.kosh.domain.model.ChatTag>()
+        val db = readableDatabase
+        db.rawQuery("SELECT * FROM tags ORDER BY name ASC", null).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIdx = cursor.getColumnIndexOrThrow("id")
+                val nameIdx = cursor.getColumnIndexOrThrow("name")
+                val colIdx = cursor.getColumnIndexOrThrow("color")
+                do {
+                    list.add(
+                        com.rajpawardotin.kosh.domain.model.ChatTag(
+                            id = cursor.getString(idIdx),
+                            name = cursor.getString(nameIdx),
+                            colorHex = cursor.getString(colIdx)
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        }
+        return list
+    }
+
+    fun createTag(name: String, colorHex: String): Boolean = synchronized(this) {
+        if (name.isBlank()) return false
+        val db = writableDatabase
+        val id = name.trim().lowercase()
+        val values = ContentValues().apply {
+            put("id", id)
+            put("name", name.trim())
+            put("color", colorHex)
+        }
+        val result = db.insertWithOnConflict("tags", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+        return result != -1L
+    }
+
+    fun updateTag(oldName: String, newName: String, colorHex: String): Boolean = synchronized(this) {
+        if (newName.isBlank()) return false
+        val db = writableDatabase
+        val oldId = oldName.trim().lowercase()
+        val newId = newName.trim().lowercase()
+        
+        db.beginTransaction()
+        try {
+            if (oldId != newId) {
+                val cursor = db.rawQuery("SELECT 1 FROM tags WHERE id = ?", arrayOf(newId))
+                val exists = cursor.use { it.moveToFirst() }
+                if (exists) {
+                    db.endTransaction()
+                    return false
+                }
+                
+                val values = ContentValues().apply {
+                    put("id", newId)
+                    put("name", newName.trim())
+                    put("color", colorHex)
+                }
+                db.insert("tags", null, values)
+                
+                db.execSQL("UPDATE session_tags SET tag_id = ? WHERE tag_id = ?", arrayOf(newId, oldId))
+                db.delete("tags", "id = ?", arrayOf(oldId))
+            } else {
+                val values = ContentValues().apply {
+                    put("name", newName.trim())
+                    put("color", colorHex)
+                }
+                db.update("tags", values, "id = ?", arrayOf(oldId))
+            }
+            db.setTransactionSuccessful()
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        } finally {
+            try {
+                db.endTransaction()
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun deleteTag(name: String): Boolean = synchronized(this) {
+        val db = writableDatabase
+        val id = name.trim().lowercase()
+        db.beginTransaction()
+        try {
+            db.delete("session_tags", "tag_id = ?", arrayOf(id))
+            db.delete("tags", "id = ?", arrayOf(id))
+            db.setTransactionSuccessful()
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        } finally {
+            try {
+                db.endTransaction()
+            } catch (e: Exception) {}
+        }
+    }
+
+    fun addTagToSession(sessionId: String, tagName: String) = synchronized(this) {
+        val db = writableDatabase
+        val tagId = tagName.trim().lowercase()
+        val values = ContentValues().apply {
+            put("session_id", sessionId)
+            put("tag_id", tagId)
+        }
+        db.insertWithOnConflict("session_tags", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+    }
+
+    fun removeTagFromSession(sessionId: String, tagName: String) = synchronized(this) {
+        val db = writableDatabase
+        val tagId = tagName.trim().lowercase()
+        db.delete("session_tags", "session_id = ? AND tag_id = ?", arrayOf(sessionId, tagId))
+    }
+
+    fun getTagsForSession(sessionId: String): List<com.rajpawardotin.kosh.domain.model.ChatTag> = synchronized(this) {
+        val list = mutableListOf<com.rajpawardotin.kosh.domain.model.ChatTag>()
+        val db = readableDatabase
+        val query = """
+            SELECT t.id, t.name, t.color 
+            FROM tags t
+            JOIN session_tags st ON t.id = st.tag_id
+            WHERE st.session_id = ?
+            ORDER BY t.name ASC
+        """.trimIndent()
+        db.rawQuery(query, arrayOf(sessionId)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idIdx = cursor.getColumnIndexOrThrow("id")
+                val nameIdx = cursor.getColumnIndexOrThrow("name")
+                val colIdx = cursor.getColumnIndexOrThrow("color")
+                do {
+                    list.add(
+                        com.rajpawardotin.kosh.domain.model.ChatTag(
+                            id = cursor.getString(idIdx),
+                            name = cursor.getString(nameIdx),
+                            colorHex = cursor.getString(colIdx)
+                        )
+                    )
+                } while (cursor.moveToNext())
+            }
+        }
+        return list
+    }
+
+    fun getSessionTagsCount(tagName: String): Int = synchronized(this) {
+        val db = readableDatabase
+        val tagId = tagName.trim().lowercase()
+        db.rawQuery("SELECT COUNT(*) FROM session_tags WHERE tag_id = ?", arrayOf(tagId)).use { cursor ->
+            if (cursor.moveToFirst()) cursor.getInt(0) else 0
         }
     }
 }

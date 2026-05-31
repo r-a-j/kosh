@@ -11,4 +11,14 @@ interface SessionRepository {
     
     fun closeDatabase()
     fun mergeDatabaseBackup(tempDecryptedDbPath: String)
+
+    fun getTags(): List<com.rajpawardotin.kosh.domain.model.ChatTag>
+    fun createTag(name: String, colorHex: String): Boolean
+    fun updateTag(oldName: String, newName: String, colorHex: String): Boolean
+    fun deleteTag(name: String): Boolean
+    fun addTagToSession(sessionId: String, tagName: String)
+    fun removeTagFromSession(sessionId: String, tagName: String)
+    fun getTagsForSession(sessionId: String): List<com.rajpawardotin.kosh.domain.model.ChatTag>
+    fun getSessionTagsCount(tagName: String): Int
+
 }
