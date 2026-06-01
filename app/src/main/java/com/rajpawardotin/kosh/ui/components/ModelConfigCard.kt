@@ -68,10 +68,12 @@ fun ModelConfigCard(
     braveApiKey: String = "",
     isAppLockEnabled: Boolean = false,
     isScreenshotEnabled: Boolean = false,
+    startWithNewChat: Boolean = false,
     currentTheme: String = "SYSTEM",
     onThemeSelected: (String) -> Unit = {},
     onToggleAppLock: (Boolean) -> Unit = {},
     onToggleScreenshot: (Boolean) -> Unit = {},
+    onToggleStartWithNewChat: (Boolean) -> Unit = {},
     onExportBackup: () -> Unit = {},
     onImportBackup: () -> Unit = {},
     onTavilyApiKeyChange: (String) -> Unit = {},
@@ -699,6 +701,44 @@ fun ModelConfigCard(
                     Switch(
                         checked = isScreenshotEnabled,
                         onCheckedChange = onToggleScreenshot,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MaterialTheme.colorScheme.primary,
+                            checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                            checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            uncheckedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Start App with New Chat Preference Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleStartWithNewChat(!startWithNewChat) }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Start App with New Chat",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Bypass dashboard and open new chat directly",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Switch(
+                        checked = startWithNewChat,
+                        onCheckedChange = onToggleStartWithNewChat,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.primary,
                             checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),

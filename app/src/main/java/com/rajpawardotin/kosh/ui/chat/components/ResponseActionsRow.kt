@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.VolumeUp
@@ -55,6 +56,7 @@ fun ResponseActionsRow(
     onStopTts: () -> Unit = {},
     feedback: Int = 0,
     onFeedbackChanged: (Int) -> Unit = {},
+    onManageTagsClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -200,6 +202,21 @@ fun ResponseActionsRow(
                 tint = if (isCurrentlySpeaking) activeGoodColor else defaultIconTint,
                 modifier = Modifier.size(16.dp)
             )
+        }
+
+        // 5.5. Manage Tags
+        if (onManageTagsClick != null) {
+            IconButton(
+                onClick = onManageTagsClick,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Label,
+                    contentDescription = "Manage tags",
+                    tint = defaultIconTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
 
         // 6. More Options Menu

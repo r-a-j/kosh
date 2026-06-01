@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.model.AttachedFile
@@ -53,7 +54,8 @@ import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.ui.components.ChatBubble
 import com.rajpawardotin.kosh.ui.components.ChatInput
 import com.rajpawardotin.kosh.ui.components.ModelConfigCard
-import com.rajpawardotin.kosh.ui.components.NeuralCoreWizard
+import com.rajpawardotin.kosh.ui.components.DashboardScreen
+import com.rajpawardotin.kosh.ui.components.ModelHubScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -90,8 +92,8 @@ fun ChatScreen(
             scope.launch { drawerState.close() }
         } else if (showBottomSheet) {
             showBottomSheet = false
-        } else if (viewModel.currentSessionId != null) {
-            viewModel.startNewChat()
+        } else if (viewModel.currentScreen == AppScreen.CHAT || viewModel.currentScreen == AppScreen.MODEL_HUB) {
+            viewModel.currentScreen = AppScreen.DASHBOARD
         } else {
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastBackPressTime < 2000) {
@@ -341,270 +343,324 @@ fun ChatScreen(
         )
 
 
-
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                com.rajpawardotin.kosh.ui.chat.components.ChatDrawerContent(
-                    viewModel = viewModel,
-                    drawerState = drawerState,
-                    scope = scope,
-                    context = context,
-                    onLockSession = { session -> sessionToLock = session }
-                )
-            }
-        ) {
-            Scaffold(
-                  modifier = Modifier.fillMaxSize(),
-                  containerColor = Color.Transparent,
-                  contentWindowInsets = WindowInsets(0, 0, 0, 0)
-              ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding)
+        if (viewModel.currentScreen == AppScreen.MODEL_HUB) {
+            ModelHubScreen(
+                viewModel = viewModel,
+                onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
+                onBackClick = {
+                    viewModel.currentScreen = AppScreen.DASHBOARD
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    com.rajpawardotin.kosh.ui.chat.components.ChatDrawerContent(
+                        viewModel = viewModel,
+                        drawerState = drawerState,
+                        scope = scope,
+                        context = context,
+                        onLockSession = { session -> sessionToLock = session }
+                    )
+                }
             ) {
-                // 1. Content Container (fills the Box)
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    if (!viewModel.isEngineReady) {
-                        NeuralCoreWizard(
-                            modelPath = viewModel.modelPath,
-                            isInitializing = viewModel.isInitializing,
-                            isCopyingModel = viewModel.isCopyingModel,
-                            isCheckingModels = viewModel.isCheckingModels,
-                            selectedBackend = viewModel.selectedBackend,
-                            backends = viewModel.backends,
-                            onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
-                            onSelectBackend = { viewModel.selectBackend(it) },
-                            onStartEngine = { viewModel.initializeEngine() },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(top = headerHeightDp)
-                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                        )
-                    } else {
-                        if (isLocked) {
-                            LockedVaultScreen(
-                                title = currentSession!!.title,
-                                hasBiometricKey = currentSession.encryptedKeyBiometric != null,
-                                onUnlockWithPassword = { pwd, onDone ->
-                                    viewModel.unlockSessionWithPassword(currentSession.id, pwd, onDone)
-                                },
-                                onUnlockWithBiometrics = { onDone ->
-                                    viewModel.unlockSessionWithBiometrics(currentSession.id, context, onDone)
-                                },
-                                onRecoverWithMnemonic = { mnemonic, newPwd, onDone ->
-                                    viewModel.recoverSessionWithMnemonic(currentSession.id, mnemonic, newPwd, context, onDone)
-                                },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(top = headerHeightDp)
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.BottomCenter
-                            ) {
-                                if (viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(top = headerHeightDp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        com.rajpawardotin.kosh.ui.chat.components.ChatEmptyState(
-                                            isTemporarySession = viewModel.isTemporarySession,
-                                            onSuggestionClick = { suggestion ->
-                                                viewModel.prompt = suggestion
-                                            },
-                                            onExitTemporaryClick = {
-                                                viewModel.startNewChat(isTemporary = false)
-                                            },
-                                            bottomPadding = inputHeightDp,
-                                            scrollState = emptyStateScrollState,
-                                            modelPath = viewModel.modelPath,
-                                            isEngineReady = viewModel.isEngineReady,
-                                            attachedFilesCount = viewModel.attachedFiles.size,
-                                            savedSessions = viewModel.savedSessions,
-                                            allTags = viewModel.allTags,
-                                            onStartTemporarySession = { viewModel.startNewChat(isTemporary = true) },
-                                            onStartJournalSession = {
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0)
+                ) { innerPadding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .consumeWindowInsets(innerPadding)
+                    ) {
+                        // 1. Content Container (fills the Box)
+                        Box(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            if (viewModel.isInitializing) {
+                                IgnitingCoreOverlay(
+                                    modelPath = viewModel.modelPath,
+                                    selectedBackend = viewModel.selectedBackend,
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = headerHeightDp)
+                                )
+                            } else if (!viewModel.isEngineReady) {
+                                EngineOfflineFallback(
+                                    modelPath = viewModel.modelPath,
+                                    onInitialize = { viewModel.triggerManualInitialization() },
+                                    onGoToHub = { viewModel.currentScreen = AppScreen.MODEL_HUB },
+                                    onGoToDashboard = { viewModel.currentScreen = AppScreen.DASHBOARD },
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(top = headerHeightDp)
+                                )
+                            } else {
+                                if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                    DashboardScreen(
+                                        viewModel = viewModel,
+                                        onManageModelsClick = {
+                                            viewModel.currentScreen = AppScreen.MODEL_HUB
+                                        },
+                                        onQuickChatClick = {
+                                            viewModel.navigateToChatWithAutoStart {
+                                                viewModel.startNewChat()
+                                            }
+                                            viewModel.currentScreen = AppScreen.CHAT
+                                        },
+                                        onStartJournalSession = {
+                                            viewModel.navigateToChatWithAutoStart {
                                                 val existingJournal = viewModel.savedSessions.find { sess ->
-                                                    sess.tags.any { it.id == "journal" }
+                                                    sess.tags.any { it.name.equals("journal", ignoreCase = true) }
                                                 }
                                                 if (existingJournal != null) {
                                                     viewModel.loadSession(existingJournal.id)
                                                 } else {
                                                     viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
                                                 }
-                                            },
-                                            onLoadSession = { viewModel.loadSession(it) },
-                                            onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
-                                            onSealVaultClick = { viewModel.lockAppOnBackground() }
-                                        )
-                                    }
-                                } else {
-                                    val topFadePx = with(density) { topFadeHeightDp.toPx() }
-                                    val topBoundaryPx = with(density) { headerHeightDp.toPx() }
-
-                                    LazyColumn(
-                                        state = scrollState,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .fadingEdges(
-                                                topBoundaryPx = topBoundaryPx,
-                                                topFadePx = topFadePx
-                                            ),
-                                        reverseLayout = true,
-                                        contentPadding = PaddingValues(
-                                            start = 16.dp,
-                                            end = 16.dp,
-                                            top = headerHeightDp + topFadeHeightDp + 8.dp,
-                                            bottom = inputHeightDp + 8.dp
-                                        ),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        // Index 0 is visual BOTTOM
-                                        
-                                        if (viewModel.isThinking || viewModel.isSearchingInternet || viewModel.currentResponseChunk.isNotEmpty() || viewModel.isGenerating) {
-                                            item {
-                                                ThinkingIndicator(
-                                                    text = when {
-                                                        viewModel.currentResponseChunk.isNotEmpty() -> viewModel.currentResponseChunk
-                                                        else -> viewModel.agenticStateLabel
-                                                    },
-                                                    isSearchingInternet = viewModel.isSearchingInternet,
-                                                    isGenerating = viewModel.isGenerating
-                                                )
                                             }
-                                        }
-
-                                        items(viewModel.chatMessages.reversed()) { message ->
-                                            val currentlySpeakingId by viewModel.currentlySpeakingMessageId.collectAsState()
-                                            ChatBubble(
-                                                message = message,
-                                                currentlySpeakingMessageId = currentlySpeakingId,
-                                                onPlayTts = { id, text -> viewModel.playTts(id, text) },
-                                                onStopTts = { viewModel.stopTts() },
-                                                checkedItems = viewModel.checkedItems,
-                                                onToggleChecklistItem = { index, checked ->
-                                                    viewModel.toggleChecklistItem(message.id, index, checked)
-                                                },
-                                                onFeedbackChanged = { feedback ->
-                                                    viewModel.updateMessageFeedback(message.id, feedback)
+                                            viewModel.currentScreen = AppScreen.CHAT
+                                        },
+                                        onLoadSession = { sessionId ->
+                                            viewModel.navigateToChatWithAutoStart {
+                                                viewModel.loadSession(sessionId)
+                                            }
+                                            viewModel.currentScreen = AppScreen.CHAT
+                                        },
+                                        onOpenSettings = { showBottomSheet = true },
+                                        onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
+                                        topPadding = headerHeightDp,
+                                        bottomPadding = inputHeightDp,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else { // AppScreen.CHAT
+                                    if (isLocked) {
+                                        LockedVaultScreen(
+                                            title = currentSession!!.title,
+                                            hasBiometricKey = currentSession.encryptedKeyBiometric != null,
+                                            onUnlockWithPassword = { pwd, onDone ->
+                                                viewModel.unlockSessionWithPassword(currentSession.id, pwd, onDone)
+                                            },
+                                            onUnlockWithBiometrics = { onDone ->
+                                                viewModel.unlockSessionWithBiometrics(currentSession.id, context, onDone)
+                                            },
+                                            onRecoverWithMnemonic = { mnemonic, newPwd, onDone ->
+                                                viewModel.recoverSessionWithMnemonic(currentSession.id, mnemonic, newPwd, context, onDone)
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(top = headerHeightDp)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.BottomCenter
+                                        ) {
+                                            if (viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(top = headerHeightDp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    com.rajpawardotin.kosh.ui.chat.components.ChatEmptyState(
+                                                        onSuggestionClick = { suggestion ->
+                                                            viewModel.prompt = suggestion
+                                                        },
+                                                        bottomPadding = inputHeightDp
+                                                    )
                                                 }
-                                            )
+                                            } else {
+                                                val topFadePx = with(density) { topFadeHeightDp.toPx() }
+                                                val topBoundaryPx = with(density) { headerHeightDp.toPx() }
+
+                                                LazyColumn(
+                                                    state = scrollState,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .fadingEdges(
+                                                            topBoundaryPx = topBoundaryPx,
+                                                            topFadePx = topFadePx
+                                                        ),
+                                                    reverseLayout = true,
+                                                    contentPadding = PaddingValues(
+                                                        start = 16.dp,
+                                                        end = 16.dp,
+                                                        top = headerHeightDp + topFadeHeightDp + 8.dp,
+                                                        bottom = inputHeightDp + 8.dp
+                                                    ),
+                                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                                ) {
+                                                    // Index 0 is visual BOTTOM
+
+                                                    if (viewModel.isThinking || viewModel.isSearchingInternet || viewModel.currentResponseChunk.isNotEmpty() || viewModel.isGenerating) {
+                                                        item {
+                                                            ThinkingIndicator(
+                                                                text = when {
+                                                                    viewModel.currentResponseChunk.isNotEmpty() -> viewModel.currentResponseChunk
+                                                                    else -> viewModel.agenticStateLabel
+                                                                },
+                                                                isSearchingInternet = viewModel.isSearchingInternet,
+                                                                isGenerating = viewModel.isGenerating
+                                                            )
+                                                        }
+                                                    }
+
+                                                    items(viewModel.chatMessages.reversed()) { message ->
+                                                        val currentlySpeakingId by viewModel.currentlySpeakingMessageId.collectAsState()
+                                                        ChatBubble(
+                                                            message = message,
+                                                            currentlySpeakingMessageId = currentlySpeakingId,
+                                                            onPlayTts = { id, text -> viewModel.playTts(id, text) },
+                                                            onStopTts = { viewModel.stopTts() },
+                                                            checkedItems = viewModel.checkedItems,
+                                                            onToggleChecklistItem = { index, checked ->
+                                                                viewModel.toggleChecklistItem(message.id, index, checked)
+                                                            },
+                                                            onFeedbackChanged = { feedback ->
+                                                                viewModel.updateMessageFeedback(message.id, feedback)
+                                                            },
+                                                            onManageTagsClick = if (!viewModel.isTemporarySession && !isLocked) {
+                                                                { showManageTagsDialog = true }
+                                                            } else null
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
-
-                                ChatInput(
-                                    value = viewModel.prompt,
-                                    onValueChange = { viewModel.prompt = it },
-                                    onSend = { viewModel.sendMessage(context) },
-                                    onStop = { viewModel.stopGeneration() },
-                                    onVoiceClick = { startVoiceInput() },
-                                    onAttachClick = { documentPickerLauncher.launch("*/*") },
-                                    attachedFiles = viewModel.attachedFiles,
-                                    onDetachFile = { viewModel.detachFile(it) },
-                                    enabled = viewModel.isEngineReady,
-                                    isGenerating = viewModel.isGenerating,
-                                    isInternetEnabled = viewModel.isInternetEnabled,
-                                    isSearchForced = viewModel.isSearchForced,
-                                    onToggleSearch = { viewModel.toggleSearchForced() },
-                                    modifier = Modifier
-                                        .onGloballyPositioned { coordinates ->
-                                            inputHeightDp = with(density) { coordinates.size.height.toDp() }
-                                        }
-                                        .fillMaxWidth()
-                                        .imePadding()
-                                        .navigationBarsPadding()
-                                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                                )
                             }
                         }
-                    }
-                }
 
-                // 2. Floating Header Column (floats on top of the content)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .onGloballyPositioned { coordinates ->
-                            headerHeightDp = with(density) { coordinates.size.height.toDp() }
+                        // 2. ChatInput (only visible when engine is ready and not initializing)
+                        if (viewModel.isEngineReady && !viewModel.isInitializing) {
+                            ChatInput(
+                                value = viewModel.prompt,
+                                onValueChange = { viewModel.prompt = it },
+                                onSend = {
+                                     if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                         val enteredPrompt = viewModel.prompt
+                                         viewModel.currentScreen = AppScreen.CHAT
+                                         viewModel.startNewChat()
+                                         viewModel.prompt = enteredPrompt
+                                     }
+                                     viewModel.sendMessage(context)
+                                 },
+                                onStop = { viewModel.stopGeneration() },
+                                onVoiceClick = {
+                                    if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                        viewModel.currentScreen = AppScreen.CHAT
+                                        viewModel.startNewChat()
+                                    }
+                                    startVoiceInput()
+                                },
+                                onAttachClick = { documentPickerLauncher.launch("*/*") },
+                                attachedFiles = viewModel.attachedFiles,
+                                onDetachFile = { viewModel.detachFile(it) },
+                                enabled = viewModel.isEngineReady,
+                                isGenerating = viewModel.isGenerating,
+                                isInternetEnabled = viewModel.isInternetEnabled,
+                                isSearchForced = viewModel.isSearchForced,
+                                onToggleSearch = { viewModel.toggleSearchForced() },
+                                modifier = Modifier
+                                    .onGloballyPositioned { coordinates ->
+                                        inputHeightDp = with(density) { coordinates.size.height.toDp() }
+                                    }
+                                    .fillMaxWidth()
+                                    .imePadding()
+                                    .navigationBarsPadding()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                    .align(Alignment.BottomCenter)
+                            )
                         }
-                ) {
-                    com.rajpawardotin.kosh.ui.chat.components.ChatTopBar(
-                        isEngineReady = viewModel.isEngineReady,
-                        modelPath = viewModel.modelPath,
-                        currentSession = viewModel.savedSessions.find { it.id == viewModel.currentSessionId },
-                        isCurrentSessionUnlocked = viewModel.currentSessionId?.let { viewModel.activeSessionKeys.containsKey(it) } ?: false,
-                        isTemporarySession = viewModel.isTemporarySession,
-                        isGenerating = viewModel.isGenerating,
-                        onMenuClick = { scope.launch { drawerState.open() } },
-                        onCoreSelectorClick = { if (!viewModel.isGenerating) showBottomSheet = true },
-                        onLockSettingsClick = { session -> sessionToLock = session },
-                        onManageLockClick = { showManageLockDialog = true },
-                        onNewChatClick = { isTemp -> viewModel.startNewChat(isTemporary = isTemp) },
-                        onSettingsClick = { showBottomSheet = true },
-                        onManageTagsClick = { showManageTagsDialog = true },
-                        scrollProgress = { scrollProgress }
-                    )
 
-                    // Badge for Temporary Chat
-                    AnimatedVisibility(
-                        visible = viewModel.isTemporarySession,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        Row(
+                        // 3. Floating Header Column (floats on top of the content)
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 4.dp),
-                            horizontalArrangement = Arrangement.Center
+                                .align(Alignment.TopCenter)
+                                .onGloballyPositioned { coordinates ->
+                                    headerHeightDp = with(density) { coordinates.size.height.toDp() }
+                                }
                         ) {
-                            Surface(
-                                color = Color(0xFFFF9100).copy(alpha = 0.15f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.3f)),
-                                shape = RoundedCornerShape(12.dp)
+                            com.rajpawardotin.kosh.ui.chat.components.ChatTopBar(
+                                isEngineReady = viewModel.isEngineReady,
+                                modelPath = viewModel.modelPath,
+                                currentSession = viewModel.savedSessions.find { it.id == viewModel.currentSessionId },
+                                isCurrentSessionUnlocked = viewModel.currentSessionId?.let { viewModel.activeSessionKeys.containsKey(it) } ?: false,
+                                isTemporarySession = viewModel.isTemporarySession,
+                                isGenerating = viewModel.isGenerating,
+                                onMenuClick = { scope.launch { drawerState.open() } },
+                                onCoreSelectorClick = { if (!viewModel.isGenerating) showBottomSheet = true },
+                                onLockSettingsClick = { session -> sessionToLock = session },
+                                onManageLockClick = { showManageLockDialog = true },
+                                onNewChatClick = { isTemp -> 
+                                    viewModel.startNewChat(isTemporary = isTemp)
+                                    viewModel.currentScreen = AppScreen.CHAT
+                                },
+                                onSettingsClick = { showBottomSheet = true },
+                                scrollProgress = { scrollProgress },
+                                onBackClick = if (viewModel.currentScreen == AppScreen.CHAT) {
+                                    { viewModel.currentScreen = AppScreen.DASHBOARD }
+                                } else null
+                            )
+
+                            // Badge for Temporary Chat
+                            AnimatedVisibility(
+                                visible = viewModel.isTemporarySession && viewModel.currentScreen == AppScreen.CHAT,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .clip(CircleShape)
-                                            .background(Color(0xFFFF9100))
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "TEMPORARY SESSION (NOT SAVED)",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            letterSpacing = 1.sp
-                                        ),
-                                        color = Color(0xFFFF9100)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .size(16.dp)
-                                            .clip(CircleShape)
-                                            .clickable { viewModel.startNewChat(isTemporary = false) },
-                                        contentAlignment = Alignment.Center
+                                    Surface(
+                                        color = Color(0xFFFF9100).copy(alpha = 0.15f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFF9100).copy(alpha = 0.3f)),
+                                        shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Exit Temporary Chat",
-                                            tint = Color(0xFFFF9100),
-                                            modifier = Modifier.size(12.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(0xFFFF9100))
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "TEMPORARY SESSION (NOT SAVED)",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.sp
+                                                ),
+                                                color = Color(0xFFFF9100)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable { viewModel.startNewChat(isTemporary = false) },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Exit Temporary Chat",
+                                                    tint = Color(0xFFFF9100),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -613,7 +669,6 @@ fun ChatScreen(
                 }
             }
         }
-    }
 
         if (showBottomSheet) {
             ModalBottomSheet(
@@ -645,6 +700,7 @@ fun ChatScreen(
                         braveApiKey = viewModel.braveApiKey,
                         isAppLockEnabled = viewModel.isAppLockEnabled,
                         isScreenshotEnabled = viewModel.isScreenshotEnabled,
+                        startWithNewChat = viewModel.startWithNewChat,
                         currentTheme = viewModel.appTheme,
                         onThemeSelected = { viewModel.updateAppTheme(it) },
                         onToggleAppLock = { viewModel.toggleAppLock(it) },
@@ -675,8 +731,9 @@ fun ChatScreen(
                         onDeleteModel = { viewModel.deleteModel() },
                         onSelectBackend = { viewModel.selectBackend(it) },
                         onSelectSearchEngine = { viewModel.selectSearchEngine(it) },
-                        onStartEngine = { viewModel.initializeEngine() },
+                        onStartEngine = { viewModel.triggerManualInitialization() },
                         onToggleInternet = { viewModel.isInternetEnabled = it },
+                        onToggleStartWithNewChat = { viewModel.updateStartWithNewChat(it) },
                         models = viewModel.models,
                         onSelectModel = { viewModel.selectModel(it.filePath) },
                         onSetModelTag = { name, tag -> viewModel.setModelTag(name, tag) },
@@ -821,6 +878,35 @@ fun ChatScreen(
                 onDismiss = { showManageTagsDialog = false }
             )
         }
+
+        // Backend Selection and Fallback dialogues
+        if (viewModel.showInitializeBackendDialog) {
+            com.rajpawardotin.kosh.ui.chat.dialogs.InitializeBackendDialog(
+                backends = viewModel.backends,
+                onSelectBackend = { viewModel.initializeEngineWithBackend(it) },
+                onDismiss = { viewModel.showInitializeBackendDialog = false }
+            )
+        }
+
+        if (viewModel.showBackendFallbackPrompt && viewModel.failedBackend != null) {
+            val remaining = viewModel.backends.filter { it !in viewModel.attemptedBackends }
+            com.rajpawardotin.kosh.ui.chat.dialogs.BackendFallbackPromptDialog(
+                failedBackend = viewModel.failedBackend!!,
+                remainingBackends = remaining,
+                onSelectBackend = { viewModel.initializeEngineWithFallbackBackend(it) },
+                onDismiss = { viewModel.showBackendFallbackPrompt = false }
+            )
+        }
+
+        if (viewModel.showModelIncompatibleDialog) {
+            com.rajpawardotin.kosh.ui.chat.dialogs.ModelIncompatibleDialog(
+                onGoToHub = {
+                    viewModel.showModelIncompatibleDialog = false
+                    viewModel.currentScreen = AppScreen.MODEL_HUB
+                },
+                onDismiss = { viewModel.showModelIncompatibleDialog = false }
+            )
+        }
     }
 }
 
@@ -885,15 +971,12 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
     }
 
     Row(
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .padding(top = 5.dp)
-        ) {
+        Box {
             if (isSearchingInternet) {
                 Icon(
                     imageVector = Icons.Default.Public,
@@ -1622,3 +1705,227 @@ private fun Modifier.fadingEdges(
             )
         }
     }
+
+@Composable
+fun IgnitingCoreOverlay(
+    modelPath: String?,
+    selectedBackend: String,
+    modifier: Modifier = Modifier
+) {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val infiniteTransition = rememberInfiniteTransition(label = "ignitingPulse")
+    val alphaPulse by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+            modifier = Modifier.widthIn(max = 400.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(primaryColor.copy(alpha = 0.08f))
+                        .border(1.dp, primaryColor.copy(alpha = 0.25f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = primaryColor,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+
+                Text(
+                    text = "IGNITING NEURAL CORE",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp
+                    ),
+                    color = primaryColor,
+                    modifier = Modifier.alpha(alphaPulse)
+                )
+
+                Text(
+                    text = "Loading private offline LLM weights into memory. Please keep Kosh open. This takes just a moment...",
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                val fileName = modelPath?.let { java.io.File(it).name } ?: "UNKNOWN WEIGHTS"
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Memory,
+                            contentDescription = null,
+                            tint = primaryColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${fileName.uppercase()} (${selectedBackend.uppercase()})",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EngineOfflineFallback(
+    modelPath: String?,
+    onInitialize: () -> Unit,
+    onGoToHub: () -> Unit,
+    onGoToDashboard: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val outlineVariant = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
+    val errorColor = MaterialTheme.colorScheme.error
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, outlineVariant),
+            modifier = Modifier.widthIn(max = 400.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(errorColor.copy(alpha = 0.08f))
+                        .border(1.dp, errorColor.copy(alpha = 0.25f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = errorColor,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Text(
+                    text = "NEURAL CORE OFFLINE",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 2.sp
+                    ),
+                    color = errorColor,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "The local brain is offline. You must initialize model weights to execute offline intelligence.",
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+
+                if (modelPath != null) {
+                    val fileName = java.io.File(modelPath).name
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.04f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Memory,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = fileName.uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (modelPath != null) {
+                        Button(
+                            onClick = onInitialize,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(48.dp)
+                        ) {
+                            Icon(Icons.Default.PowerSettingsNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("INITIALIZE CORE", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = onGoToHub,
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("OPEN MODEL HUB", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+
+                    TextButton(
+                        onClick = onGoToDashboard,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Go back to Dashboard", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+        }
+    }
+}

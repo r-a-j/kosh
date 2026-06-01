@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -45,8 +46,8 @@ fun ChatTopBar(
     onManageLockClick: () -> Unit,
     onNewChatClick: (isTemporary: Boolean) -> Unit,
     onSettingsClick: () -> Unit,
-    onManageTagsClick: () -> Unit = {},
-    scrollProgress: () -> Float = { 0f }
+    scrollProgress: () -> Float = { 0f },
+    onBackClick: (() -> Unit)? = null
 ) {
     val barColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
     val outlineColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
@@ -65,23 +66,32 @@ fun ChatTopBar(
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left: 2-line Hamburger Menu M3 styled button
+        // Left button: Back or Hamburger Menu
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                 .border(1.dp, outlineColor, CircleShape)
-                .clickable { onMenuClick() },
+                .clickable { onBackClick?.invoke() ?: onMenuClick() },
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(3.5.dp),
-                horizontalAlignment = Alignment.Start,
-                modifier = Modifier.width(18.dp)
-            ) {
-                Box(modifier = Modifier.width(18.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
-                Box(modifier = Modifier.width(12.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
+            if (onBackClick != null) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.size(20.dp)
+                )
+            } else {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(3.5.dp),
+                    horizontalAlignment = Alignment.Start,
+                    modifier = Modifier.width(18.dp)
+                ) {
+                    Box(modifier = Modifier.width(18.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
+                    Box(modifier = Modifier.width(12.dp).height(2.dp).background(onSurface.copy(alpha = 0.8f)))
+                }
             }
         }
 
@@ -188,24 +198,6 @@ fun ChatTopBar(
                         tint = if (isEncrypted) {
                             if (isUnlocked) primary else errorColor
                         } else onSurfaceMuted,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-
-            // Action 1.5: Chat Tags Management Button
-            if (currentSession != null && !isTemporarySession && isCurrentSessionUnlocked) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .clickable { onManageTagsClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Label,
-                        contentDescription = "Session Tags",
-                        tint = primary,
                         modifier = Modifier.size(16.dp)
                     )
                 }

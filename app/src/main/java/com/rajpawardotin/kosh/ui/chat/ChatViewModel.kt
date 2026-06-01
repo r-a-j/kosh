@@ -15,6 +15,7 @@ import com.rajpawardotin.kosh.data.DestroyableSecretKey
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.data.TtsProvider
 import com.rajpawardotin.kosh.domain.model.ChatSession
+
 import com.rajpawardotin.kosh.domain.model.AttachedFile
 import com.rajpawardotin.kosh.domain.model.SessionDocument
 import com.rajpawardotin.kosh.domain.model.ChatTag
@@ -41,6 +42,8 @@ import javax.crypto.spec.SecretKeySpec
 
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CancellationException
+
+enum class AppScreen { DASHBOARD, CHAT, MODEL_HUB }
 
 class ChatViewModel(
     private val context: Context,
@@ -120,6 +123,18 @@ class ChatViewModel(
                         modelPath = generalModel.filePath
                     }
                 }
+                
+                if (!isStartupRedirectionDone) {
+                    isStartupRedirectionDone = true
+                    if (allModels.isEmpty()) {
+                        currentScreen = AppScreen.MODEL_HUB
+                    } else {
+                        if (!isEngineReady && !isInitializing) {
+                            initializeEngine()
+                        }
+                    }
+                }
+                
                 isCheckingModels = false
             }
         }
@@ -278,6 +293,17 @@ class ChatViewModel(
     val allTags = androidx.compose.runtime.mutableStateListOf<ChatTag>()
     val activeSessionTags = androidx.compose.runtime.mutableStateListOf<ChatTag>()
     val nextSessionTags = androidx.compose.runtime.mutableStateListOf<String>()
+
+    var currentScreen by mutableStateOf(AppScreen.DASHBOARD)
+    var isStartupRedirectionDone = false
+    var startWithNewChat by mutableStateOf(settingsProvider.getBoolean("start_with_new_chat", false))
+        private set
+
+    fun updateStartWithNewChat(value: Boolean) {
+        startWithNewChat = value
+        settingsProvider.putBoolean("start_with_new_chat", value)
+    }
+
 
 
     
@@ -654,8 +680,11 @@ class ChatViewModel(
             loadSavedSessionsInternal()
             loadAllTags()
         }
+        val defaultToNewChat = settingsProvider.getBoolean("start_with_new_chat", false)
+        currentScreen = if (defaultToNewChat) AppScreen.CHAT else AppScreen.DASHBOARD
         // Metrics tracking is started by MainActivity.onStart(), not here
     }
+
 
     private suspend fun loadSavedSessionsInternal() {
         val sessions = sessionRepository.getSessionsOrderedByLastActive().map { decryptSession(it) }
@@ -761,6 +790,20 @@ class ChatViewModel(
         }
     }
 
+    fun navigateToChatWithAutoStart(action: () -> Unit) {
+        val path = modelPath
+        if (path == null) {
+            showToast("Please import or select a model first.")
+            currentScreen = AppScreen.MODEL_HUB
+        } else {
+            action()
+            currentScreen = AppScreen.CHAT
+            if (!isEngineReady && !isInitializing) {
+                initializeEngine()
+            }
+        }
+    }
+
     fun startNewChat(isTemporary: Boolean = false) {
         if (isGenerating) return
         currentSessionId = null
@@ -772,12 +815,14 @@ class ChatViewModel(
         prompt = ""
         activeSessionDocuments.clear()
         activeSessionTags.clear()
+        nextSessionTags.clear()
         if (isTemporary) {
             showToast("Temporary Vault active (history disabled)")
         } else {
             showToast("New saved brainstorm active")
         }
     }
+
 
     fun startNewChatWithTags(isTemporary: Boolean = false, tags: List<String>) {
         startNewChat(isTemporary)
@@ -1386,7 +1431,17 @@ class ChatViewModel(
     }
 
     fun addTagToActiveSession(tagName: String) {
-        val sessionId = currentSessionId ?: return
+        val sessionId = currentSessionId
+        if (sessionId == null) {
+            if (!nextSessionTags.contains(tagName)) {
+                nextSessionTags.add(tagName)
+            }
+            val tag = allTags.find { it.name == tagName }
+            if (tag != null && !activeSessionTags.contains(tag)) {
+                activeSessionTags.add(tag)
+            }
+            return
+        }
         viewModelScope.launch(safeIoDispatcher) {
             sessionRepository.addTagToSession(sessionId, tagName)
             withContext(Dispatchers.Main) {
@@ -1397,7 +1452,12 @@ class ChatViewModel(
     }
 
     fun removeTagFromActiveSession(tagName: String) {
-        val sessionId = currentSessionId ?: return
+        val sessionId = currentSessionId
+        if (sessionId == null) {
+            nextSessionTags.remove(tagName)
+            activeSessionTags.removeAll { it.name == tagName }
+            return
+        }
         viewModelScope.launch(safeIoDispatcher) {
             sessionRepository.removeTagFromSession(sessionId, tagName)
             withContext(Dispatchers.Main) {
@@ -1406,6 +1466,7 @@ class ChatViewModel(
             }
         }
     }
+
 
     private suspend fun loadActiveSessionTagsInternal(sessionId: String) {
         val tags = sessionRepository.getTagsForSession(sessionId)
@@ -1453,6 +1514,12 @@ class ChatViewModel(
     var showCrashRecoveryDialog by mutableStateOf(false)
         private set
 
+    var showInitializeBackendDialog by mutableStateOf(false)
+    var failedBackend by mutableStateOf<String?>(null)
+    var showBackendFallbackPrompt by mutableStateOf(false)
+    var showModelIncompatibleDialog by mutableStateOf(false)
+    val attemptedBackends = androidx.compose.runtime.mutableStateListOf<String>()
+
     fun onCrashRecoveryDecision(tryAgain: Boolean) {
         showCrashRecoveryDialog = false
         if (tryAgain) {
@@ -1464,6 +1531,76 @@ class ChatViewModel(
             setModel(null)
             isEngineReady = false
             showToast("Model disabled to prevent further crashes.")
+        }
+    }
+
+    fun triggerManualInitialization() {
+        val path = modelPath
+        if (path == null) {
+            showToast("Please import or select a model first.")
+            currentScreen = AppScreen.MODEL_HUB
+            return
+        }
+        
+        if (settingsProvider.getBoolean("engine_crashed", false)) {
+            showCrashRecoveryDialog = true
+            return
+        }
+
+        showInitializeBackendDialog = true
+        failedBackend = null
+        showBackendFallbackPrompt = false
+        showModelIncompatibleDialog = false
+        attemptedBackends.clear()
+    }
+
+    fun initializeEngineWithBackend(backend: String) {
+        showInitializeBackendDialog = false
+        selectedBackend = backend
+        attemptedBackends.clear()
+        attemptedBackends.add(backend)
+        initializeEngineInternal()
+    }
+
+    fun initializeEngineWithFallbackBackend(backend: String) {
+        showBackendFallbackPrompt = false
+        selectedBackend = backend
+        attemptedBackends.add(backend)
+        initializeEngineInternal()
+    }
+
+    private fun initializeEngineInternal() {
+        val path = modelPath ?: return
+        isInitializing = true
+        
+        // Write sentinel synchronously
+        settingsProvider.commitBoolean("engine_crashed", true)
+        
+        viewModelScope.launch(safeIoDispatcher) {
+            val result = aiProvider.initialize(path, selectedBackend)
+            // Clear sentinel on success or graceful failure
+            settingsProvider.commitBoolean("engine_crashed", false)
+            
+            withContext(Dispatchers.Main) {
+                isInitializing = false
+                isEngineReady = aiProvider.isInitialized
+                if (isEngineReady) {
+                    showToast("Model loaded successfully!")
+                    // Direct to homescreen
+                    currentScreen = AppScreen.DASHBOARD
+                } else {
+                    val error = result.exceptionOrNull()?.localizedMessage ?: "Unknown configuration error"
+                    showToast("Failed to load model on $selectedBackend: $error")
+                    
+                    val remaining = backends.filter { it !in attemptedBackends }
+                    if (remaining.isNotEmpty()) {
+                        failedBackend = selectedBackend
+                        showBackendFallbackPrompt = true
+                    } else {
+                        showModelIncompatibleDialog = true
+                    }
+                }
+            }
         }
     }
 
@@ -1586,6 +1723,9 @@ class ChatViewModel(
                             modelPath = modelPath,
                             lastSearchQuery = null
                         )
+                        // Save session first to avoid foreign key constraint failure
+                        sessionRepository.saveSession(newSession)
+                        
                         for (tagId in nextSessionTags) {
                             sessionRepository.addTagToSession(sessionId!!, tagId)
                         }

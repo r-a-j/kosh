@@ -38,7 +38,8 @@ fun ChatBubble(
     onStopTts: (() -> Unit)? = null,
     checkedItems: Map<String, Boolean>,
     onToggleChecklistItem: (Int, Boolean) -> Unit,
-    onFeedbackChanged: ((Int) -> Unit)? = null
+    onFeedbackChanged: ((Int) -> Unit)? = null,
+    onManageTagsClick: (() -> Unit)? = null
 ) {
     val alignment = if (message.isUser) Alignment.End else Alignment.Start
     val primary = MaterialTheme.colorScheme.primary
@@ -238,7 +239,8 @@ fun ChatBubble(
                         onPlayTts = { onPlayTts?.invoke(message.id, message.text) },
                         onStopTts = { onStopTts?.invoke() },
                         feedback = message.feedback,
-                        onFeedbackChanged = { nextFeedback -> onFeedbackChanged?.invoke(nextFeedback) }
+                        onFeedbackChanged = { nextFeedback -> onFeedbackChanged?.invoke(nextFeedback) },
+                        onManageTagsClick = onManageTagsClick
                     )
                     Text(
                         text = "Kosh may make mistakes. Verify important info.",
