@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
+    android:width="288dp"
+    android:height="288dp"
     android:viewportWidth="288"
     android:viewportHeight="288">
     
+    <!-- Background Rectangle -->
+    <path
+        android:fillColor="#C4BBBB"
+        android:pathData="M0,0h288v288h-288z" />
+        
     <!-- White Circle -->
     <path
         android:fillColor="#FFFFFF"
