@@ -43,7 +43,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CancellationException
 
-enum class AppScreen { DASHBOARD, CHAT, MODEL_HUB }
+enum class AppScreen { DASHBOARD, CHAT, MODEL_HUB, SETTINGS }
 
 class ChatViewModel(
     private val context: Context,

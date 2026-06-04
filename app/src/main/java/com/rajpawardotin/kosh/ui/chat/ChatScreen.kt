@@ -53,7 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.ui.components.ChatBubble
 import com.rajpawardotin.kosh.ui.components.ChatInput
-import com.rajpawardotin.kosh.ui.components.ModelConfigCard
+import com.rajpawardotin.kosh.ui.components.SettingsScreen
 import com.rajpawardotin.kosh.ui.components.DashboardScreen
 import com.rajpawardotin.kosh.ui.components.ModelHubScreen
 import kotlinx.coroutines.Dispatchers
@@ -70,8 +70,7 @@ fun ChatScreen(
     modifier: Modifier = Modifier
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    var showBottomSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
+    var previousScreen by remember { mutableStateOf(AppScreen.DASHBOARD) }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -90,8 +89,8 @@ fun ChatScreen(
     androidx.activity.compose.BackHandler(enabled = true) {
         if (drawerState.isOpen) {
             scope.launch { drawerState.close() }
-        } else if (showBottomSheet) {
-            showBottomSheet = false
+        } else if (viewModel.currentScreen == AppScreen.SETTINGS) {
+            viewModel.currentScreen = previousScreen
         } else if (viewModel.currentScreen == AppScreen.CHAT || viewModel.currentScreen == AppScreen.MODEL_HUB) {
             viewModel.currentScreen = AppScreen.DASHBOARD
         } else {
@@ -352,6 +351,17 @@ fun ChatScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        } else if (viewModel.currentScreen == AppScreen.SETTINGS) {
+            SettingsScreen(
+                viewModel = viewModel,
+                onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
+                onExportBackup = { showExportPasswordDialog = true },
+                onImportBackup = { importBackupLauncher.launch(arrayOf("*/*")) },
+                onBackClick = {
+                    viewModel.currentScreen = previousScreen
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -430,7 +440,10 @@ fun ChatScreen(
                                             }
                                             viewModel.currentScreen = AppScreen.CHAT
                                         },
-                                        onOpenSettings = { showBottomSheet = true },
+                                         onOpenSettings = {
+                                             previousScreen = viewModel.currentScreen
+                                             viewModel.currentScreen = AppScreen.SETTINGS
+                                         },
                                         onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
                                         topPadding = headerHeightDp,
                                         bottomPadding = inputHeightDp,
@@ -595,14 +608,22 @@ fun ChatScreen(
                                 isTemporarySession = viewModel.isTemporarySession,
                                 isGenerating = viewModel.isGenerating,
                                 onMenuClick = { scope.launch { drawerState.open() } },
-                                onCoreSelectorClick = { if (!viewModel.isGenerating) showBottomSheet = true },
+                                onCoreSelectorClick = {
+                                    if (!viewModel.isGenerating) {
+                                        previousScreen = viewModel.currentScreen
+                                        viewModel.currentScreen = AppScreen.SETTINGS
+                                    }
+                                },
                                 onLockSettingsClick = { session -> sessionToLock = session },
                                 onManageLockClick = { showManageLockDialog = true },
                                 onNewChatClick = { isTemp -> 
                                     viewModel.startNewChat(isTemporary = isTemp)
                                     viewModel.currentScreen = AppScreen.CHAT
                                 },
-                                onSettingsClick = { showBottomSheet = true },
+                                onSettingsClick = {
+                                    previousScreen = viewModel.currentScreen
+                                    viewModel.currentScreen = AppScreen.SETTINGS
+                                },
                                 scrollProgress = { scrollProgress },
                                 onBackClick = if (viewModel.currentScreen == AppScreen.CHAT) {
                                     { viewModel.currentScreen = AppScreen.DASHBOARD }
@@ -670,82 +691,7 @@ fun ChatScreen(
             }
         }
 
-        if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                dragHandle = { BottomSheetDefaults.DragHandle(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)) }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 32.dp)
-                ) {
-                    ModelConfigCard(
-                        modelPath = viewModel.modelPath,
-                        isInitializing = viewModel.isInitializing,
-                        isCopyingModel = viewModel.isCopyingModel,
-                        isEngineReady = viewModel.isEngineReady,
-                        selectedBackend = viewModel.selectedBackend,
-                        backends = viewModel.backends,
-                        isInternetEnabled = viewModel.isInternetEnabled,
-                        tokensPerSecond = viewModel.tokensPerSecond,
-                        npuLoad = viewModel.npuLoad,
-                        ramUsage = viewModel.ramUsage,
-                        selectedSearchEngine = viewModel.selectedSearchEngine,
-                        searchEngines = viewModel.searchEngines,
-                        tavilyApiKey = viewModel.tavilyApiKey,
-                        braveApiKey = viewModel.braveApiKey,
-                        isAppLockEnabled = viewModel.isAppLockEnabled,
-                        isScreenshotEnabled = viewModel.isScreenshotEnabled,
-                        startWithNewChat = viewModel.startWithNewChat,
-                        currentTheme = viewModel.appTheme,
-                        onThemeSelected = { viewModel.updateAppTheme(it) },
-                        onToggleAppLock = { viewModel.toggleAppLock(it) },
-                        onToggleScreenshot = { enabled ->
-                            if (!enabled) {
-                                viewModel.toggleScreenshot(false)
-                            } else {
-                                if (!viewModel.isScreenshotPasscodeSet) {
-                                    showScreenshotSetupDialog = true
-                                } else {
-                                    if (viewModel.isScreenshotBiometricEnabled) {
-                                        viewModel.unlockScreenshotWithBiometrics(context) { success ->
-                                            if (!success) {
-                                                showScreenshotUnlockDialog = true
-                                            }
-                                        }
-                                    } else {
-                                        showScreenshotUnlockDialog = true
-                                    }
-                                }
-                            }
-                        },
-                        onExportBackup = { showExportPasswordDialog = true },
-                        onImportBackup = { importBackupLauncher.launch(arrayOf("*/*")) },
-                        onTavilyApiKeyChange = { viewModel.updateTavilyApiKey(it) },
-                        onBraveApiKeyChange = { viewModel.updateBraveApiKey(it) },
-                        onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
-                        onDeleteModel = { viewModel.deleteModel() },
-                        onSelectBackend = { viewModel.selectBackend(it) },
-                        onSelectSearchEngine = { viewModel.selectSearchEngine(it) },
-                        onStartEngine = { viewModel.triggerManualInitialization() },
-                        onToggleInternet = { viewModel.isInternetEnabled = it },
-                        onToggleStartWithNewChat = { viewModel.updateStartWithNewChat(it) },
-                        models = viewModel.models,
-                        onSelectModel = { viewModel.selectModel(it.filePath) },
-                        onSetModelTag = { name, tag -> viewModel.setModelTag(name, tag) },
-                        onDeleteModelFile = { viewModel.deleteModelFile(it) },
-                        allTags = viewModel.allTags,
-                        onCreateTag = { name, color -> viewModel.createTag(name, color) },
-                        onRenameTag = { old, new, color, onWarning -> viewModel.updateTag(old, new, color, onWarning) },
-                        onDeleteTag = { name, onWarning -> viewModel.deleteTag(name, onWarning) }
-                    )
-                }
-            }
-        }
+
 
         // App Lock Overlay
         if (viewModel.isAppLocked) {
