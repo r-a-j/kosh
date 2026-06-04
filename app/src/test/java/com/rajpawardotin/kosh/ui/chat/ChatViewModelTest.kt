@@ -259,15 +259,15 @@ class ChatViewModelTest {
 
     @Test
     fun testAppThemeSettingUpdates() {
-        assertEquals("SYSTEM", viewModel.appTheme)
+        assertEquals("OLED_OBSIDIAN", viewModel.appTheme)
         
         viewModel.updateAppTheme("OLED_OBSIDIAN")
         assertEquals("OLED_OBSIDIAN", viewModel.appTheme)
-        assertEquals("OLED_OBSIDIAN", fakeSettings.getString("app_theme", "SYSTEM"))
+        assertEquals("OLED_OBSIDIAN", fakeSettings.getString("app_theme", "OLED_OBSIDIAN"))
         
         viewModel.updateAppTheme("MINIMALIST_SAND")
         assertEquals("MINIMALIST_SAND", viewModel.appTheme)
-        assertEquals("MINIMALIST_SAND", fakeSettings.getString("app_theme", "SYSTEM"))
+        assertEquals("MINIMALIST_SAND", fakeSettings.getString("app_theme", "OLED_OBSIDIAN"))
     }
 
     @Test

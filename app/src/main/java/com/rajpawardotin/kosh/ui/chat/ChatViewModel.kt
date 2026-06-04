@@ -310,7 +310,7 @@ class ChatViewModel(
     var isTemporarySession by mutableStateOf(false)
         private set
 
-    var appTheme by mutableStateOf(settingsProvider.getString("app_theme", "SYSTEM"))
+    var appTheme by mutableStateOf(settingsProvider.getString("app_theme", "OLED_OBSIDIAN"))
         private set
 
     var isAppLockEnabled by mutableStateOf(settingsProvider.getString("app_lock_enabled", "false") == "true")
