@@ -263,7 +263,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Text(
-                    text = "Preferences",
+                    text = "Settings",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, fontSize = 22.sp),
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
@@ -280,15 +280,7 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                item {
-                    // Page Subtitle
-                    Text(
-                        text = "Customize themes, configure offline model backends, search intelligence, and security parameters.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
+
 
                 // CATEGORY 1: Theme & Appearance
                 item {
@@ -458,15 +450,33 @@ fun SettingsScreen(
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Hardware Metrics Dashboard
-                            HardwareDashboard(
-                                isEngineReady = viewModel.isEngineReady,
-                                selectedBackend = viewModel.selectedBackend,
-                                tokensPerSecond = viewModel.tokensPerSecond,
-                                npuLoad = viewModel.npuLoad,
-                                ramUsage = viewModel.ramUsage,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            // Performance HUD Switch Row
+                             Row(
+                                 modifier = Modifier
+                                     .fillMaxWidth()
+                                     .clickable { viewModel.updateShowHardwareStats(!viewModel.showHardwareStats) }
+                                     .padding(vertical = 4.dp),
+                                 horizontalArrangement = Arrangement.SpaceBetween,
+                                 verticalAlignment = Alignment.CenterVertically
+                             ) {
+                                 Column(modifier = Modifier.weight(1f)) {
+                                     Text(
+                                         text = "Performance HUD",
+                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                         color = MaterialTheme.colorScheme.onSurface
+                                     )
+                                     Text(
+                                         text = "Show generation speed (t/s), memory usage, and core load during chat inference",
+                                         style = MaterialTheme.typography.labelSmall,
+                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                     )
+                                 }
+                                 Spacer(modifier = Modifier.width(16.dp))
+                                 KoshSwitch(
+                                     checked = viewModel.showHardwareStats,
+                                     onCheckedChange = { viewModel.updateShowHardwareStats(it) }
+                                 )
+                             }
 
                             // Initializer Section
                             AnimatedVisibility(

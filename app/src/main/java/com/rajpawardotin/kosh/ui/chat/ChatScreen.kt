@@ -549,36 +549,9 @@ fun ChatScreen(
                             }
                         }
 
-                        // 2. ChatInput (only visible when engine is ready and not initializing)
+                        // 2. ChatInput and Stats HUD Container (only visible when engine is ready and not initializing)
                         if (viewModel.isEngineReady && !viewModel.isInitializing) {
-                            ChatInput(
-                                value = viewModel.prompt,
-                                onValueChange = { viewModel.prompt = it },
-                                onSend = {
-                                     if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                         val enteredPrompt = viewModel.prompt
-                                         viewModel.currentScreen = AppScreen.CHAT
-                                         viewModel.startNewChat()
-                                         viewModel.prompt = enteredPrompt
-                                     }
-                                     viewModel.sendMessage(context)
-                                 },
-                                onStop = { viewModel.stopGeneration() },
-                                onVoiceClick = {
-                                    if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                        viewModel.currentScreen = AppScreen.CHAT
-                                        viewModel.startNewChat()
-                                    }
-                                    startVoiceInput()
-                                },
-                                onAttachClick = { documentPickerLauncher.launch("*/*") },
-                                attachedFiles = viewModel.attachedFiles,
-                                onDetachFile = { viewModel.detachFile(it) },
-                                enabled = viewModel.isEngineReady,
-                                isGenerating = viewModel.isGenerating,
-                                isInternetEnabled = viewModel.isInternetEnabled,
-                                isSearchForced = viewModel.isSearchForced,
-                                onToggleSearch = { viewModel.toggleSearchForced() },
+                            Column(
                                 modifier = Modifier
                                     .onGloballyPositioned { coordinates ->
                                         inputHeightDp = with(density) { coordinates.size.height.toDp() }
@@ -587,8 +560,54 @@ fun ChatScreen(
                                     .imePadding()
                                     .navigationBarsPadding()
                                     .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                                    .align(Alignment.BottomCenter)
-                            )
+                                    .align(Alignment.BottomCenter),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Dynamic Performance HUD
+                                AnimatedVisibility(
+                                    visible = viewModel.isGenerating && viewModel.showHardwareStats,
+                                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                                ) {
+                                    HardwareStatsHUD(
+                                        backend = viewModel.selectedBackend,
+                                        speed = viewModel.tokensPerSecond,
+                                        load = viewModel.npuLoad,
+                                        ram = viewModel.ramUsage
+                                    )
+                                }
+
+                                ChatInput(
+                                    value = viewModel.prompt,
+                                    onValueChange = { viewModel.prompt = it },
+                                    onSend = {
+                                         if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                             val enteredPrompt = viewModel.prompt
+                                             viewModel.currentScreen = AppScreen.CHAT
+                                             viewModel.startNewChat()
+                                             viewModel.prompt = enteredPrompt
+                                         }
+                                         viewModel.sendMessage(context)
+                                     },
+                                    onStop = { viewModel.stopGeneration() },
+                                    onVoiceClick = {
+                                        if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                            viewModel.currentScreen = AppScreen.CHAT
+                                            viewModel.startNewChat()
+                                        }
+                                        startVoiceInput()
+                                    },
+                                    onAttachClick = { documentPickerLauncher.launch("*/*") },
+                                    attachedFiles = viewModel.attachedFiles,
+                                    onDetachFile = { viewModel.detachFile(it) },
+                                    enabled = viewModel.isEngineReady,
+                                    isGenerating = viewModel.isGenerating,
+                                    isInternetEnabled = viewModel.isInternetEnabled,
+                                    isSearchForced = viewModel.isSearchForced,
+                                    onToggleSearch = { viewModel.toggleSearchForced() },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
 
                         // 3. Floating Header Column (floats on top of the content)
@@ -1870,6 +1889,118 @@ fun EngineOfflineFallback(
                     ) {
                         Text("Go back to Dashboard", style = MaterialTheme.typography.labelMedium)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HardwareStatsHUD(
+    backend: String,
+    speed: Float,
+    load: Int,
+    ram: Double,
+    modifier: Modifier = Modifier
+) {
+    val primary = MaterialTheme.colorScheme.primary
+    val outlineVariant = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
+
+    // Pulse animation for the core active indicator dot
+    val infiniteTransition = rememberInfiniteTransition(label = "hud_pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 1.dp,
+                color = outlineVariant,
+                shape = RoundedCornerShape(16.dp)
+            ),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left part: Backend Indicator
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .graphicsLayer(alpha = pulseAlpha)
+                        .clip(CircleShape)
+                        .background(primary)
+                )
+                Text(
+                    text = backend.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 0.5.sp),
+                    color = primary
+                )
+            }
+
+            // Middle & Right parts: Metrics
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Speed
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "SPEED",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.1f t/s", speed),
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // Core Load
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "CORE LOAD",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = "$load%",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // RAM
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "RAM ALLOC",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.2f GB", ram),
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }

@@ -304,6 +304,14 @@ class ChatViewModel(
         settingsProvider.putBoolean("start_with_new_chat", value)
     }
 
+    var showHardwareStats by mutableStateOf(settingsProvider.getBoolean("show_hardware_stats", true))
+        private set
+
+    fun updateShowHardwareStats(value: Boolean) {
+        showHardwareStats = value
+        settingsProvider.putBoolean("show_hardware_stats", value)
+    }
+
 
 
     
