@@ -117,10 +117,16 @@ class ChatViewModel(
                 models.addAll(allModels)
                 
                 if (modelPath == null) {
-                    val generalModel = allModels.find { it.tag == com.rajpawardotin.kosh.data.ModelTag.GENERAL }
-                        ?: allModels.firstOrNull()
-                    if (generalModel != null) {
-                        modelPath = generalModel.filePath
+                    val savedPath = settingsProvider.getString("selected_model_path", "")
+                    if (savedPath.isNotEmpty() && allModels.any { it.filePath == savedPath }) {
+                        modelPath = savedPath
+                    } else {
+                        val generalModel = allModels.find { it.tag == com.rajpawardotin.kosh.data.ModelTag.GENERAL }
+                            ?: allModels.firstOrNull()
+                        if (generalModel != null) {
+                            modelPath = generalModel.filePath
+                            settingsProvider.putString("selected_model_path", generalModel.filePath)
+                        }
                     }
                 }
                 
@@ -145,7 +151,9 @@ class ChatViewModel(
             aiProvider.close() // Purge current engine from RAM
             withContext(Dispatchers.Main) {
                 modelPath = path
+                settingsProvider.putString("selected_model_path", path)
                 isEngineReady = false
+                initializeEngine() // Automatically reload in background when changed
             }
         }
     }
@@ -184,9 +192,11 @@ class ChatViewModel(
                                     aiProvider.close() // Purge previous model
                                     withContext(Dispatchers.Main) {
                                         modelPath = profile.filePath
+                                        settingsProvider.putString("selected_model_path", profile.filePath)
                                         isEngineReady = false
                                         isCopyingModel = false
                                         showToast("Model ${profile.name} ready")
+                                        initializeEngine() // Automatically reload in background when changed
                                     }
                                 }
                             } else {
@@ -225,6 +235,11 @@ class ChatViewModel(
                         if (wasActive) {
                             val general = modelLibraryManager.getModelByTag(com.rajpawardotin.kosh.data.ModelTag.GENERAL)
                             modelPath = general?.filePath
+                            if (modelPath != null) {
+                                settingsProvider.putString("selected_model_path", modelPath!!)
+                            } else {
+                                settingsProvider.putString("selected_model_path", "")
+                            }
                             isEngineReady = false // Stay in standby on fallback
                         }
                         showToast("Model deleted")
@@ -240,6 +255,7 @@ class ChatViewModel(
     var isCheckingModels by mutableStateOf(true)
     var isCopyingModel by mutableStateOf(false)
     var isInitializing by mutableStateOf(false)
+    var userWaitingForEngine by mutableStateOf(false)
     var prompt by mutableStateOf("")
     var isInternetEnabled by mutableStateOf(false)
     var isSearchForced by mutableStateOf(false)
@@ -806,8 +822,13 @@ class ChatViewModel(
         } else {
             action()
             currentScreen = AppScreen.CHAT
-            if (!isEngineReady && !isInitializing) {
-                initializeEngine()
+            if (!isEngineReady) {
+                userWaitingForEngine = true
+                if (isInitializing) {
+                    showToast("Almost ready...")
+                } else {
+                    initializeEngine()
+                }
             }
         }
     }
@@ -1299,6 +1320,13 @@ class ChatViewModel(
     fun selectBackend(backend: String) {
         selectedBackend = backend
         settingsProvider.putString("selected_backend", backend)
+        viewModelScope.launch(safeIoDispatcher) {
+            aiProvider.close()
+            withContext(Dispatchers.Main) {
+                isEngineReady = false
+                initializeEngine()
+            }
+        }
     }
 
     val backends = listOf("CPU", "GPU", "NPU (Qualcomm)")
@@ -1486,7 +1514,7 @@ class ChatViewModel(
 
 
     var isEngineReady by mutableStateOf(aiProvider.isInitialized)
-        private set
+        internal set
 
     fun setModel(path: String?) {
         modelPath = path
@@ -1511,6 +1539,7 @@ class ChatViewModel(
                 modelLibraryManager.deleteModel(fileName)
                 withContext(Dispatchers.Main) {
                     modelPath = null
+                    settingsProvider.putString("selected_model_path", "")
                     isEngineReady = aiProvider.isInitialized
                     refreshModelsList()
                     startNewChat()
@@ -1580,6 +1609,10 @@ class ChatViewModel(
     private fun initializeEngineInternal() {
         val path = modelPath ?: return
         isInitializing = true
+        if (currentScreen == AppScreen.CHAT) {
+            userWaitingForEngine = true
+            showToast("Almost ready...")
+        }
         
         // Write sentinel synchronously
         settingsProvider.commitBoolean("engine_crashed", true)
@@ -1593,19 +1626,21 @@ class ChatViewModel(
                 isInitializing = false
                 isEngineReady = aiProvider.isInitialized
                 if (isEngineReady) {
-                    showToast("Model loaded successfully!")
-                    // Direct to homescreen
-                    currentScreen = AppScreen.DASHBOARD
+                    if (userWaitingForEngine) {
+                        showToast("Ready to chat!")
+                    }
+                    userWaitingForEngine = false
                 } else {
                     val error = result.exceptionOrNull()?.localizedMessage ?: "Unknown configuration error"
-                    showToast("Failed to load model on $selectedBackend: $error")
-                    
                     val remaining = backends.filter { it !in attemptedBackends }
                     if (remaining.isNotEmpty()) {
                         failedBackend = selectedBackend
                         showBackendFallbackPrompt = true
                     } else {
                         showModelIncompatibleDialog = true
+                        showToast("Core failed to load, do you want to manually load it?")
+                        currentScreen = AppScreen.SETTINGS
+                        userWaitingForEngine = false
                     }
                 }
             }
@@ -1621,6 +1656,10 @@ class ChatViewModel(
         }
 
         isInitializing = true
+        if (currentScreen == AppScreen.CHAT) {
+            userWaitingForEngine = true
+            showToast("Almost ready...")
+        }
         
         // Write sentinel synchronously
         settingsProvider.commitBoolean("engine_crashed", true)
@@ -1634,10 +1673,14 @@ class ChatViewModel(
                 isInitializing = false
                 isEngineReady = aiProvider.isInitialized
                 if (isEngineReady) {
-                    showToast("Model loaded successfully!")
+                    if (userWaitingForEngine) {
+                        showToast("Ready to chat!")
+                    }
+                    userWaitingForEngine = false
                 } else {
-                    val error = result.exceptionOrNull()?.localizedMessage ?: "Unknown configuration error"
-                    showToast("Failed to load model: $error")
+                    showToast("Core failed to load, do you want to manually load it?")
+                    currentScreen = AppScreen.SETTINGS
+                    userWaitingForEngine = false
                 }
             }
         }

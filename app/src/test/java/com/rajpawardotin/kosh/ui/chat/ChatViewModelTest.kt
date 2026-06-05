@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -980,6 +981,146 @@ class ChatViewModelTest {
 
         assertEquals(0, viewModel.chatMessages.find { it.id == messageId }?.feedback)
         assertEquals(0, fakeMessageRepo.getMessagesForSession(sessionId).find { it.id == messageId }?.feedback)
+    }
+
+    @Test
+    fun testModelPathPersistence() = runTest(testDispatcher) {
+        // Setup mock models list
+        val mockLibraryManager = org.mockito.kotlin.mock<com.rajpawardotin.kosh.data.ModelLibraryManager>()
+        val profile = com.rajpawardotin.kosh.data.ModelProfile("CustomModel", "custom/path/model.litertlm", 200_000_000L, com.rajpawardotin.kosh.data.ModelTag.GENERAL)
+        org.mockito.kotlin.whenever(mockLibraryManager.getModels()).thenReturn(listOf(profile))
+        org.mockito.kotlin.whenever(mockLibraryManager.getModelByTag(org.mockito.kotlin.any())).thenReturn(null)
+        
+        val testViewModel = ChatViewModel(
+            context,
+            fakeAI,
+            fakeSearch,
+            fakeSessionRepo,
+            fakeMessageRepo,
+            fakeDocumentRepo,
+            fakeSettings,
+            fakeTts,
+            mockLibraryManager,
+            org.mockito.kotlin.mock(),
+            testDispatcher
+        )
+        testViewModel.modelPath = null
+        
+        // 1. Initial boot with nothing saved: should fall back to general/first
+        testViewModel.refreshModelsList()
+        testScheduler.advanceUntilIdle()
+        assertEquals("custom/path/model.litertlm", testViewModel.modelPath)
+        assertEquals("custom/path/model.litertlm", fakeSettings.getString("selected_model_path", ""))
+        
+        // 2. Select a new model path manually
+        testViewModel.selectModel("new/saved/path.bin")
+        testScheduler.advanceUntilIdle()
+        assertEquals("new/saved/path.bin", testViewModel.modelPath)
+        assertEquals("new/saved/path.bin", fakeSettings.getString("selected_model_path", ""))
+    }
+
+    @Test
+    fun testNavigateToChatWithAutoStartToastAndInitializingStates() = runTest(testDispatcher) {
+        val collectedToasts = mutableListOf<String>()
+        val toastJob = launch {
+            viewModel.toastMessage.collect { collectedToasts.add(it) }
+        }
+        testScheduler.advanceUntilIdle() // Ensure subscription completes
+
+        viewModel.modelPath = "fake/model/path.bin"
+        fakeAI.isInitialized = false
+
+        // 1. Navigate when initializing is true: should show "Almost ready..." and set waiting
+        viewModel.isInitializing = true
+        viewModel.isEngineReady = false
+        viewModel.userWaitingForEngine = false
+        
+        viewModel.navigateToChatWithAutoStart { }
+        testScheduler.advanceUntilIdle()
+        
+        assertTrue(viewModel.userWaitingForEngine)
+        assertEquals(AppScreen.CHAT, viewModel.currentScreen)
+        assertTrue(collectedToasts.contains("Almost ready..."))
+
+        // 2. Navigate when completely offline and not initializing: should trigger load and set waiting
+        viewModel.isInitializing = false
+        viewModel.isEngineReady = false
+        viewModel.userWaitingForEngine = false
+        collectedToasts.clear()
+        
+        viewModel.navigateToChatWithAutoStart { }
+        assertTrue(viewModel.isInitializing)
+        assertTrue(viewModel.userWaitingForEngine)
+        
+        testScheduler.advanceUntilIdle()
+        assertFalse(viewModel.isInitializing)
+        
+        toastJob.cancel()
+    }
+
+    @Test
+    fun testInitializeEngineSuccessAndFailureToastFlows() = runTest(testDispatcher) {
+        val collectedToasts = mutableListOf<String>()
+        val toastJob = launch {
+            viewModel.toastMessage.collect { collectedToasts.add(it) }
+        }
+        testScheduler.advanceUntilIdle() // Ensure subscription completes
+
+        viewModel.modelPath = "fake/model/path.bin"
+        fakeAI.isInitialized = true
+        viewModel.userWaitingForEngine = true
+        
+        // Success flow
+        viewModel.initializeEngine()
+        testScheduler.advanceUntilIdle()
+        
+        assertFalse(viewModel.userWaitingForEngine)
+        assertTrue(collectedToasts.contains("Ready to chat!"))
+
+        // Failure flow
+        fakeAI.isInitialized = false
+        viewModel.userWaitingForEngine = true
+        collectedToasts.clear()
+        
+        // We override fakeAI to return failure
+        val failingAI = object : AIProvider {
+            override var isInitialized = false
+            override suspend fun initialize(modelPath: String, backend: String) = Result.failure<Unit>(Exception("Load failed"))
+            override fun sendMessage(prompt: String) = kotlinx.coroutines.flow.flowOf("")
+            override fun close() {}
+        }
+        val mockLibraryManager = org.mockito.kotlin.mock<com.rajpawardotin.kosh.data.ModelLibraryManager>()
+        val testViewModel = ChatViewModel(
+            context,
+            failingAI,
+            fakeSearch,
+            fakeSessionRepo,
+            fakeMessageRepo,
+            fakeDocumentRepo,
+            fakeSettings,
+            fakeTts,
+            mockLibraryManager,
+            org.mockito.kotlin.mock(),
+            testDispatcher
+        )
+        testViewModel.modelPath = "fake/model/path.bin"
+        testViewModel.userWaitingForEngine = true
+        
+        val testToasts = mutableListOf<String>()
+        val testToastJob = launch {
+            testViewModel.toastMessage.collect { testToasts.add(it) }
+        }
+        testScheduler.advanceUntilIdle() // Ensure subscription completes
+        
+        testViewModel.initializeEngine()
+        testScheduler.advanceUntilIdle()
+        
+        assertEquals(AppScreen.SETTINGS, testViewModel.currentScreen)
+        assertFalse(testViewModel.userWaitingForEngine)
+        assertTrue(testToasts.contains("Core failed to load, do you want to manually load it?"))
+
+        toastJob.cancel()
+        testToastJob.cancel()
     }
 }
 

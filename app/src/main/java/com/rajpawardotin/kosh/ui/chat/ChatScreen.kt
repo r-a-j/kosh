@@ -390,66 +390,66 @@ fun ChatScreen(
                         Box(
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            if (viewModel.isInitializing) {
-                                IgnitingCoreOverlay(
-                                    modelPath = viewModel.modelPath,
-                                    selectedBackend = viewModel.selectedBackend,
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(top = headerHeightDp)
+                            if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                DashboardScreen(
+                                    viewModel = viewModel,
+                                    onManageModelsClick = {
+                                        viewModel.currentScreen = AppScreen.MODEL_HUB
+                                    },
+                                    onQuickChatClick = {
+                                        viewModel.navigateToChatWithAutoStart {
+                                            viewModel.startNewChat()
+                                        }
+                                        viewModel.currentScreen = AppScreen.CHAT
+                                    },
+                                    onStartJournalSession = {
+                                        viewModel.navigateToChatWithAutoStart {
+                                            val existingJournal = viewModel.savedSessions.find { sess ->
+                                                sess.tags.any { it.name.equals("journal", ignoreCase = true) }
+                                            }
+                                            if (existingJournal != null) {
+                                                viewModel.loadSession(existingJournal.id)
+                                            } else {
+                                                viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
+                                            }
+                                        }
+                                        viewModel.currentScreen = AppScreen.CHAT
+                                    },
+                                    onLoadSession = { sessionId ->
+                                        viewModel.navigateToChatWithAutoStart {
+                                            viewModel.loadSession(sessionId)
+                                        }
+                                        viewModel.currentScreen = AppScreen.CHAT
+                                    },
+                                     onOpenSettings = {
+                                         previousScreen = viewModel.currentScreen
+                                         viewModel.currentScreen = AppScreen.SETTINGS
+                                     },
+                                    onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
+                                    topPadding = headerHeightDp,
+                                    bottomPadding = inputHeightDp,
+                                    modifier = Modifier.fillMaxSize()
                                 )
-                            } else if (!viewModel.isEngineReady) {
-                                EngineOfflineFallback(
-                                    modelPath = viewModel.modelPath,
-                                    onInitialize = { viewModel.triggerManualInitialization() },
-                                    onGoToHub = { viewModel.currentScreen = AppScreen.MODEL_HUB },
-                                    onGoToDashboard = { viewModel.currentScreen = AppScreen.DASHBOARD },
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(top = headerHeightDp)
-                                )
-                            } else {
-                                if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                    DashboardScreen(
-                                        viewModel = viewModel,
-                                        onManageModelsClick = {
-                                            viewModel.currentScreen = AppScreen.MODEL_HUB
-                                        },
-                                        onQuickChatClick = {
-                                            viewModel.navigateToChatWithAutoStart {
-                                                viewModel.startNewChat()
-                                            }
-                                            viewModel.currentScreen = AppScreen.CHAT
-                                        },
-                                        onStartJournalSession = {
-                                            viewModel.navigateToChatWithAutoStart {
-                                                val existingJournal = viewModel.savedSessions.find { sess ->
-                                                    sess.tags.any { it.name.equals("journal", ignoreCase = true) }
-                                                }
-                                                if (existingJournal != null) {
-                                                    viewModel.loadSession(existingJournal.id)
-                                                } else {
-                                                    viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
-                                                }
-                                            }
-                                            viewModel.currentScreen = AppScreen.CHAT
-                                        },
-                                        onLoadSession = { sessionId ->
-                                            viewModel.navigateToChatWithAutoStart {
-                                                viewModel.loadSession(sessionId)
-                                            }
-                                            viewModel.currentScreen = AppScreen.CHAT
-                                        },
-                                         onOpenSettings = {
-                                             previousScreen = viewModel.currentScreen
-                                             viewModel.currentScreen = AppScreen.SETTINGS
-                                         },
-                                        onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
-                                        topPadding = headerHeightDp,
-                                        bottomPadding = inputHeightDp,
-                                        modifier = Modifier.fillMaxSize()
+                            } else { // AppScreen.CHAT
+                                if (viewModel.isInitializing) {
+                                    IgnitingCoreOverlay(
+                                        modelPath = viewModel.modelPath,
+                                        selectedBackend = viewModel.selectedBackend,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(top = headerHeightDp)
                                     )
-                                } else { // AppScreen.CHAT
+                                } else if (!viewModel.isEngineReady) {
+                                    EngineOfflineFallback(
+                                        modelPath = viewModel.modelPath,
+                                        onInitialize = { viewModel.triggerManualInitialization() },
+                                        onGoToHub = { viewModel.currentScreen = AppScreen.MODEL_HUB },
+                                        onGoToDashboard = { viewModel.currentScreen = AppScreen.DASHBOARD },
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(top = headerHeightDp)
+                                    )
+                                } else {
                                     if (isLocked) {
                                         LockedVaultScreen(
                                             title = currentSession!!.title,

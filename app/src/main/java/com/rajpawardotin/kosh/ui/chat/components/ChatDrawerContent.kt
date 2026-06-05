@@ -94,7 +94,9 @@ fun ChatDrawerContent(
             // New Brainstorm button
             OutlinedButton(
                 onClick = {
-                    viewModel.startNewChat()
+                    viewModel.navigateToChatWithAutoStart {
+                        viewModel.startNewChat()
+                    }
                     scope.launch { drawerState.close() }
                 },
                 enabled = !viewModel.isGenerating,
@@ -178,7 +180,9 @@ fun ChatDrawerContent(
                                     else Color.Transparent
                                 )
                                 .clickable(enabled = !viewModel.isGenerating) {
-                                    viewModel.loadSession(session.id)
+                                    viewModel.navigateToChatWithAutoStart {
+                                        viewModel.loadSession(session.id)
+                                    }
                                     scope.launch { drawerState.close() }
                                 }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
