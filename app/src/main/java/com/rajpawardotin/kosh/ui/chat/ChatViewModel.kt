@@ -871,6 +871,7 @@ class ChatViewModel(
         viewModelScope.launch(safeIoDispatcher) {
             sessionRepository.deleteSession(sessionId)
             withContext(Dispatchers.Main) {
+                activeSessionKeys.remove(sessionId)
                 if (currentSessionId == sessionId) {
                     startNewChat()
                 }
@@ -1730,6 +1731,11 @@ class ChatViewModel(
             return
         }
 
+        if (!isEngineReady) {
+            userWaitingForEngine = true
+            showToast("Almost ready...")
+        }
+
         // 1. Resolve Session ID
         var sessionId = currentSessionId
         val isNewSession = sessionId == null
@@ -1775,17 +1781,37 @@ class ChatViewModel(
                         isThinking = true
                         agenticStateLabel = "Loading model..."
                     }
-                    val initResult = aiProvider.initialize(currentPath, selectedBackend)
-                    withContext(Dispatchers.Main) {
-                        isEngineReady = aiProvider.isInitialized
-                        if (!initResult.isSuccess || !aiProvider.isInitialized) {
-                            val errorMsg = initResult.exceptionOrNull()?.localizedMessage ?: "Unknown initialization error"
-                            showToast("Failed to load model: $errorMsg")
-                        }
+                    while (isInitializing) {
+                        delay(100)
                     }
                     if (!aiProvider.isInitialized) {
-                        return@launch
+                        val initResult = aiProvider.initialize(currentPath, selectedBackend)
+                        withContext(Dispatchers.Main) {
+                            isEngineReady = aiProvider.isInitialized
+                            if (isEngineReady) {
+                                if (userWaitingForEngine) {
+                                    showToast("Ready to chat!")
+                                    userWaitingForEngine = false
+                                }
+                            } else {
+                                val errorMsg = initResult.exceptionOrNull()?.localizedMessage ?: "Unknown initialization error"
+                                showToast("Failed to load model: $errorMsg")
+                                userWaitingForEngine = false
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            isEngineReady = true
+                            if (userWaitingForEngine) {
+                                showToast("Ready to chat!")
+                                userWaitingForEngine = false
+                            }
+                        }
                     }
+                }
+
+                if (!aiProvider.isInitialized) {
+                    return@launch
                 }
 
                 if (!isTemporarySession) {

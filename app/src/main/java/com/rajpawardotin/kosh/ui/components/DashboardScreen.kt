@@ -39,6 +39,9 @@ import com.rajpawardotin.kosh.domain.model.ChatSession
 import com.rajpawardotin.kosh.domain.model.ChatTag
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
 import java.io.File
+import android.widget.Toast
+import com.rajpawardotin.kosh.ui.chat.dialogs.DeleteSessionDialog
+import com.rajpawardotin.kosh.ui.chat.dialogs.RenameSessionDialog
 
 @Composable
 fun DashboardScreen(
@@ -49,6 +52,7 @@ fun DashboardScreen(
     onLoadSession: (String) -> Unit,
     onOpenJournals: () -> Unit,
     onOpenSettings: () -> Unit,
+    onLockSession: (ChatSession) -> Unit,
     onAttachDocumentClick: () -> Unit,
     topPadding: Dp = 0.dp,
     bottomPadding: Dp = 100.dp,
@@ -63,6 +67,9 @@ fun DashboardScreen(
 
     val selectedTags = remember { mutableStateListOf<String>() }
     val isFirstLaunch = rememberSaveable { mutableStateOf(true) }
+    var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
+    var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     val animateEntrance = isFirstLaunch.value
 
     LaunchedEffect(Unit) {
@@ -72,9 +79,9 @@ fun DashboardScreen(
         }
     }
 
-    val filteredSessions = remember(viewModel.savedSessions, selectedTags.toList()) {
+    val filteredSessions = remember(viewModel.savedSessions.toList(), selectedTags.toList()) {
         if (selectedTags.isEmpty()) {
-            viewModel.savedSessions
+            viewModel.savedSessions.toList()
         } else {
             viewModel.savedSessions.filter { session ->
                 selectedTags.all { selectedId -> session.tags.any { it.id == selectedId } }
@@ -183,7 +190,7 @@ fun DashboardScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val journalSessionsCount = remember(viewModel.savedSessions) {
+                                val journalSessionsCount = remember(viewModel.savedSessions.toList()) {
                                     viewModel.savedSessions.count { it.tags.any { tag -> tag.id == "journal" } }
                                 }
                                 Surface(
@@ -335,7 +342,7 @@ fun DashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val journalSessionsCount = remember(viewModel.savedSessions) {
+                                    val journalSessionsCount = remember(viewModel.savedSessions.toList()) {
                                         viewModel.savedSessions.count { it.tags.any { tag -> tag.id == "journal" } }
                                     }
                                     Text(
@@ -566,9 +573,9 @@ fun DashboardScreen(
                                     ) {
                                         if (isEncrypted) {
                                             Icon(
-                                                imageVector = Icons.Default.Lock,
+                                                imageVector = if (isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
                                                 contentDescription = if (isLocked) "Encrypted Locked" else "Encrypted Unlocked",
-                                                tint = if (isLocked) MaterialTheme.colorScheme.error else primary,
+                                                tint = if (isLocked) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f) else Color(0xFFF59E0B),
                                                 modifier = Modifier.size(14.dp)
                                             )
                                             Spacer(modifier = Modifier.width(6.dp))
@@ -591,11 +598,76 @@ fun DashboardScreen(
                                             else -> "${diff / 86400_000}d ago"
                                         }
                                     }
-                                    Text(
-                                        text = relativeTime,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
+                                    Row(
+                                         verticalAlignment = Alignment.CenterVertically,
+                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                     ) {
+                                         Text(
+                                             text = relativeTime,
+                                             style = MaterialTheme.typography.labelSmall,
+                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                         )
+                                         
+                                         Spacer(modifier = Modifier.width(4.dp))
+                                         
+                                         IconButton(
+                                             onClick = { sessionToRename = session },
+                                             modifier = Modifier.size(24.dp)
+                                         ) {
+                                             Icon(
+                                                 imageVector = Icons.Default.Edit,
+                                                 contentDescription = "Rename",
+                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                 modifier = Modifier.size(14.dp)
+                                             )
+                                         }
+                                         
+                                         if (isEncrypted && !isLocked) {
+                                             IconButton(
+                                                 onClick = {
+                                                     viewModel.activeSessionKeys.remove(session.id)
+                                                     if (viewModel.currentSessionId == session.id) {
+                                                         viewModel.loadSession(session.id)
+                                                     }
+                                                     Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
+                                                 },
+                                                 modifier = Modifier.size(24.dp)
+                                             ) {
+                                                 Icon(
+                                                     imageVector = Icons.Default.Lock,
+                                                     contentDescription = "Lock Chat",
+                                                     tint = Color(0xFFF59E0B),
+                                                     modifier = Modifier.size(14.dp)
+                                                 )
+                                             }
+                                         } else if (!isEncrypted) {
+                                             IconButton(
+                                                 onClick = { onLockSession(session) },
+                                                 modifier = Modifier.size(24.dp)
+                                             ) {
+                                                 Icon(
+                                                     imageVector = Icons.Default.LockOpen,
+                                                     contentDescription = "Encrypt Chat",
+                                                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                     modifier = Modifier.size(14.dp)
+                                                 )
+                                             }
+                                         } else {
+                                             Spacer(modifier = Modifier.size(24.dp))
+                                         }
+                                         
+                                         IconButton(
+                                             onClick = { sessionToDelete = session },
+                                             modifier = Modifier.size(24.dp)
+                                         ) {
+                                             Icon(
+                                                 imageVector = Icons.Default.Delete,
+                                                 contentDescription = "Delete",
+                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                 modifier = Modifier.size(14.dp)
+                                             )
+                                         }
+                                     }
                                 }
 
                                 if (session.tags.isNotEmpty()) {
@@ -632,6 +704,23 @@ fun DashboardScreen(
             item {
                 Spacer(modifier = Modifier.height(bottomPadding + 16.dp))
             }
+        }
+
+        if (sessionToDelete != null) {
+            DeleteSessionDialog(
+                session = sessionToDelete!!,
+                viewModel = viewModel,
+                context = context,
+                onDismiss = { sessionToDelete = null }
+            )
+        }
+
+        if (sessionToRename != null) {
+            RenameSessionDialog(
+                session = sessionToRename!!,
+                viewModel = viewModel,
+                onDismiss = { sessionToRename = null }
+            )
         }
     }
 }

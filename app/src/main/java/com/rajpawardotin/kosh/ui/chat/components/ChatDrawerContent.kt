@@ -197,7 +197,11 @@ fun ChatDrawerContent(
                                     Icons.AutoMirrored.Filled.Chat
                                 },
                                 contentDescription = null,
-                                tint = if (isActive) primary else if (isEncrypted) primary.copy(alpha = 0.7f) else onSurfaceMuted,
+                                tint = if (isEncrypted) {
+                                    if (isUnlocked) Color(0xFFF59E0B) else onSurfaceMuted.copy(alpha = 0.4f)
+                                } else {
+                                    if (isActive) primary else onSurfaceMuted
+                                },
                                 modifier = Modifier.size(18.dp)
                             )
 
@@ -234,26 +238,38 @@ fun ChatDrawerContent(
 
                             Spacer(modifier = Modifier.width(4.dp))
 
-                            IconButton(
-                                onClick = {
-                                    if (!isEncrypted) {
-                                        onLockSession(session)
-                                    } else if (isUnlocked) {
+                            if (isEncrypted && isUnlocked) {
+                                IconButton(
+                                    onClick = {
                                         viewModel.activeSessionKeys.remove(session.id)
                                         if (viewModel.currentSessionId == session.id) {
                                             viewModel.loadSession(session.id)
                                         }
                                         Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isEncrypted) Icons.Default.Lock else Icons.Default.LockOpen,
-                                    contentDescription = "Lock Status",
-                                    tint = if (isEncrypted) primary else onSurfaceMuted,
-                                    modifier = Modifier.size(14.dp)
-                                )
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Lock Chat",
+                                        tint = Color(0xFFF59E0B),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            } else if (!isEncrypted) {
+                                IconButton(
+                                    onClick = { onLockSession(session) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.LockOpen,
+                                        contentDescription = "Encrypt Chat",
+                                        tint = onSurfaceMuted,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.size(24.dp))
                             }
 
                             Spacer(modifier = Modifier.width(4.dp))

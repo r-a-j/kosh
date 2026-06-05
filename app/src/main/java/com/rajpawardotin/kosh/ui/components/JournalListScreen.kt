@@ -27,6 +27,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.ui.chat.ChatViewModel
+import com.rajpawardotin.kosh.domain.model.ChatSession
+import com.rajpawardotin.kosh.ui.chat.dialogs.DeleteSessionDialog
+import com.rajpawardotin.kosh.ui.chat.dialogs.RenameSessionDialog
+import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -38,6 +42,7 @@ fun JournalListScreen(
     onBackClick: () -> Unit,
     onLoadSession: (String) -> Unit,
     onNewEntryClick: () -> Unit,
+    onLockSession: (ChatSession) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val primary = MaterialTheme.colorScheme.primary
@@ -45,7 +50,7 @@ fun JournalListScreen(
     val outlineVariant = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
     val cardColors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
 
-    val journalSessions = remember(viewModel.savedSessions) {
+    val journalSessions = remember(viewModel.savedSessions.toList()) {
         viewModel.savedSessions.filter { session ->
             session.tags.any { it.id == "journal" }
         }
@@ -54,31 +59,9 @@ fun JournalListScreen(
     val dateFormatter = remember { SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()) }
     val timeFormatter = remember { SimpleDateFormat("h:mm a", Locale.getDefault()) }
 
-    var sessionToDelete by remember { mutableStateOf<String?>(null) }
-
-    if (sessionToDelete != null) {
-        AlertDialog(
-            onDismissRequest = { sessionToDelete = null },
-            containerColor = MaterialTheme.colorScheme.surface,
-            title = { Text("Delete Journal Entry", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
-            text = { Text("Are you sure you want to permanently delete this journal entry? This action cannot be undone.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        sessionToDelete?.let { viewModel.deleteSession(it) }
-                        sessionToDelete = null
-                    }
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { sessionToDelete = null }) {
-                    Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        )
-    }
+    var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
+    var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(
         modifier = modifier
@@ -244,6 +227,9 @@ fun JournalListScreen(
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val isEncrypted = session.encryptedKeyPassword != null
+                                val isUnlocked = isEncrypted && viewModel.activeSessionKeys.containsKey(session.id)
+
                                 // Journal Icon / Accent Indicator
                                 Box(
                                     modifier = Modifier
@@ -258,6 +244,25 @@ fun JournalListScreen(
                                         tint = primary,
                                         modifier = Modifier.size(20.dp)
                                     )
+                                    if (isEncrypted) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .offset(x = 2.dp, y = 2.dp)
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surface)
+                                                .border(0.5.dp, outlineVariant, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                                contentDescription = null,
+                                                tint = if (isUnlocked) Color(0xFFF59E0B) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                modifier = Modifier.size(10.dp)
+                                            )
+                                        }
+                                    }
                                 }
 
                                 Spacer(modifier = Modifier.width(16.dp))
@@ -291,23 +296,91 @@ fun JournalListScreen(
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                // Delete Button
-                                IconButton(
-                                    onClick = { sessionToDelete = session.id },
-                                    modifier = Modifier.size(36.dp)
+                                // Unified Actions Row
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete entry",
-                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    IconButton(
+                                        onClick = { sessionToRename = session },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Rename",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    if (isEncrypted && isUnlocked) {
+                                        IconButton(
+                                            onClick = {
+                                                viewModel.activeSessionKeys.remove(session.id)
+                                                if (viewModel.currentSessionId == session.id) {
+                                                    viewModel.loadSession(session.id)
+                                                }
+                                                Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Lock,
+                                                contentDescription = "Lock Chat",
+                                                tint = Color(0xFFF59E0B),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    } else if (!isEncrypted) {
+                                        IconButton(
+                                            onClick = { onLockSession(session) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.LockOpen,
+                                                contentDescription = "Encrypt Chat",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Spacer(modifier = Modifier.size(28.dp))
+                                    }
+
+                                    IconButton(
+                                        onClick = { sessionToDelete = session },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Delete entry",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+
+        if (sessionToDelete != null) {
+            DeleteSessionDialog(
+                session = sessionToDelete!!,
+                viewModel = viewModel,
+                context = context,
+                onDismiss = { sessionToDelete = null }
+            )
+        }
+
+        if (sessionToRename != null) {
+            RenameSessionDialog(
+                session = sessionToRename!!,
+                viewModel = viewModel,
+                onDismiss = { sessionToRename = null }
+            )
         }
     }
 }

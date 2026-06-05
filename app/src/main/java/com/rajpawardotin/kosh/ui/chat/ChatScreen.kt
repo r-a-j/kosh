@@ -381,6 +381,7 @@ fun ChatScreen(
                     }
                     viewModel.currentScreen = AppScreen.CHAT
                 },
+                onLockSession = { session -> sessionToLock = session },
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -442,6 +443,7 @@ fun ChatScreen(
                                          previousScreen = viewModel.currentScreen
                                          viewModel.currentScreen = AppScreen.SETTINGS
                                      },
+                                    onLockSession = { session -> sessionToLock = session },
                                     onAttachDocumentClick = { documentPickerLauncher.launch("*/*") },
                                     topPadding = headerHeightDp,
                                     bottomPadding = inputHeightDp,
@@ -566,65 +568,63 @@ fun ChatScreen(
                             }
                         }
 
-                        // 2. ChatInput and Stats HUD Container (only visible when engine is ready and not initializing)
-                        if (viewModel.isEngineReady && !viewModel.isInitializing) {
-                            Column(
-                                modifier = Modifier
-                                    .onGloballyPositioned { coordinates ->
-                                        inputHeightDp = with(density) { coordinates.size.height.toDp() }
-                                    }
-                                    .fillMaxWidth()
-                                    .imePadding()
-                                    .navigationBarsPadding()
-                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                                    .align(Alignment.BottomCenter),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                // Dynamic Performance HUD
-                                AnimatedVisibility(
-                                    visible = viewModel.isGenerating && viewModel.showHardwareStats,
-                                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
-                                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
-                                ) {
-                                    HardwareStatsHUD(
-                                        backend = viewModel.selectedBackend,
-                                        speed = viewModel.tokensPerSecond,
-                                        load = viewModel.npuLoad,
-                                        ram = viewModel.ramUsage
-                                    )
+                        // 2. ChatInput and Stats HUD Container (always visible)
+                        Column(
+                            modifier = Modifier
+                                .onGloballyPositioned { coordinates ->
+                                    inputHeightDp = with(density) { coordinates.size.height.toDp() }
                                 }
-
-                                ChatInput(
-                                    value = viewModel.prompt,
-                                    onValueChange = { viewModel.prompt = it },
-                                    onSend = {
-                                         if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                             val enteredPrompt = viewModel.prompt
-                                             viewModel.currentScreen = AppScreen.CHAT
-                                             viewModel.startNewChat()
-                                             viewModel.prompt = enteredPrompt
-                                         }
-                                         viewModel.sendMessage(context)
-                                     },
-                                    onStop = { viewModel.stopGeneration() },
-                                    onVoiceClick = {
-                                        if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                            viewModel.currentScreen = AppScreen.CHAT
-                                            viewModel.startNewChat()
-                                        }
-                                        startVoiceInput()
-                                    },
-                                    onAttachClick = { documentPickerLauncher.launch("*/*") },
-                                    attachedFiles = viewModel.attachedFiles,
-                                    onDetachFile = { viewModel.detachFile(it) },
-                                    enabled = viewModel.isEngineReady,
-                                    isGenerating = viewModel.isGenerating,
-                                    isInternetEnabled = viewModel.isInternetEnabled,
-                                    isSearchForced = viewModel.isSearchForced,
-                                    onToggleSearch = { viewModel.toggleSearchForced() },
-                                    modifier = Modifier.fillMaxWidth()
+                                .fillMaxWidth()
+                                .imePadding()
+                                .navigationBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                .align(Alignment.BottomCenter),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Dynamic Performance HUD
+                            AnimatedVisibility(
+                                visible = viewModel.isGenerating && viewModel.showHardwareStats,
+                                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                            ) {
+                                HardwareStatsHUD(
+                                    backend = viewModel.selectedBackend,
+                                    speed = viewModel.tokensPerSecond,
+                                    load = viewModel.npuLoad,
+                                    ram = viewModel.ramUsage
                                 )
                             }
+
+                            ChatInput(
+                                value = viewModel.prompt,
+                                onValueChange = { viewModel.prompt = it },
+                                onSend = {
+                                     if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                         val enteredPrompt = viewModel.prompt
+                                         viewModel.currentScreen = AppScreen.CHAT
+                                         viewModel.startNewChat()
+                                         viewModel.prompt = enteredPrompt
+                                     }
+                                     viewModel.sendMessage(context)
+                                 },
+                                onStop = { viewModel.stopGeneration() },
+                                onVoiceClick = {
+                                    if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                        viewModel.currentScreen = AppScreen.CHAT
+                                        viewModel.startNewChat()
+                                    }
+                                    startVoiceInput()
+                                },
+                                onAttachClick = { documentPickerLauncher.launch("*/*") },
+                                attachedFiles = viewModel.attachedFiles,
+                                onDetachFile = { viewModel.detachFile(it) },
+                                enabled = viewModel.modelPath != null,
+                                isGenerating = viewModel.isGenerating,
+                                isInternetEnabled = viewModel.isInternetEnabled,
+                                isSearchForced = viewModel.isSearchForced,
+                                onToggleSearch = { viewModel.toggleSearchForced() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
                         // 3. Floating Header Column (floats on top of the content)
