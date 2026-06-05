@@ -47,6 +47,7 @@ fun DashboardScreen(
     onQuickChatClick: () -> Unit,
     onStartJournalSession: () -> Unit,
     onLoadSession: (String) -> Unit,
+    onOpenJournals: () -> Unit,
     onOpenSettings: () -> Unit,
     onAttachDocumentClick: () -> Unit,
     topPadding: Dp = 0.dp,
@@ -288,13 +289,15 @@ fun DashboardScreen(
                             }
                         }
 
-                        // Card B: AI Model Engine Panel (Pure Flat Information)
+                        // Card B: Journal Vault Gateway Card
                         Card(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(136.dp),
+                                .height(136.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .clickable { onOpenJournals() },
                             shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            colors = cardColors,
                             border = androidx.compose.foundation.BorderStroke(1.dp, outlineVariant)
                         ) {
                             Column(
@@ -303,14 +306,14 @@ fun DashboardScreen(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Memory,
+                                        imageVector = Icons.Default.Book,
                                         contentDescription = null,
                                         tint = primary,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Model Engine",
+                                        text = "Journal Vault",
                                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                                     )
@@ -318,51 +321,34 @@ fun DashboardScreen(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                Column(modifier = Modifier.heightIn(min = 26.dp)) {
-                                    Text(
-                                        text = viewModel.modelPath?.let { File(it).name.replace(".litertlm", "").replace(".bin", "").uppercase() } ?: "NO MODEL LOADED",
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-
-                                    if (viewModel.isEngineReady && viewModel.tokensPerSecond > 0f) {
-                                        Text(
-                                            text = String.format(java.util.Locale.US, "%.1f t/s", viewModel.tokensPerSecond),
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
-                                            color = primary
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = "Read or browse your private thoughts and daily reflections.",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, lineHeight = 13.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.heightIn(min = 26.dp)
+                                )
 
                                 Spacer(modifier = Modifier.weight(1f))
 
-                                Surface(
-                                    shape = RoundedCornerShape(6.dp),
-                                    color = if (viewModel.isEngineReady) Color(0xFF10B981).copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.05f),
-                                    border = androidx.compose.foundation.BorderStroke(
-                                        width = 0.5.dp,
-                                        color = if (viewModel.isEngineReady) Color(0xFF10B981).copy(alpha = 0.25f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-                                    )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(5.dp)
-                                                .clip(CircleShape)
-                                                .background(if (viewModel.isEngineReady) Color(0xFF10B981) else Color.Gray)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = if (viewModel.isEngineReady) "ONLINE" else "STANDBY",
-                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.sp),
-                                            color = if (viewModel.isEngineReady) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                    val journalSessionsCount = remember(viewModel.savedSessions) {
+                                        viewModel.savedSessions.count { it.tags.any { tag -> tag.id == "journal" } }
                                     }
+                                    Text(
+                                        text = "$journalSessionsCount entries",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 9.sp),
+                                        color = primary
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = null,
+                                        tint = primary,
+                                        modifier = Modifier.size(14.dp)
+                                    )
                                 }
                             }
                         }

@@ -436,15 +436,44 @@ fun SettingsScreen(
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
-                                    Text(
-                                        text = when {
-                                            viewModel.isEngineReady -> "Neural Core Online"
-                                            viewModel.modelPath != null -> "Standby • Ready for Init"
-                                            else -> "No active weights loaded"
-                                        },
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (viewModel.isEngineReady) primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(if (viewModel.isEngineReady) Color(0xFF10B981) else Color.Gray)
+                                        )
+                                        Text(
+                                            text = when {
+                                                viewModel.isEngineReady -> "Online"
+                                                viewModel.modelPath != null -> "Standby"
+                                                else -> "Offline"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = if (viewModel.isEngineReady) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        if (viewModel.isEngineReady && viewModel.tokensPerSecond > 0f) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = primary.copy(alpha = 0.08f),
+                                                border = androidx.compose.foundation.BorderStroke(
+                                                    width = 0.5.dp,
+                                                    color = primary.copy(alpha = 0.25f)
+                                                )
+                                            ) {
+                                                Text(
+                                                    text = String.format(java.util.Locale.US, "%.1f t/s", viewModel.tokensPerSecond),
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.5.sp),
+                                                    color = primary,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
 
@@ -1058,38 +1087,52 @@ fun SettingsScreen(
                                                 )
                                             }
 
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                IconButton(
-                                                    onClick = {
-                                                        editingTag = tag
-                                                        editTagName = tag.name
-                                                        editTagColor = tag.colorHex
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Edit,
-                                                        contentDescription = "Edit Tag",
-                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
+                                            if (!tag.name.equals("Journal", ignoreCase = true)) {
+                                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    IconButton(
+                                                        onClick = {
+                                                            editingTag = tag
+                                                            editTagName = tag.name
+                                                            editTagColor = tag.colorHex
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Edit Tag",
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            viewModel.deleteTag(tag.name) { count, proceed ->
+                                                                tagWarningDialog = com.rajpawardotin.kosh.ui.chat.dialogs.TagWarningInfo(
+                                                                    title = "Delete Tag confirmation",
+                                                                    message = "This tag is associated with $count chats. Deleting it will disassociate it from all of them. Are you sure you want to delete it?",
+                                                                    onConfirm = proceed
+                                                                )
+                                                            }
+                                                        },
+                                                        modifier = Modifier.size(32.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Delete,
+                                                            contentDescription = "Delete Tag",
+                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
                                                 }
-                                                IconButton(
-                                                    onClick = {
-                                                        viewModel.deleteTag(tag.name) { count, proceed ->
-                                                            tagWarningDialog = com.rajpawardotin.kosh.ui.chat.dialogs.TagWarningInfo(
-                                                                title = "Delete Tag confirmation",
-                                                                message = "This tag is associated with $count chats. Deleting it will disassociate it from all of them. Are you sure you want to delete it?",
-                                                                onConfirm = proceed
-                                                            )
-                                                        }
-                                                    },
-                                                    modifier = Modifier.size(32.dp)
+                                            } else {
+                                                Box(
+                                                    modifier = Modifier.padding(end = 8.dp),
+                                                    contentAlignment = Alignment.Center
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Default.Delete,
-                                                        contentDescription = "Delete Tag",
-                                                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                        imageVector = Icons.Default.Lock,
+                                                        contentDescription = "Protected Tag",
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                                                         modifier = Modifier.size(16.dp)
                                                     )
                                                 }

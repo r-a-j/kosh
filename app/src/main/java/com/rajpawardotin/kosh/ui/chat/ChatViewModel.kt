@@ -43,7 +43,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CancellationException
 
-enum class AppScreen { DASHBOARD, CHAT, MODEL_HUB, SETTINGS }
+enum class AppScreen { DASHBOARD, CHAT, MODEL_HUB, SETTINGS, JOURNALS }
 
 class ChatViewModel(
     private val context: Context,
@@ -1391,6 +1391,15 @@ class ChatViewModel(
             showToast("Tag name cannot be empty")
             return
         }
+        if (name.trim().equals("Journal", ignoreCase = true)) {
+            showToast("Tag 'Journal' is a protected system tag and duplicates are not allowed.")
+            return
+        }
+        val exists = allTags.any { it.name.trim().equals(name.trim(), ignoreCase = true) }
+        if (exists) {
+            showToast("Tag already exists")
+            return
+        }
         viewModelScope.launch(safeIoDispatcher) {
             val success = sessionRepository.createTag(name, colorHex)
             withContext(Dispatchers.Main) {
@@ -1407,6 +1416,19 @@ class ChatViewModel(
     fun updateTag(oldName: String, newName: String, colorHex: String, onWarning: (Int, () -> Unit) -> Unit) {
         if (newName.isBlank()) {
             showToast("Tag name cannot be empty")
+            return
+        }
+        if (oldName.trim().equals("Journal", ignoreCase = true)) {
+            showToast("The 'Journal' tag is protected and cannot be edited.")
+            return
+        }
+        if (newName.trim().equals("Journal", ignoreCase = true)) {
+            showToast("Tag 'Journal' is a protected system tag and duplicates are not allowed.")
+            return
+        }
+        val exists = allTags.any { it.name.trim().equals(newName.trim(), ignoreCase = true) && !it.name.trim().equals(oldName.trim(), ignoreCase = true) }
+        if (exists) {
+            showToast("Tag already exists")
             return
         }
         viewModelScope.launch(safeIoDispatcher) {
@@ -1438,6 +1460,10 @@ class ChatViewModel(
     }
 
     fun deleteTag(name: String, onWarning: (Int, () -> Unit) -> Unit) {
+        if (name.trim().equals("Journal", ignoreCase = true)) {
+            showToast("The 'Journal' tag is protected and cannot be deleted.")
+            return
+        }
         viewModelScope.launch(safeIoDispatcher) {
             val count = sessionRepository.getSessionTagsCount(name)
             val deleteAction = {

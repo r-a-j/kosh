@@ -56,6 +56,7 @@ import com.rajpawardotin.kosh.ui.components.ChatInput
 import com.rajpawardotin.kosh.ui.components.SettingsScreen
 import com.rajpawardotin.kosh.ui.components.DashboardScreen
 import com.rajpawardotin.kosh.ui.components.ModelHubScreen
+import com.rajpawardotin.kosh.ui.components.JournalListScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -91,7 +92,7 @@ fun ChatScreen(
             scope.launch { drawerState.close() }
         } else if (viewModel.currentScreen == AppScreen.SETTINGS) {
             viewModel.currentScreen = previousScreen
-        } else if (viewModel.currentScreen == AppScreen.CHAT || viewModel.currentScreen == AppScreen.MODEL_HUB) {
+        } else if (viewModel.currentScreen == AppScreen.CHAT || viewModel.currentScreen == AppScreen.MODEL_HUB || viewModel.currentScreen == AppScreen.JOURNALS) {
             viewModel.currentScreen = AppScreen.DASHBOARD
         } else {
             val currentTime = System.currentTimeMillis()
@@ -362,6 +363,26 @@ fun ChatScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        } else if (viewModel.currentScreen == AppScreen.JOURNALS) {
+            JournalListScreen(
+                viewModel = viewModel,
+                onBackClick = {
+                    viewModel.currentScreen = AppScreen.DASHBOARD
+                },
+                onLoadSession = { sessionId ->
+                    viewModel.navigateToChatWithAutoStart {
+                        viewModel.loadSession(sessionId)
+                    }
+                    viewModel.currentScreen = AppScreen.CHAT
+                },
+                onNewEntryClick = {
+                    viewModel.navigateToChatWithAutoStart {
+                        viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
+                    }
+                    viewModel.currentScreen = AppScreen.CHAT
+                },
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             ModalNavigationDrawer(
                 drawerState = drawerState,
@@ -404,14 +425,7 @@ fun ChatScreen(
                                     },
                                     onStartJournalSession = {
                                         viewModel.navigateToChatWithAutoStart {
-                                            val existingJournal = viewModel.savedSessions.find { sess ->
-                                                sess.tags.any { it.name.equals("journal", ignoreCase = true) }
-                                            }
-                                            if (existingJournal != null) {
-                                                viewModel.loadSession(existingJournal.id)
-                                            } else {
-                                                viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
-                                            }
+                                            viewModel.startNewChatWithTags(isTemporary = false, listOf("Journal"))
                                         }
                                         viewModel.currentScreen = AppScreen.CHAT
                                     },
@@ -420,6 +434,9 @@ fun ChatScreen(
                                             viewModel.loadSession(sessionId)
                                         }
                                         viewModel.currentScreen = AppScreen.CHAT
+                                    },
+                                    onOpenJournals = {
+                                        viewModel.currentScreen = AppScreen.JOURNALS
                                     },
                                      onOpenSettings = {
                                          previousScreen = viewModel.currentScreen
