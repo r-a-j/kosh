@@ -363,5 +363,21 @@ class ResponseParserTest {
         val parsed3 = com.rajpawardotin.kosh.ui.chat.components.parseInlineMath(mathText3)
         assertEquals("H\u0302", parsed3.text)
     }
+
+    @Test
+    fun testSanitizeThinkingTagsInResponse() {
+        val textWithLeakedTags = "<thinking>Reasoning</thinking>\nHere is the clean response.\n</thinking>\nAnother line.\n</thinking>"
+        val (thinking, clean) = ResponseParser.extractThinkingSegments(textWithLeakedTags)
+        
+        assertEquals(1, thinking.size)
+        assertEquals("Reasoning", thinking[0])
+        assertEquals("Here is the clean response.\nAnother line.", clean.replace("\r\n", "\n"))
+        
+        val parsedBlocks = ResponseParser.parse(textWithLeakedTags)
+        assertEquals(2, parsedBlocks.size)
+        assertTrue(parsedBlocks[0] is ChatContentBlock.Thinking)
+        assertTrue(parsedBlocks[1] is ChatContentBlock.Text)
+        assertEquals("Here is the clean response.\nAnother line.", (parsedBlocks[1] as ChatContentBlock.Text).content.replace("\r\n", "\n"))
+    }
 }
 

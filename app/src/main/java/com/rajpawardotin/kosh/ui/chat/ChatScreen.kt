@@ -681,13 +681,13 @@ fun ChatScreen(
                         // 2. ChatInput and Stats HUD Container (always visible)
                         Column(
                             modifier = Modifier
-                                .onGloballyPositioned { coordinates ->
-                                    inputHeightDp = with(density) { coordinates.size.height.toDp() }
-                                }
                                 .fillMaxWidth()
                                 .imePadding()
                                 .navigationBarsPadding()
                                 .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                .onGloballyPositioned { coordinates ->
+                                    inputHeightDp = with(density) { coordinates.size.height.toDp() }
+                                }
                                 .align(Alignment.BottomCenter),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {

@@ -104,7 +104,7 @@ object ResponseParser {
         return StreamState(
             isThinking = state.isThinking,
             thinkingContent = state.thinkingContent.trim(),
-            cleanResponse = state.cleanResponse.trim()
+            cleanResponse = sanitizeThinkingTags(state.cleanResponse).trim()
         )
     }
 
@@ -218,6 +218,14 @@ object ResponseParser {
                    .trim()
     }
 
+    fun sanitizeThinkingTags(text: String): String {
+        return text
+            .replace("""\s*<thinking>\s*""".toRegex(), "\n")
+            .replace("""\s*</thinking>\s*""".toRegex(), "\n")
+            .replace("""\s*```thinking\s*""".toRegex(), "\n")
+            .trim()
+    }
+
     fun extractThinkingSegments(text: String): Pair<List<String>, String> {
         val xmlMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?<thinking>(.*?)(?:</thinking>|$)""".toRegex().findAll(text)
         val fenceMatches = """(?s)(?:^|\n)?(?:\s*[-*+•]\s*|\s*\d+\.\s*)?```thinking\s*\n(.*?)(?:\n```|$)""".toRegex().findAll(text)
@@ -225,7 +233,7 @@ object ResponseParser {
         val allMatches = (xmlMatches + fenceMatches).sortedBy { it.range.first }.toList()
         
         if (allMatches.isEmpty()) {
-            return Pair(emptyList(), cleanUpEmptyListMarkers(text).trim())
+            return Pair(emptyList(), sanitizeThinkingTags(cleanUpEmptyListMarkers(text)).trim())
         }
         
         val thinkingContents = mutableListOf<String>()
@@ -246,7 +254,7 @@ object ResponseParser {
         }
         
         val cleanText = cleanTextBuilder.toString().trim()
-        val finalCleanText = cleanUpEmptyListMarkers(cleanText).trim()
+        val finalCleanText = sanitizeThinkingTags(cleanUpEmptyListMarkers(cleanText)).trim()
         return Pair(thinkingContents, finalCleanText)
     }
 
@@ -258,7 +266,7 @@ object ResponseParser {
         val blocks = mutableListOf<ChatContentBlock>()
         
         if (allMatches.isEmpty()) {
-            val cleanBlocks = parseCleanText(cleanUpEmptyListMarkers(text))
+            val cleanBlocks = parseCleanText(sanitizeThinkingTags(cleanUpEmptyListMarkers(text)))
             blocks.addAll(cleanBlocks)
         } else {
             var lastIndex = 0
@@ -268,7 +276,7 @@ object ResponseParser {
                 // Parse the clean text before this thinking block
                 if (match.range.first > lastIndex) {
                     val subText = text.substring(lastIndex, match.range.first)
-                    blocks.addAll(parseCleanText(cleanUpEmptyListMarkers(subText)))
+                    blocks.addAll(parseCleanText(sanitizeThinkingTags(cleanUpEmptyListMarkers(subText))))
                 }
                 
                 val thinking = match.groupValues[1].trim()
@@ -280,7 +288,7 @@ object ResponseParser {
             
             if (lastIndex < text.length) {
                 val remainingText = text.substring(lastIndex)
-                blocks.addAll(parseCleanText(cleanUpEmptyListMarkers(remainingText)))
+                blocks.addAll(parseCleanText(sanitizeThinkingTags(cleanUpEmptyListMarkers(remainingText))))
             }
         }
         

@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -47,6 +49,7 @@ fun ChatDrawerContent(
     ) {
         var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
         var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+        var searchQuery by remember { mutableStateOf("") }
 
         val primary = MaterialTheme.colorScheme.primary
         val secondary = MaterialTheme.colorScheme.secondary
@@ -138,7 +141,62 @@ fun ChatDrawerContent(
                 modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
             )
 
-            if (viewModel.savedSessions.isEmpty()) {
+            if (viewModel.savedSessions.size > 10) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search history...", fontSize = 14.sp, color = onSurfaceMuted.copy(alpha = 0.6f)) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = onSurfaceMuted.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { searchQuery = "" },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = onSurfaceMuted.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                        focusedBorderColor = primary.copy(alpha = 0.5f),
+                        unfocusedBorderColor = outline.copy(alpha = 0.12f),
+                        cursorColor = primary
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                )
+            }
+
+            val filteredSessions = remember(viewModel.savedSessions.toList(), searchQuery) {
+                if (searchQuery.isBlank()) {
+                    viewModel.savedSessions.toList()
+                } else {
+                    viewModel.savedSessions.filter { session ->
+                        session.title.contains(searchQuery, ignoreCase = true) ||
+                        session.tags.any { it.name.contains(searchQuery, ignoreCase = true) }
+                    }
+                }
+            }
+
+            if (filteredSessions.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -146,7 +204,7 @@ fun ChatDrawerContent(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No secure chats yet.",
+                        text = if (searchQuery.isNotEmpty()) "No matches found." else "No secure chats yet.",
                         color = onSurfaceMuted,
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -158,7 +216,7 @@ fun ChatDrawerContent(
                         .fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(viewModel.savedSessions) { session ->
+                    items(filteredSessions) { session ->
                         val isActive = viewModel.currentSessionId == session.id
                         val relativeTime = remember(session.lastActive) {
                             val now = System.currentTimeMillis()

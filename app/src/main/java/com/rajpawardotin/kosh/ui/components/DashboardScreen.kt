@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +71,7 @@ fun DashboardScreen(
     val isFirstLaunch = rememberSaveable { mutableStateOf(true) }
     var sessionToDelete by remember { mutableStateOf<ChatSession?>(null) }
     var sessionToRename by remember { mutableStateOf<ChatSession?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val animateEntrance = isFirstLaunch.value
 
@@ -79,12 +82,20 @@ fun DashboardScreen(
         }
     }
 
-    val filteredSessions = remember(viewModel.savedSessions.toList(), selectedTags.toList()) {
-        if (selectedTags.isEmpty()) {
+    val filteredSessions = remember(viewModel.savedSessions.toList(), selectedTags.toList(), searchQuery) {
+        val base = if (selectedTags.isEmpty()) {
             viewModel.savedSessions.toList()
         } else {
             viewModel.savedSessions.filter { session ->
                 selectedTags.all { selectedId -> session.tags.any { it.id == selectedId } }
+            }
+        }
+        if (searchQuery.isBlank()) {
+            base
+        } else {
+            base.filter { session ->
+                session.title.contains(searchQuery, ignoreCase = true) ||
+                session.tags.any { it.name.contains(searchQuery, ignoreCase = true) }
             }
         }
     }
@@ -117,9 +128,29 @@ fun DashboardScreen(
                 ))
         )
 
+        val scrollState = rememberLazyListState()
+        var isSearchFocused by remember { mutableStateOf(false) }
+
+        LaunchedEffect(isSearchFocused) {
+            if (isSearchFocused) {
+                delay(150)
+                val searchBarIndex = if (viewModel.allTags.isNotEmpty()) 5 else 4
+                val viewportHeight = scrollState.layoutInfo.viewportSize.height
+                if (viewportHeight > 0) {
+                    val itemHeight = with(density) { 64.dp.roundToPx() }
+                    val targetOffset = (viewportHeight - itemHeight) / 2
+                    scrollState.animateScrollToItem(index = searchBarIndex, scrollOffset = -targetOffset)
+                } else {
+                    scrollState.animateScrollToItem(index = searchBarIndex)
+                }
+            }
+        }
+
         LazyColumn(
+            state = scrollState,
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .fadingEdges(
                     topBoundaryPx = with(density) { topPadding.toPx() },
                     topFadePx = with(density) { topFadeHeightDp.toPx() }
@@ -515,6 +546,54 @@ fun DashboardScreen(
                 }
             }
 
+            if (viewModel.savedSessions.size > 10) {
+                item(key = "search_bar") {
+                    StaggeredEntrance(enabled = animateEntrance, delayMillis = 300) { animationModifier ->
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search chats...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = { searchQuery = "" },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.15f),
+                                focusedBorderColor = primary.copy(alpha = 0.5f),
+                                unfocusedBorderColor = outlineVariant,
+                                cursorColor = primary
+                            ),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = animationModifier
+                                .fillMaxWidth()
+                                .onFocusChanged { isSearchFocused = it.isFocused }
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // List of Filtered Chats
             if (filteredSessions.isEmpty()) {
                 item {
@@ -756,22 +835,21 @@ private fun StaggeredEntrance(
     delayMillis: Int,
     content: @Composable (modifier: Modifier) -> Unit
 ) {
-    if (!enabled) {
-        content(Modifier)
-        return
-    }
+    // Keep composition path identical to prevent node recreation and focus loss.
+    // If initially not enabled, start animProgress at 1f.
+    val animProgress = remember { Animatable(if (enabled) 0f else 1f) }
 
-    val animProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        delay(delayMillis.toLong())
-        animProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = 350,
-                easing = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)
+    LaunchedEffect(enabled) {
+        if (enabled && animProgress.value < 1f) {
+            delay(delayMillis.toLong())
+            animProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 350,
+                    easing = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)
+                )
             )
-        )
+        }
     }
 
     val alpha = animProgress.value
