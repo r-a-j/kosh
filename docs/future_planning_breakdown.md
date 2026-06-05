@@ -15,11 +15,11 @@ Below is the verbatim transcription of the handwritten notes grouped by source i
 *   `[ ] Debug web search glitches.`
 *   `[ ] Maybe remove the web search functionality [think how it can be implemented].`
 *   `[ ] Generate different logo ideas based on this starting point.` (References a hand-drawn sketch of a cloud encircling a core emblem).
-*   `[ ] Response markdown does not display LaTeX code or mathematical expressions.` (Continued in Image 2).
+*   `[x] Response markdown does not display LaTeX code or mathematical expressions.` (Continued in Image 2; Basic Markdown added, local KaTeX offline bundle planned).
 
 ### Image 2: UX, Offline Tasks & Utilities
-*   `[ ] Response markdown does not display LaTeX code or mathematical expressions.`
-*   `[ ] Instant scroll to bottom in chat button.`
+*   `[x] Response markdown does not display LaTeX code or mathematical expressions.` (Basic Markdown added, local KaTeX offline bundle planned).
+*   `[x] Instant scroll to bottom in chat button.`
 *   `[ ] Add games chat dashboard in dashboard home-screen.`
 *   `[ ] Offline tasks:`
     *   `-> (1) Translation`
@@ -31,10 +31,10 @@ Below is the verbatim transcription of the handwritten notes grouped by source i
 *   `[ ] Minimum how to support. How to optimize for minimum requirement.`
 *   `[ ] By default small inbuilt model.`
     *   `[ Challenge: How to be small & also provide basic inbuilt proper model? ]`
-*   `[ ] Battery less than 20%...` (Continued in Image 4).
+*   `[x] Battery less than 20%...` (Continued in Image 4).
 
 ### Image 4: Power Management & Feature Demos
-*   `[ ] Battery less than 20%, show notification that the app will drain faster battery. Avoid longer usage after 15% battery usage.`
+*   `[x] Battery less than 20%, show notification that the app will drain faster battery. Avoid longer usage after 15% battery usage.`
 *   `[ ] List all tasks that Kosh is actually able to perform.`
 *   `[ ] Make feature videos: major ones, list all use cases & then group them to show for the use case video.`
 

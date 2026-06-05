@@ -78,6 +78,10 @@ In Android's dynamic linker namespace, loading the vendor dispatch library direc
   3. `"QnnHtp"`
   4. `"LiteRtDispatch_Qualcomm"` (Loaded successfully now that all runtime symbols exist in the namespace).
 
+### Static KV-Cache Size Synchronization (2382 Token Limit)
+Qualcomm NPU compiled models require static shape dimensions for optimization. The compiled model loaded in Kosh has a hard limit of exactly 2382 tokens for its KV-cache.
+* **Resolution**: Configured `maxNumTokens = 2380` in `EngineConfig` specifically for the Qualcomm NPU backend. This instructs the LiteRT engine to stop generation gracefully upon reaching the limit, avoiding out-of-bounds execution (which asserts `new_step <= TokenCount()` at step 2383) that would otherwise crash the JNI thread. CPU/GPU backends continue using `4096` to allow dynamic shapes and larger context lengths.
+
 ---
 
 ## 5. UI Layout Constraints & Overlap Protection

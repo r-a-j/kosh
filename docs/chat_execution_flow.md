@@ -76,8 +76,10 @@ Before prompt compilation, the coroutine retrieves three sources of context:
 
 ### Step 4: Prompt Compilation (`LlmUseCase.compileFinalPrompt`)
 The view model passes the message history, document context, web search snippets, running summary, and facts list to the domain use case.
-1. **Budget Calculation**: Checks the remaining character budget:
-   `budget = maxContextChars (8000) - prompt.length - docContext.length - searchResults.length - summary.length - facts.length - 1500`.
+1. **Budget Calculation**: Checks the remaining character budget based on the active backend:
+   - **NPU Backend**: `maxContextChars = 5500` characters (approx. 1380 tokens) to guarantee a 1000-token generation buffer within the NPU's compiled 2382-token limit.
+   - **CPU/GPU Backends**: `maxContextChars = 12000` characters (approx. 3000 tokens) to allow a larger history window on dynamic-shape backends.
+   - The remaining history budget is computed as: `budget = maxContextChars - prompt.length - documentContext.length - searchResults.length - summary.length - facts.length - 1500`.
 2. **History Partitioning**:
    - **Sliding Verbatim Window**: Takes the last 8 turns from the history to include verbatim.
    - **Older History Semantic Search**: Searches the remaining older messages using `searchHistoryMessages` (token-overlap keyword search) to find the top 2 relevant turns.

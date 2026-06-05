@@ -17,6 +17,7 @@ This file contains concise, actionable guidance for AI coding agents working in 
    - `app/src/main/java/.../data/ModelLibraryManager.kt` — models stored in `files/models`; imports enforce integrity (expected size) and a 100 MB minimum. Sanitize/dedupe behavior is here.
    - `app/src/main/java/.../data/SharedPrefsSettingsProvider.kt` — EncryptedSharedPreferences wrapper and deterministic recovery path when prefs are corrupted (deletes xml then recreates). Shows keys used (e.g., `engine_crashed`).
    - `app/src/main/java/.../ui/chat/ChatViewModel.kt` — central control flow for generation, RAG retrieval, sentinel usage (`settingsProvider.commitBoolean("engine_crashed", true)`), model selection, and backend strings.
+   - `app/src/main/java/.../ui/chat/components/MathFormulaCard.kt` — typesets LaTeX formulas via WebView; currently relies on external CDNs which causes failures in offline mode.
    - `docs/npu_setup.md` and `build_tools/` — exact native build & packaging notes (useLegacyPackaging, static STL, 16 KB alignment). Follow these when building native libs.
 
 3) Short actionable developer workflows
@@ -42,6 +43,15 @@ This file contains concise, actionable guidance for AI coding agents working in 
    - Engine crash sentinel: code writes `engine_crashed=true` synchronously before JNI initialize and clears it on return. Resilience flow in `ChatViewModel.initializeEngine()` and `docs/resilience.md` must be preserved when changing initialization logic.
    - JNI shutdown: `LiteRTModelProvider.close()` performs JNI close on a background thread to avoid deadlocks — do not force close on UI thread or you may hang the process.
    - Settings & prefs recovery: `SharedPrefsSettingsProvider` will delete corrupted `neural_core_prefs.xml` and recreate encrypted prefs. Avoid relying on encrypted prefs for irreversible state.
+   - LaTeX mathematical equations: Rendered inside a transparent WebView loaded with KaTeX. It has a known limitation of using online CDN links which fail when offline. Local assets bundle implementation is planned.
+   - Chat scroll list ordering: `ChatScreen.kt` message list uses `reverseLayout = true` in its `LazyColumn`. This means index `0` represents the visual bottom (most recent message).
+   - Future roadmap details: Core plans for other runtimes, dynamic LoRAs, local translation/GPS, and battery warnings are documented in `docs/future_planning_breakdown.md`.
+   - Journal protection: The tag named "Journal" (case-insensitive checking in view model) is protected and cannot be created, edited, deleted, or disassociated. All new journal entry chat sessions automatically start with this tag allocated.
+   - Session List Caching Gotcha: The session lists on the Dashboard and Journal Vault screens are filtered/remembered. To ensure updates (like deletes, renames, or lock/unlock status changes) are reflected immediately in Compose, the `remember` blocks must key on `viewModel.savedSessions.toList()` instead of `viewModel.savedSessions` directly.
+   - Deletion Security: Session deletion on all interfaces (Drawer, Dashboard, Journal list) must use `DeleteSessionDialog` to enforce biometric/passcode-secured deletion for encrypted chats. When a session is deleted, call `activeSessionKeys.remove(sessionId)` to prevent key leaks.
+   - Low Battery Warning: A warning banner appears when the battery is under 20% (and not charging), and a warning dialog prevents sending messages when the battery is under 15% (requiring explicit confirmation to proceed).
+   - RAG Memory Consolidation: A background consolidation task (`updateRAGMemoryConsolidation`) extracts facts, formulas, and context, updating a consolidated `SessionDocument` (with `chunkIndex = -2`) to optimize offline context.
+   - Qualcomm NPU Budgeting: When using the "NPU (Qualcomm)" backend, the context limit is set to 5500 characters (leaving space for generation within the 2382 token hardware limit). Other backends use up to 12000 characters.
 
 5) Integration points & external dependencies to watch
    - Native libs and JNI: `app/src/main/jniLibs/arm64-v8a/` (local JNI takes precedence); see `docs/npu_setup.md` for packaging rules (useLegacyPackaging=true).
@@ -57,7 +67,19 @@ This file contains concise, actionable guidance for AI coding agents working in 
    - Unit tests: `app/src/test/java/...` (e.g., `ChatViewModelTest.kt`) use fakes for `AIProvider`, `ModelLibraryManager`, and `SettingsProvider`. Use `.\gradlew.bat test` to run.
 
 8) Useful search anchors for agents
-   - Search for: `engine_crashed`, `LiteRTModelProvider`, `ModelLibraryManager`, `ModelTag`, `SharedPrefsSettingsProvider`, `useLegacyPackaging`, `libLiteRt`, `packaging`.
+   - Search for: `engine_crashed`, `LiteRTModelProvider`, `ModelLibraryManager`, `ModelTag`, `SharedPrefsSettingsProvider`, `useLegacyPackaging`, `libLiteRt`, `packaging`, `MathFormulaCard`, `reverseLayout`, `future_planning_breakdown.md`, `updateRAGMemoryConsolidation`, `DeleteSessionDialog`.
+
+9) Local Documentation Index (in `docs/` directory)
+   - [architecture.md](file:///d:/Work/Testbench/temp/docs/architecture.md) — High-level architecture (Android Compose + LiteRT native JNI loading).
+   - [chat_execution_flow.md](file:///d:/Work/Testbench/temp/docs/chat_execution_flow.md) — Detailed step-by-step chat pipeline and model invocation flow.
+   - [npu_setup.md](file:///d:/Work/Testbench/temp/docs/npu_setup.md) — NPU build details (16 KB page alignment, CMake configurations, packaging).
+   - [resilience.md](file:///d:/Work/Testbench/temp/docs/resilience.md) — Resilience, EncryptedSharedPreferences recovery, and Keystore setup.
+   - [future_planning_breakdown.md](file:///d:/Work/Testbench/temp/docs/future_planning_breakdown.md) — Roadmap notes (LaTeX mathematical formulas, local translation, GPS, battery warning details).
+   - [backup_system.md](file:///d:/Work/Testbench/temp/docs/backup_system.md) — Detailed description of the backup/import/export system.
+   - [memory_and_history_architecture.md](file:///d:/Work/Testbench/temp/docs/memory_and_history_architecture.md) — Details of the chat history database and context management.
+   - [agent_and_skills.md](file:///d:/Work/Testbench/temp/docs/agent_and_skills.md) — Details on the Agent execution loop and registered capabilities.
+   - [npu_token_limit_research.md](file:///d:/Work/Testbench/temp/docs/npu_token_limit_research.md) — Context limit optimizations specifically for the Qualcomm NPU.
+   - [on_device_tts_analysis.md](file:///d:/Work/Testbench/temp/docs/on_device_tts_analysis.md) — Text-to-speech engine and offline model analysis.
 
 Keep entries above factual and discoverable; update this file when core flows change.
 

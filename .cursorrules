@@ -3,6 +3,19 @@
 ## Absolute Rules
 - **Do NOT commit or push code to GitHub without explicit permission from the user.** Even if you have generated documentation or completed verification tests, you must stop, summarize your changes, and ask the user if they would like to commit and push. Never execute a commit or push command without this explicit user directive.
 - **Do NOT write project-specific documentation or knowledge base entries to the global `.gemini` folder or global agent knowledge directories** (e.g., `C:\Users\raj24\.gemini\antigravity\knowledge`). All technical specifications, architecture blueprints, execution flows, and project-specific knowledge base documents must be saved strictly under Kosh's local `docs/` folder in this repository.
+- **Reference & Maintain Documentation:** Kosh's design is fully documented locally in the `docs/` folder. Before writing or changing code, you must read the relevant files in `docs/`. After completing any feature or bug fix, you must update the corresponding documentation before asking for permission to commit.
+
+## Documentation Directory Map
+Refer to the following files in the `docs/` folder to understand Kosh's codebase structure:
+- **[architecture.md](file:///d:/Work/Testbench/temp/docs/architecture.md):** Overall system architecture, UI layer, cryptography, FTS4 indexing, and RAG pipeline.
+- **[agent_and_skills.md](file:///d:/Work/Testbench/temp/docs/agent_and_skills.md):** Suspending permissions, reflective suspend-function execution, WebView sandboxing, and loop limits.
+- **[chat_execution_flow.md](file:///d:/Work/Testbench/temp/docs/chat_execution_flow.md):** Detail of the ChatViewModel state machine, prompt stream processing, and background jobs.
+- **[memory_and_history_architecture.md](file:///d:/Work/Testbench/temp/docs/memory_and_history_architecture.md):** Token constraints, sliding window prompt assembly, and negative-space checks.
+- **[npu_setup.md](file:///d:/Work/Testbench/temp/docs/npu_setup.md):** Hexagon DSP NPU setup details: shared library loading orders, static STL alignments, and packaging.
+- **[resilience.md](file:///d:/Work/Testbench/temp/docs/resilience.md):** JNI fault tolerance, crash sentinel flags, and database recovery flow.
+- **[backup_system.md](file:///d:/Work/Testbench/temp/docs/backup_system.md):** Secure AES-256-GCM database export/import with Tink integrity verification.
+- **[on_device_tts_analysis.md](file:///d:/Work/Testbench/temp/docs/on_device_tts_analysis.md):** Analysis of local TextToSpeech, lifecycle bounds, and sentence-chunking engine.
+- **[future_planning_breakdown.md](file:///d:/Work/Testbench/temp/docs/future_planning_breakdown.md):** Roadmap for alternative runtimes, LoRA adapters, local offline translation/GPS, battery tracking, and offline KaTeX.
 
 ## Developer Workflows
 - **Build (Windows PowerShell):**

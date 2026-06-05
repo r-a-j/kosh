@@ -28,7 +28,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
+            .padding(vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
@@ -36,7 +36,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(8.dp)
         ) {
             AndroidView(
                 factory = { context ->
@@ -45,7 +45,6 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.WRAP_CONTENT
                         )
-                        // Make WebView background transparent
                         setBackgroundColor(android.graphics.Color.TRANSPARENT)
                         
                         settings.apply {
@@ -53,6 +52,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                             domStorageEnabled = true
                             useWideViewPort = true
                             loadWithOverviewMode = true
+                            allowFileAccess = true
                         }
                         
                         webViewClient = object : WebViewClient() {
@@ -66,19 +66,18 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                             .replace("'", "\\'")
                             .replace("\n", " ")
 
-                        // Local HTML containing KaTeX resources from jsdelivr CDN
-                        // Fallback script displays raw LaTeX if stylesheet or JS fails to load (e.g. offline)
+                        // Local HTML loading KaTeX from file:///android_asset/
                         val html = """
                             <!DOCTYPE html>
                             <html>
                             <head>
                                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-G5sc4EBW1569o63kR9wS8B4S4V+bA9W+uEaI3L+8Gq/tI1AdfQpZ8sQ2e4O6y1j" crossorigin="anonymous">
-                                <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" integrity="sha384-tZg133P15j37M91t+h/H9WdC/n1A9E3m4W1O+I/2N+d5V6WvF9C6M3L2uD5u" crossorigin="anonymous"></script>
+                                <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css">
+                                <script src="file:///android_asset/katex/katex.min.js"></script>
                                 <style>
                                     body {
                                         margin: 0;
-                                        padding: 8px;
+                                        padding: 2px 4px;
                                         background-color: transparent !important;
                                         color: $textColorHex;
                                         font-family: 'Courier New', Courier, monospace;
@@ -91,9 +90,12 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                                         user-select: none;
                                     }
                                     #math {
-                                        font-size: 1.2em;
+                                        font-size: 1.15em;
                                         text-align: center;
                                         white-space: nowrap;
+                                    }
+                                    .katex-display {
+                                        margin: 4px 0 !important;
                                     }
                                 </style>
                             </head>
@@ -108,7 +110,6 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                                                     displayMode: true
                                                 });
                                             } else {
-                                                // Fallback display if KaTeX package is not loaded
                                                 document.getElementById('math').textContent = '$$escapedFormula';
                                             }
                                         } catch (e) {
@@ -120,7 +121,7 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                             </html>
                         """.trimIndent()
                         
-                        loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                        loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
                     }
                 },
                 update = { webView ->
@@ -134,12 +135,12 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                         <html>
                         <head>
                             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
-                            <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+                            <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css">
+                            <script src="file:///android_asset/katex/katex.min.js"></script>
                             <style>
                                 body {
                                     margin: 0;
-                                    padding: 8px;
+                                    padding: 2px 4px;
                                     background-color: transparent !important;
                                     color: $textColorHex;
                                     font-family: 'Courier New', Courier, monospace;
@@ -150,9 +151,12 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                                     overflow-y: hidden;
                                 }
                                 #math {
-                                    font-size: 1.2em;
+                                    font-size: 1.15em;
                                     text-align: center;
                                     white-space: nowrap;
+                                }
+                                .katex-display {
+                                    margin: 4px 0 !important;
                                 }
                             </style>
                         </head>
@@ -173,11 +177,11 @@ fun MathFormulaCard(formula: String, modifier: Modifier = Modifier) {
                         </body>
                         </html>
                     """.trimIndent()
-                    webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                    webView.loadDataWithBaseURL("file:///android_asset/", html, "text/html", "UTF-8", null)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 48.dp, max = 150.dp)
+                    .heightIn(min = 36.dp, max = 120.dp)
             )
         }
     }

@@ -7,6 +7,8 @@ import com.rajpawardotin.kosh.domain.provider.SearchProvider
 import com.rajpawardotin.kosh.domain.repository.SessionRepository
 import com.rajpawardotin.kosh.domain.repository.DocumentRepository
 import com.rajpawardotin.kosh.ui.chat.ResponseParser
+import javax.crypto.SecretKey
+import com.rajpawardotin.kosh.data.CryptoUtils
 
 class LlmUseCase(
     private val aiProvider: AIProvider,
@@ -185,61 +187,359 @@ class LlmUseCase(
         activeSessionDocuments: List<SessionDocument>,
         justAttached: Boolean = false
     ): Pair<String, List<String>> {
+        val ragMemoryDocs = activeSessionDocuments.filter { it.chunkIndex == -2 }
+        val masterSummaries = activeSessionDocuments.filter { it.chunkIndex == -1 }
+        val sectionSummaries = activeSessionDocuments.filter { it.chunkIndex in -100..-10 }
+        val contentDocs = activeSessionDocuments.filter { it.chunkIndex >= 0 }
+        
         val terms = tokenizeQuery(query)
         
         val relevantDocs = if (terms.isEmpty() || justAttached) {
-            activeSessionDocuments.takeLast(3).reversed()
+            getFallbackExcerpts(contentDocs)
         } else {
-            // 1. Rank chunks in memory using multi-metric scoring (consistent for both encrypted & unencrypted)
-            val rankedMatches = activeSessionDocuments
-                .map { doc -> doc to scoreChunk(doc.chunkText, terms) }
-                .filter { it.second > 0.0 }
-                .sortedByDescending { it.second }
-            
-            if (rankedMatches.isEmpty()) {
-                activeSessionDocuments.takeLast(3).reversed()
-            } else {
-                // 2. Select top 2 matching chunks
-                val topMatches = rankedMatches.take(2).map { it.first }
+            if (sectionSummaries.isNotEmpty()) {
+                val rankedSections = sectionSummaries
+                    .map { sec -> sec to scoreChunk(sec.chunkText, terms) }
+                    .filter { it.second > 0.0 }
+                    .sortedByDescending { it.second }
                 
-                // 3. Coherency Window: inject neighbors (index - 1 and index + 1) for the same file
-                val resultSet = mutableSetOf<SessionDocument>()
-                for (match in topMatches) {
-                    resultSet.add(match)
+                if (rankedSections.isEmpty()) {
+                    rankAndBuildResultSet(contentDocs, contentDocs, terms)
+                } else {
+                    val topSections = rankedSections.take(2).map { it.first }
+                    val candidateLeafs = topSections.flatMap { sec ->
+                        getLeafChunksForSection(sec, contentDocs)
+                    }.distinctBy { it.id }
                     
-                    val preceding = activeSessionDocuments.find { 
-                        it.fileName == match.fileName && it.chunkIndex == match.chunkIndex - 1 
+                    if (candidateLeafs.isEmpty()) {
+                        rankAndBuildResultSet(contentDocs, contentDocs, terms)
+                    } else {
+                        rankAndBuildResultSet(candidateLeafs, contentDocs, terms)
                     }
-                    if (preceding != null) resultSet.add(preceding)
-                    
-                    val succeeding = activeSessionDocuments.find { 
-                        it.fileName == match.fileName && it.chunkIndex == match.chunkIndex + 1 
-                    }
-                    if (succeeding != null) resultSet.add(succeeding)
                 }
-                
-                // 4. Chronological Sorting: sort by filename and chunk index to maintain reading order
-                resultSet.sortedWith(compareBy<SessionDocument> { it.fileName }.thenBy { it.chunkIndex })
+            } else {
+                rankAndBuildResultSet(contentDocs, contentDocs, terms)
             }
         }
 
-        if (relevantDocs.isEmpty()) return Pair("", emptyList())
+        if (relevantDocs.isEmpty() && masterSummaries.isEmpty() && ragMemoryDocs.isEmpty()) {
+            return Pair("", emptyList())
+        }
 
-        val sourceNames = relevantDocs.map { it.fileName }.distinct()
+        val sourceNames = (relevantDocs.map { it.fileName } + 
+                           masterSummaries.map { it.fileName } + 
+                           ragMemoryDocs.map { it.fileName })
+            .distinct()
+            .filter { it != "RAG_Memory" }
         val sb = StringBuilder()
         
         sb.append("### ACTIVE CONVERSATION DOCUMENTS\n")
         sb.append("The user has attached the following files to this session: ")
-        sb.append(sourceNames.joinToString(", ")).append("\n\n")
-        sb.append("Excerpts/Context from the attached documents:\n")
-        sb.append("--- START EXCERPTS ---\n")
-        for (doc in relevantDocs) {
-            sb.append("File: ").append(doc.fileName).append(" (Chunk ").append(doc.chunkIndex + 1).append("):\n")
-            sb.append(doc.chunkText.trim()).append("\n\n")
+        sb.append(sourceNames.filter { it != "RAG_Memory" }.joinToString(", ")).append("\n\n")
+
+        if (ragMemoryDocs.isNotEmpty()) {
+            sb.append("### CONSOLIDATED RAG KNOWLEDGE MEMORY\n")
+            sb.append("The following is a running consolidated memory of facts, definitions, and details extracted from the attached documents and discussed in this session so far:\n")
+            for (ragMem in ragMemoryDocs) {
+                sb.append(ragMem.chunkText.trim()).append("\n\n")
+            }
         }
-        sb.append("--- END EXCERPTS ---")
+
+        if (masterSummaries.isNotEmpty()) {
+            sb.append("### CONSOLIDATED DOCUMENT OVERVIEW\n")
+            for (summary in masterSummaries) {
+                sb.append("File: ").append(summary.fileName).append(" (High-Level Overview):\n")
+                sb.append(summary.chunkText.trim()).append("\n\n")
+            }
+        }
+        
+        if (relevantDocs.isNotEmpty()) {
+            sb.append("Excerpts/Context from the attached documents:\n")
+            sb.append("--- START EXCERPTS ---\n")
+            for (doc in relevantDocs) {
+                sb.append("File: ").append(doc.fileName).append(" (Chunk ").append(doc.chunkIndex + 1).append("):\n")
+                sb.append(doc.chunkText.trim()).append("\n\n")
+            }
+            sb.append("--- END EXCERPTS ---")
+        }
 
         return Pair(sb.toString(), sourceNames)
+    }
+
+    private fun getFallbackExcerpts(contentDocs: List<SessionDocument>): List<SessionDocument> {
+        if (contentDocs.isEmpty()) return emptyList()
+        
+        val groupedByFile = contentDocs.groupBy { it.fileName }
+        val latestFileName = groupedByFile.maxByOrNull { (_, chunks) -> 
+            chunks.maxOfOrNull { it.createdAt } ?: 0L 
+        }?.key ?: return emptyList()
+        
+        return contentDocs
+            .filter { it.fileName == latestFileName }
+            .sortedBy { it.chunkIndex }
+            .take(3)
+    }
+
+    fun getLeafChunksForSection(
+        secDoc: SessionDocument,
+        contentDocs: List<SessionDocument>
+    ): List<SessionDocument> {
+        val docName = secDoc.fileName
+        val docLeafs = contentDocs.filter { it.fileName == docName }.sortedBy { it.chunkIndex }
+        if (docLeafs.isEmpty()) return emptyList()
+        val totalLeafs = docLeafs.size
+        val sectionSize = maxOf(5, totalLeafs / 5)
+        val sectionIndex = -secDoc.chunkIndex - 10
+        if (sectionIndex < 0) return emptyList()
+        
+        val startIdx = sectionIndex * sectionSize
+        val endIdx = startIdx + sectionSize - 1
+        return docLeafs.filter { it.chunkIndex in startIdx..endIdx }
+    }
+
+    private fun rankAndBuildResultSet(
+        candidates: List<SessionDocument>,
+        allContentDocs: List<SessionDocument>,
+        terms: List<String>
+    ): List<SessionDocument> {
+        val rankedMatches = candidates
+            .map { doc -> doc to scoreChunk(doc.chunkText, terms) }
+            .filter { it.second > 0.0 }
+            .sortedByDescending { it.second }
+        
+        if (rankedMatches.isEmpty()) {
+            return getFallbackExcerpts(allContentDocs)
+        }
+        
+        val topMatches = rankedMatches.take(2).map { it.first }
+        val resultSet = mutableSetOf<SessionDocument>()
+        for (match in topMatches) {
+            resultSet.add(match)
+            
+            val preceding = allContentDocs.find { 
+                it.fileName == match.fileName && it.chunkIndex == match.chunkIndex - 1 
+            }
+            if (preceding != null) resultSet.add(preceding)
+            
+            val succeeding = allContentDocs.find { 
+                it.fileName == match.fileName && it.chunkIndex == match.chunkIndex + 1 
+            }
+            if (succeeding != null) resultSet.add(succeeding)
+        }
+        
+        return resultSet.sortedWith(compareBy<SessionDocument> { it.fileName }.thenBy { it.chunkIndex })
+    }
+
+    private fun buildSessionDoc(
+        id: String,
+        sessionId: String,
+        fileName: String,
+        fileType: String,
+        fileSize: Long,
+        chunkIndex: Int,
+        chunkText: String,
+        isEncrypted: Boolean,
+        key: SecretKey?
+    ): SessionDocument {
+        val storedName = if (isEncrypted && key != null) CryptoUtils.encryptMessage(fileName, key) else fileName
+        val storedText = if (isEncrypted && key != null) CryptoUtils.encryptMessage(chunkText, key) else chunkText
+        return SessionDocument(
+            id = id,
+            sessionId = sessionId,
+            fileName = storedName,
+            fileType = fileType,
+            fileSize = fileSize,
+            chunkIndex = chunkIndex,
+            chunkText = storedText,
+            isEncrypted = isEncrypted,
+            createdAt = System.currentTimeMillis()
+        )
+    }
+
+    suspend fun generateDocumentSummaryIfMissing(
+        sessionId: String,
+        fileName: String,
+        chunks: List<SessionDocument>,
+        isTemporarySession: Boolean,
+        activeSessionKeys: Map<String, SecretKey>
+    ): List<SessionDocument> {
+        if (chunks.isEmpty()) return emptyList()
+        
+        val contentChunks = chunks.filter { it.chunkIndex >= 0 }.sortedBy { it.chunkIndex }
+        if (contentChunks.isEmpty()) return emptyList()
+        
+        val hasSummary = chunks.any { it.chunkIndex == -1 }
+        if (hasSummary) return emptyList()
+        
+        val generatedDocs = mutableListOf<SessionDocument>()
+        val isEncrypted = activeSessionKeys.containsKey(sessionId) || isTemporarySession
+        val key = activeSessionKeys[sessionId]
+        
+        if (isEncrypted && !isTemporarySession && key == null) {
+            return emptyList()
+        }
+        
+        val totalChunks = contentChunks.size
+        
+        if (totalChunks <= 5) {
+            val firstChunks = contentChunks.take(2)
+            val lastChunk = contentChunks.lastOrNull().let { if (it != null && !firstChunks.contains(it)) listOf(it) else emptyList() }
+            val sampleExcerpts = (firstChunks + lastChunk).joinToString("\n\n") { 
+                "Excerpt (Chunk ${it.chunkIndex + 1}):\n${it.chunkText.trim()}" 
+            }
+            
+            val summaryPrompt = """
+                You are Kosh, a private offline assistant. Analyze the following excerpts from the beginning and end of a document named "$fileName".
+                Generate a highly condensed, professional summary/map of the document in under 150 words. Focus on:
+                1. The main topic or goal of the document.
+                2. The target audience or context.
+                3. The key sections or subjects covered.
+                
+                Excerpts:
+                $sampleExcerpts
+                
+                Concise Map:
+            """.trimIndent()
+            
+            var summaryText = ""
+            try {
+                aiProvider.sendMessage(summaryPrompt).collect { token ->
+                    summaryText += token
+                }
+                summaryText = ResponseParser.extractThinkingSegments(summaryText).second.trim()
+                if (summaryText.isEmpty() || summaryText.startsWith("Error:")) {
+                    summaryText = "Document summary unavailable."
+                }
+            } catch (e: Exception) {
+                summaryText = "Document summary generation failed."
+            }
+            
+            val chunkId = java.util.UUID.randomUUID().toString()
+            val masterDoc = buildSessionDoc(chunkId, sessionId, fileName, "summary", contentChunks.first().fileSize, -1, summaryText, isEncrypted, key)
+            if (!isTemporarySession) {
+                documentRepository.saveSessionDocument(masterDoc)
+            }
+            generatedDocs.add(
+                SessionDocument(
+                    id = chunkId,
+                    sessionId = sessionId,
+                    fileName = fileName,
+                    fileType = "summary",
+                    fileSize = contentChunks.first().fileSize,
+                    chunkIndex = -1,
+                    chunkText = summaryText,
+                    isEncrypted = isEncrypted,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        } else {
+            val sectionSize = maxOf(5, totalChunks / 5)
+            val sectionsCount = (totalChunks + sectionSize - 1) / sectionSize
+            val sectionSummaryTexts = mutableListOf<String>()
+            
+            for (i in 0 until sectionsCount) {
+                val start = i * sectionSize
+                val end = minOf(start + sectionSize, totalChunks)
+                val sectionChunks = contentChunks.subList(start, end)
+                val sectionText = sectionChunks.joinToString("\n\n") { it.chunkText.trim() }
+                
+                val sectionPrompt = """
+                    You are Kosh, an offline assistant. Summarize the following section of the document "$fileName".
+                    Focus on extracting the main topics, key concepts, formulas, and details covered in this section. Keep it under 150 words.
+                    
+                    Section Text:
+                    $sectionText
+                    
+                    Summary:
+                """.trimIndent()
+                
+                var sectionSummary = ""
+                try {
+                    aiProvider.sendMessage(sectionPrompt).collect { token ->
+                        sectionSummary += token
+                    }
+                    sectionSummary = ResponseParser.extractThinkingSegments(sectionSummary).second.trim()
+                    if (sectionSummary.isEmpty() || sectionSummary.startsWith("Error:")) {
+                        sectionSummary = "Section summary unavailable."
+                    }
+                } catch (e: Exception) {
+                    sectionSummary = "Section summary generation failed."
+                }
+                
+                sectionSummaryTexts.add(sectionSummary)
+                
+                val chunkId = java.util.UUID.randomUUID().toString()
+                val secIndex = -(10 + i)
+                val secDoc = buildSessionDoc(chunkId, sessionId, fileName, "section_summary", contentChunks.first().fileSize, secIndex, sectionSummary, isEncrypted, key)
+                if (!isTemporarySession) {
+                    documentRepository.saveSessionDocument(secDoc)
+                }
+                generatedDocs.add(
+                    SessionDocument(
+                        id = chunkId,
+                        sessionId = sessionId,
+                        fileName = fileName,
+                        fileType = "section_summary",
+                        fileSize = contentChunks.first().fileSize,
+                        chunkIndex = secIndex,
+                        chunkText = sectionSummary,
+                        isEncrypted = isEncrypted,
+                        createdAt = System.currentTimeMillis()
+                    )
+                )
+            }
+            
+            val combinedSectionSummaries = sectionSummaryTexts.mapIndexed { idx, text ->
+                "Section ${idx + 1} Summary:\n$text"
+            }.joinToString("\n\n")
+            
+            val masterPrompt = """
+                You are Kosh, a private offline assistant. Analyze the following section summaries of the document "$fileName".
+                Generate a highly condensed, professional master summary/map of the entire document in under 150 words. Focus on:
+                1. The main topic or goal of the document.
+                2. The target audience or context.
+                3. The key sections or subjects covered.
+                
+                Section Summaries:
+                $combinedSectionSummaries
+                
+                Concise Map:
+            """.trimIndent()
+            
+            var masterSummary = ""
+            try {
+                aiProvider.sendMessage(masterPrompt).collect { token ->
+                    masterSummary += token
+                }
+                masterSummary = ResponseParser.extractThinkingSegments(masterSummary).second.trim()
+                if (masterSummary.isEmpty() || masterSummary.startsWith("Error:")) {
+                    masterSummary = "Document summary unavailable."
+                }
+            } catch (e: Exception) {
+                masterSummary = "Document summary generation failed."
+            }
+            
+            val chunkId = java.util.UUID.randomUUID().toString()
+            val masterDoc = buildSessionDoc(chunkId, sessionId, fileName, "summary", contentChunks.first().fileSize, -1, masterSummary, isEncrypted, key)
+            if (!isTemporarySession) {
+                documentRepository.saveSessionDocument(masterDoc)
+            }
+            generatedDocs.add(
+                SessionDocument(
+                    id = chunkId,
+                    sessionId = sessionId,
+                    fileName = fileName,
+                    fileType = "summary",
+                    fileSize = contentChunks.first().fileSize,
+                    chunkIndex = -1,
+                    chunkText = masterSummary,
+                    isEncrypted = isEncrypted,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+        
+        return generatedDocs
     }
 
     fun searchHistoryMessages(query: String, messages: List<ChatMessage>): List<ChatMessage> {

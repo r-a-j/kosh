@@ -263,6 +263,13 @@ class ChatViewModel(
     var isGenerating by mutableStateOf(false)
     var currentResponseChunk by mutableStateOf("")
     
+    private var batteryReceiver: android.content.BroadcastReceiver? = null
+    var batteryPercentage by mutableStateOf(100)
+        private set
+    var isCharging by mutableStateOf(false)
+        private set
+    var showLowBatteryDialog by mutableStateOf(false)
+    
     // New UX states for 2026 Edition
     var isThinking by mutableStateOf(false)
     var agenticStateLabel by mutableStateOf("Ready")
@@ -290,6 +297,7 @@ class ChatViewModel(
     val chatMessages = mutableStateListOf<ChatMessage>()
     val attachedFiles = mutableStateListOf<AttachedFile>()
     val activeSessionDocuments = mutableStateListOf<SessionDocument>()
+    private var backgroundMemoryJob: kotlinx.coroutines.Job? = null
 
     fun attachFile(file: AttachedFile) {
         if (attachedFiles.any { it.fileName == file.fileName }) {
@@ -707,6 +715,7 @@ class ChatViewModel(
         val defaultToNewChat = settingsProvider.getBoolean("start_with_new_chat", false)
         currentScreen = if (defaultToNewChat) AppScreen.CHAT else AppScreen.DASHBOARD
         // Metrics tracking is started by MainActivity.onStart(), not here
+        registerBatteryReceiver()
     }
 
 
@@ -1725,6 +1734,8 @@ class ChatViewModel(
         }
         if (rawPrompt.isBlank() || isGenerating) return
 
+        backgroundMemoryJob?.cancel()
+
         val currentPath = modelPath
         if (currentPath == null) {
             showToast("Please import or select a model first.")
@@ -1849,6 +1860,21 @@ class ChatViewModel(
                         )
                         withContext(Dispatchers.Main) {
                             activeSessionDocuments.addAll(processedDocs)
+                            agenticStateLabel = "Analyzing ${file.fileName}..."
+                            isThinking = true
+                        }
+                        
+                        val summaryChunks = llmUseCase.generateDocumentSummaryIfMissing(
+                            sessionId = sessionId!!,
+                            fileName = file.fileName,
+                            chunks = processedDocs,
+                            isTemporarySession = isTemporarySession,
+                            activeSessionKeys = activeSessionKeys
+                        )
+                        if (summaryChunks.isNotEmpty()) {
+                            withContext(Dispatchers.Main) {
+                                activeSessionDocuments.addAll(summaryChunks)
+                            }
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -1958,6 +1984,11 @@ class ChatViewModel(
                 val agentExecutor = com.rajpawardotin.kosh.domain.agent.AgentLoopExecutor(aiProvider, registeredSkills)
 
                 val currentSession = savedSessions.find { it.id == sessionId }
+                val contextLimitChars = if (selectedBackend == "NPU (Qualcomm)") {
+                    5500 // budget ~1375 tokens for prompt, leaving ~1000 tokens for generation within the 2382 limit
+                } else {
+                    12000 // budget ~3000 tokens for prompt, leaving ~1096 tokens for generation within the 4096 limit
+                }
                 val finalPrompt = llmUseCase.compileFinalPrompt(
                     chatMessages = chatMessages,
                     rawPrompt = rawPrompt,
@@ -1965,6 +1996,7 @@ class ChatViewModel(
                     searchResults = searchResults,
                     searchQuery = lastQueryUsed,
                     toolSchemas = registeredSkills.map { it.getSchema() },
+                    maxContextChars = contextLimitChars,
                     summary = currentSession?.summary,
                     facts = currentSession?.facts
                 )
@@ -2109,12 +2141,14 @@ class ChatViewModel(
         val len = text.length
         if (len < 40) return false
         
-        for (patternLen in 1..20) {
-            val requiredRepeats = when (patternLen) {
-                1 -> 25
-                2 -> 15
-                3, 4 -> 10
-                else -> 6
+        for (patternLen in 1..100) {
+            val requiredRepeats = when {
+                patternLen == 1 -> 25
+                patternLen == 2 -> 15
+                patternLen in 3..4 -> 10
+                patternLen in 5..10 -> 6
+                patternLen in 11..30 -> 4
+                else -> 3
             }
             
             if (len < patternLen * (requiredRepeats + 1)) continue
@@ -2174,7 +2208,8 @@ class ChatViewModel(
     }
 
     private fun runBackgroundMemoryUpdates(sessionId: String) {
-        viewModelScope.launch(safeIoDispatcher) {
+        backgroundMemoryJob?.cancel()
+        backgroundMemoryJob = viewModelScope.launch(safeIoDispatcher) {
             try {
                 val currentSession = savedSessions.find { it.id == sessionId } ?: return@launch
                 val messages = chatMessages.toList()
@@ -2246,16 +2281,191 @@ class ChatViewModel(
                     )
                     saveSessionEncrypted(updatedSession)
                 }
+
+                // 3. RAG Memory Consolidation
+                updateRAGMemoryConsolidation(sessionId, lastUserMsg, lastAssistantMsg)
             } catch (e: Exception) {
                 android.util.Log.e("KOSH_MEMORY", "Error running background memory updates: ${e.message}", e)
             }
         }
     }
 
+    private suspend fun updateRAGMemoryConsolidation(
+        sessionId: String,
+        lastUserMsg: String,
+        lastAssistantMsg: String
+    ) {
+        try {
+            val isEncrypted = activeSessionKeys.containsKey(sessionId)
+            val key = activeSessionKeys[sessionId]
+            if (isEncrypted && key == null) {
+                android.util.Log.e("KOSH_SECURITY", "RAG Memory Consolidation skipped: Session is encrypted but key is missing.")
+                return
+            }
+
+            val docs = withContext(Dispatchers.Main) {
+                activeSessionDocuments.toList()
+            }
+            
+            val contentDocs = docs.filter { it.chunkIndex >= 0 }
+            if (contentDocs.isEmpty()) return
+
+            val terms = llmUseCase.tokenizeQuery(lastUserMsg)
+            if (terms.isEmpty()) return
+            
+            val sectionSummaries = docs.filter { it.chunkIndex in -100..-10 }
+            
+            val relevantDocs = if (sectionSummaries.isNotEmpty()) {
+                val rankedSections = sectionSummaries
+                    .map { sec -> sec to llmUseCase.scoreChunk(sec.chunkText, terms) }
+                    .filter { it.second > 0.0 }
+                    .sortedByDescending { it.second }
+                
+                if (rankedSections.isEmpty()) {
+                    emptyList()
+                } else {
+                    val topSections = rankedSections.take(2).map { it.first }
+                    val candidateLeafs = topSections.flatMap { sec ->
+                        llmUseCase.getLeafChunksForSection(sec, contentDocs)
+                    }.distinctBy { it.id }
+                    
+                    val rankedLeafs = candidateLeafs
+                        .map { doc -> doc to llmUseCase.scoreChunk(doc.chunkText, terms) }
+                        .filter { it.second > 0.0 }
+                        .sortedByDescending { it.second }
+                    rankedLeafs.take(2).map { it.first }
+                }
+            } else {
+                val rankedLeafs = contentDocs
+                    .map { doc -> doc to llmUseCase.scoreChunk(doc.chunkText, terms) }
+                    .filter { it.second > 0.0 }
+                    .sortedByDescending { it.second }
+                rankedLeafs.take(2).map { it.first }
+            }
+
+            if (relevantDocs.isEmpty()) return
+            
+            val messages = chatMessages.toList()
+            val chatHistoryText = messages.joinToString("\n") { msg ->
+                val role = if (msg.isUser) "User" else "Assistant"
+                val cleanText = if (msg.isUser) msg.text else ResponseParser.extractThinkingSegments(msg.text).second
+                "- $role: ${cleanText.trim()}"
+            }
+            
+            val maxContextChars = 16000
+            val chatHistoryChars = chatHistoryText.length
+            val retrievedChunksText = relevantDocs.joinToString("\n") { it.chunkText }
+            val retrievedChunksChars = retrievedChunksText.length
+            val templateChars = 2000
+            
+            val remainingChars = maxContextChars - chatHistoryChars - templateChars - retrievedChunksChars
+            val allocatedChars = maxOf(900, minOf(3600, (remainingChars * 0.3).toInt()))
+            val targetWords = allocatedChars / 6
+
+            val existingRagMemoryDoc = docs.find { it.chunkIndex == -2 }
+            val currentRagMemory = existingRagMemoryDoc?.chunkText ?: "No previous RAG memory."
+
+            val prompt = """
+                You are Kosh, a private offline assistant. Update the running consolidated memory of facts, formulas, and context extracted from the attached documents during this conversation.
+                
+                Current Consolidated RAG Memory:
+                $currentRagMemory
+                
+                Newly Retrieved Document Excerpts:
+                ${relevantDocs.joinToString("\n\n") { "Excerpt:\n" + it.chunkText.trim() }}
+                
+                Recent Interaction:
+                User: $lastUserMsg
+                Assistant: ${ResponseParser.extractThinkingSegments(lastAssistantMsg).second.trim()}
+                
+                Generate the updated, highly condensed RAG Memory (keep it under $targetWords words). Focus only on verified facts, formulas, or details extracted from the document chunks that are relevant to the user's queries/discussions.
+                
+                Updated RAG Memory:
+            """.trimIndent()
+
+            var newRagMemoryText = ""
+            aiProvider.sendMessage(prompt).collect { token ->
+                newRagMemoryText += token
+            }
+            newRagMemoryText = ResponseParser.extractThinkingSegments(newRagMemoryText).second.trim()
+            if (newRagMemoryText.isEmpty() || newRagMemoryText.startsWith("Error:")) {
+                return
+            }
+
+            val chunkId = existingRagMemoryDoc?.id ?: java.util.UUID.randomUUID().toString()
+            val storedName = if (isEncrypted && key != null) CryptoUtils.encryptMessage("RAG_Memory", key) else "RAG_Memory"
+            val storedText = if (isEncrypted && key != null) CryptoUtils.encryptMessage(newRagMemoryText, key) else newRagMemoryText
+
+            val newRagMemoryDoc = SessionDocument(
+                id = chunkId,
+                sessionId = sessionId,
+                fileName = storedName,
+                fileType = "rag_memory",
+                fileSize = 0L,
+                chunkIndex = -2,
+                chunkText = storedText,
+                isEncrypted = isEncrypted,
+                createdAt = System.currentTimeMillis()
+            )
+            
+            documentRepository.saveSessionDocument(newRagMemoryDoc)
+
+            val inMemoryDoc = SessionDocument(
+                id = chunkId,
+                sessionId = sessionId,
+                fileName = "RAG_Memory",
+                fileType = "rag_memory",
+                fileSize = 0L,
+                chunkIndex = -2,
+                chunkText = newRagMemoryText,
+                isEncrypted = isEncrypted,
+                createdAt = System.currentTimeMillis()
+            )
+
+            withContext(Dispatchers.Main) {
+                val idx = activeSessionDocuments.indexOfFirst { it.chunkIndex == -2 }
+                if (idx != -1) {
+                    activeSessionDocuments[idx] = inMemoryDoc
+                } else {
+                    activeSessionDocuments.add(inMemoryDoc)
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("KOSH_MEMORY", "Failed to update RAG Memory: ${e.message}", e)
+        }
+    }
+
+    private fun registerBatteryReceiver() {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: android.content.Intent?) {
+                intent?.let {
+                    val level = it.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+                    val scale = it.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+                    if (level != -1 && scale != -1) {
+                        batteryPercentage = (level * 100 / scale.toFloat()).toInt()
+                    }
+                    val status = it.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+                    isCharging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING ||
+                                 status == android.os.BatteryManager.BATTERY_STATUS_FULL
+                }
+            }
+        }
+        batteryReceiver = receiver
+        val filter = android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)
+        context.registerReceiver(receiver, filter)
+    }
+
     override fun onCleared() {
         super.onCleared()
         aiProvider.close()
         isEngineReady = aiProvider.isInitialized
+        batteryReceiver?.let {
+            try {
+                context.unregisterReceiver(it)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 }
 

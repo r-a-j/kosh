@@ -8,6 +8,8 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.MessageCallback
+import com.google.ai.edge.litertlm.ConversationConfig
+import com.google.ai.edge.litertlm.SamplerConfig
 import com.rajpawardotin.kosh.domain.provider.AIProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -62,9 +64,15 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
                     Backend.CPU(numOfThreads = 4)
                 }
             }
+            val maxTokens = if (backend == "NPU (Qualcomm)") {
+                2380 // Statically compiled capacity of Gemma-4-E2B NPU model (2382) with safety margin
+            } else {
+                4096
+            }
             val config = EngineConfig(
                 modelPath = modelPath,
                 backend = litertBackend,
+                maxNumTokens = maxTokens,
                 cacheDir = context.cacheDir.absolutePath
             )
             val newEngine = Engine(config)
@@ -98,7 +106,15 @@ class LiteRTModelProvider(private val context: Context) : AIProvider {
             }
         }
 
-        val freshConv = eng.createConversation()
+        val samplerConfig = SamplerConfig(
+            topK = 40,
+            topP = 0.95,
+            temperature = 0.8
+        )
+        val conversationConfig = ConversationConfig(
+            samplerConfig = samplerConfig
+        )
+        val freshConv = eng.createConversation(conversationConfig)
         conversation = freshConv
 
         freshConv.sendMessageAsync(prompt, object : MessageCallback {

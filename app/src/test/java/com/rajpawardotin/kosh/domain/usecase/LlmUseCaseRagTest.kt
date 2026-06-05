@@ -10,17 +10,24 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.any
+import org.mockito.kotlin.whenever
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import javax.crypto.SecretKey
 
 class LlmUseCaseRagTest {
 
     private lateinit var llmUseCase: LlmUseCase
+    private lateinit var mockAiProvider: AIProvider
+    private lateinit var mockDocumentRepository: DocumentRepository
 
     @Before
     fun setUp() {
-        val mockAiProvider = mock<AIProvider>()
+        mockAiProvider = mock<AIProvider>()
         val mockSearchProvider = mock<SearchProvider>()
         val mockSessionRepository = mock<SessionRepository>()
-        val mockDocumentRepository = mock<DocumentRepository>()
+        mockDocumentRepository = mock<DocumentRepository>()
         
         llmUseCase = LlmUseCase(
             mockAiProvider,
@@ -113,5 +120,144 @@ class LlmUseCaseRagTest {
         
         assertEquals(1, sourceNames.size)
         assertEquals("stats.pdf", sourceNames[0])
+    }
+
+    @Test
+    fun testRetrieveContextFallbackTakesFirstThreeChronologicallyAndSeparatesSummary() {
+        val file = "stats.pdf"
+        val chunks = listOf(
+            SessionDocument("id_sum", "sess1", file, "summary", 1000L, -1, "High level summary of stats exam.", false, 1L),
+            SessionDocument("id0", "sess1", file, "pdf", 1000L, 0, "Intro stats definitions.", false, 2L),
+            SessionDocument("id1", "sess1", file, "pdf", 1000L, 1, "Section 1.0 details.", false, 3L),
+            SessionDocument("id2", "sess1", file, "pdf", 1000L, 2, "Section 2.0 details.", false, 4L),
+            SessionDocument("id3", "sess1", file, "pdf", 1000L, 3, "Section 3.0 details.", false, 5L)
+        )
+
+        val (contextString, sourceNames) = llmUseCase.retrieveContext(
+            sessionId = "sess1",
+            query = "",
+            isEncrypted = false,
+            activeSessionDocuments = chunks,
+            justAttached = true
+        )
+
+        // Verify that the overview section is built using the summary chunk (chunkIndex = -1)
+        assertTrue(contextString.contains("### CONSOLIDATED DOCUMENT OVERVIEW"))
+        assertTrue(contextString.contains("High level summary of stats exam."))
+
+        // Verify that the fallback excerpts contain chunks 1, 2, and 3 (which are index 0, 1, and 2 printed as index + 1)
+        assertTrue(contextString.contains("Chunk 1"))
+        assertTrue(contextString.contains("Chunk 2"))
+        assertTrue(contextString.contains("Chunk 3"))
+        org.junit.Assert.assertFalse(contextString.contains("Chunk 4")) // index 3
+
+        // Chronological order verification in excerpts text
+        val indexChunk1 = contextString.indexOf("Chunk 1")
+        val indexChunk2 = contextString.indexOf("Chunk 2")
+        val indexChunk3 = contextString.indexOf("Chunk 3")
+        assertTrue(indexChunk1 < indexChunk2)
+        assertTrue(indexChunk2 < indexChunk3)
+        
+        assertEquals(1, sourceNames.size)
+        assertEquals("stats.pdf", sourceNames[0])
+    }
+
+    @Test
+    fun testRetrieveContextPartitionsRagMemoryCorrectly() {
+        val file = "stats.pdf"
+        val chunks = listOf(
+            SessionDocument("id_rag", "sess1", "RAG_Memory", "rag_memory", 0L, -2, "Consolidated memory of formulas.", false, 1L),
+            SessionDocument("id0", "sess1", file, "pdf", 1000L, 0, "Intro stats definitions.", false, 2L),
+            SessionDocument("id1", "sess1", file, "pdf", 1000L, 1, "Section 1.0 details.", false, 3L)
+        )
+
+        val (contextString, sourceNames) = llmUseCase.retrieveContext(
+            sessionId = "sess1",
+            query = "intro definitions",
+            isEncrypted = false,
+            activeSessionDocuments = chunks
+        )
+
+        // Verify that the consolidated memory block is rendered
+        assertTrue(contextString.contains("### CONSOLIDATED RAG KNOWLEDGE MEMORY"))
+        assertTrue(contextString.contains("Consolidated memory of formulas."))
+
+        // Verify that the sourceNames list does NOT contain "RAG_Memory"
+        assertTrue(sourceNames.contains("stats.pdf"))
+        org.junit.Assert.assertFalse(sourceNames.contains("RAG_Memory"))
+        
+        // Exclude RAG_Memory from the printed list of files
+        org.junit.Assert.assertFalse(contextString.contains("The user has attached the following files to this session: stats.pdf, RAG_Memory"))
+    }
+
+    @Test
+    fun testHierarchicalRetrievalScoresSectionsAndFiltersLeafChunks() {
+        val file = "stats.pdf"
+        val sectionSummaries = listOf(
+            SessionDocument("id_sec0", "sess1", file, "section_summary", 0L, -10, "This section is about probability theory.", false, 1L),
+            SessionDocument("id_sec1", "sess1", file, "section_summary", 0L, -11, "This section is about regression analysis.", false, 1L)
+        )
+        
+        val leafChunks = (0..9).map { idx ->
+            val text = if (idx in 5..9) {
+                "Regression line calculation leaf chunk $idx."
+            } else {
+                "General probability content leaf chunk $idx."
+            }
+            SessionDocument("id$idx", "sess1", file, "pdf", 1000L, idx, text, false, 2L)
+        }
+        
+        val chunks = sectionSummaries + leafChunks
+
+        // Query regression
+        val query = "regression calculation"
+        val (contextString, _) = llmUseCase.retrieveContext(
+            sessionId = "sess1",
+            query = query,
+            isEncrypted = false,
+            activeSessionDocuments = chunks
+        )
+
+        // It should match Section 1 (index -11) because it contains "regression analysis"
+        // Section 1 corresponds to index -11 => sectionIndex = 1
+        // For total leaf chunks = 10, sectionSize = maxOf(5, 10/5) = 5
+        // So Section 1 corresponds to leaf chunks in range 5..9.
+        // Chunks in range 5..9 contain "Regression line calculation leaf chunk 5."
+        assertTrue(contextString.contains("Regression line calculation leaf chunk 5"))
+    }
+
+    @Test
+    fun testGenerateDocumentSummaryIfMissingWithSelfBalancingGrouping() = runBlocking {
+        whenever(mockAiProvider.sendMessage(any())).thenReturn(flowOf("Test summary content"))
+
+        val file = "stats.pdf"
+        val chunks = (0..9).map { idx ->
+            SessionDocument("id$idx", "sess1", file, "pdf", 1000L, idx, "Chunk text $idx", false, 1L)
+        }
+
+        val result = llmUseCase.generateDocumentSummaryIfMissing(
+            sessionId = "sess1",
+            fileName = file,
+            chunks = chunks,
+            isTemporarySession = true,
+            activeSessionKeys = emptyMap()
+        )
+
+        // totalChunks = 10 (>5), so we expect section grouping
+        // sectionSize = maxOf(5, 10 / 5) = 5
+        // sectionsCount = (10 + 5 - 1) / 5 = 2 section summaries
+        // plus 1 master summary = 3 summaries total!
+        assertEquals(3, result.size)
+
+        val sec0 = result.find { it.chunkIndex == -10 }
+        val sec1 = result.find { it.chunkIndex == -11 }
+        val master = result.find { it.chunkIndex == -1 }
+
+        assertTrue(sec0 != null && sec0.fileType == "section_summary")
+        assertTrue(sec1 != null && sec1.fileType == "section_summary")
+        assertTrue(master != null && master.fileType == "summary")
+        
+        assertEquals("Test summary content", sec0?.chunkText)
+        assertEquals("Test summary content", master?.chunkText)
     }
 }

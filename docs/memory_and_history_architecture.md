@@ -8,12 +8,13 @@ This entry documents the design decisions, implementation details, and patterns 
 ## 1. Context Window Challenges & Solutions
 
 On-device inference with mobile LLMs (e.g. Gemma 2B via LiteRT) has rigid hardware boundaries:
-*   **VRAM Limits**: Exceeding the context window (~2048 tokens or ~8000 characters) leads to critical memory pressure, high pre-fill delays, or app OOM terminations.
+*   **VRAM & Hardware Limits**: Exceeding the context window (such as the hard limit of exactly 2382 tokens on Qualcomm NPU compiled models, or 4096 tokens on CPU/GPU models) leads to JNI crash failures, memory pressure, or app OOM terminations.
 *   **Attention Contamination**: Models get confused when historical assistant responses containing raw thinking tags (`<thinking>` or ````thinking````) are fed back into their inputs, leading to recursive thinking loops or format breakage.
 
 ### Solutions:
 *   **Dynamic Context Truncation**: When prompt content exceeds budget limits, Kosh trims oldest context blocks with a trailing `"... [truncated]"` message rather than discarding the entire conversation history context.
 *   **Thinking Trace Stripping**: Assistant messages stored in history are passed through `ResponseParser.extractThinkingSegments` to completely strip reasoning blocks before prompt assembly.
+*   **Backend-Aware Budgeting**: Dynamically adjusts the prompt's `maxContextChars` (5500 characters / ~1380 tokens on NPU to guarantee a ~1000-token response space, and 12000 characters / ~3000 tokens on CPU/GPU) to respect the underlying model's physical hardware limits.
 
 ---
 

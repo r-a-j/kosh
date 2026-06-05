@@ -61,8 +61,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
+import com.rajpawardotin.kosh.ui.chat.ChatContentBlock
+import com.rajpawardotin.kosh.ui.chat.ResponseParser
 import java.io.File
 import java.io.FileOutputStream
+
+
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -106,6 +113,12 @@ fun ChatScreen(
     }
 
     val scrollState = rememberLazyListState()
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            scrollState.firstVisibleItemIndex > 1 || 
+            (scrollState.firstVisibleItemIndex == 1 && scrollState.firstVisibleItemScrollOffset > 100)
+        }
+    }
     val emptyStateScrollState = rememberScrollState()
     val density = LocalDensity.current
     var inputHeightDp by remember { mutableStateOf(80.dp) }
@@ -561,6 +574,36 @@ fun ChatScreen(
                                                         )
                                                     }
                                                 }
+
+                                                // Scroll to Bottom Button
+                                                AnimatedVisibility(
+                                                    visible = showScrollToBottom,
+                                                    enter = fadeIn(animationSpec = tween(300)) + scaleIn(animationSpec = tween(300), initialScale = 0.8f),
+                                                    exit = fadeOut(animationSpec = tween(300)) + scaleOut(animationSpec = tween(300), targetScale = 0.8f),
+                                                    modifier = Modifier
+                                                        .align(Alignment.BottomEnd)
+                                                        .padding(end = 20.dp, bottom = inputHeightDp + 12.dp)
+                                                ) {
+                                                    SmallFloatingActionButton(
+                                                        onClick = {
+                                                            scope.launch {
+                                                                scrollState.animateScrollToItem(0)
+                                                            }
+                                                        },
+                                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                                        contentColor = MaterialTheme.colorScheme.primary,
+                                                        shape = CircleShape,
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                                            contentDescription = "Scroll to bottom",
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -599,13 +642,18 @@ fun ChatScreen(
                                 value = viewModel.prompt,
                                 onValueChange = { viewModel.prompt = it },
                                 onSend = {
-                                     if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                         val enteredPrompt = viewModel.prompt
-                                         viewModel.currentScreen = AppScreen.CHAT
-                                         viewModel.startNewChat()
-                                         viewModel.prompt = enteredPrompt
+                                     val hasInput = viewModel.prompt.isNotBlank() || viewModel.attachedFiles.isNotEmpty()
+                                     if (hasInput && viewModel.batteryPercentage < 15 && !viewModel.isCharging) {
+                                         viewModel.showLowBatteryDialog = true
+                                     } else {
+                                         if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                             val enteredPrompt = viewModel.prompt
+                                             viewModel.currentScreen = AppScreen.CHAT
+                                             viewModel.startNewChat()
+                                             viewModel.prompt = enteredPrompt
+                                         }
+                                         viewModel.sendMessage(context)
                                      }
-                                     viewModel.sendMessage(context)
                                  },
                                 onStop = { viewModel.stopGeneration() },
                                 onVoiceClick = {
@@ -721,6 +769,47 @@ fun ChatScreen(
                                     }
                                 }
                             }
+
+                            // Badge for Low Battery Warning
+                            AnimatedVisibility(
+                                visible = viewModel.batteryPercentage < 20 && !viewModel.isCharging && viewModel.currentScreen == AppScreen.CHAT,
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Warning,
+                                                contentDescription = "Low Battery Warning",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "LOW BATTERY: local generation drains battery faster (${viewModel.batteryPercentage}%)",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 0.5.sp
+                                                ),
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -741,6 +830,63 @@ fun ChatScreen(
             com.rajpawardotin.kosh.ui.chat.dialogs.CrashRecoveryDialog(
                 onTryAgain = { viewModel.onCrashRecoveryDecision(tryAgain = true) },
                 onDisableModel = { viewModel.onCrashRecoveryDecision(tryAgain = false) }
+            )
+        }
+
+        // Low Battery Sending Warning Dialog
+        if (viewModel.showLowBatteryDialog) {
+            AlertDialog(
+                onDismissRequest = { viewModel.showLowBatteryDialog = false },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f), RoundedCornerShape(28.dp)),
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Low Battery Warning", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    }
+                },
+                text = {
+                    Text(
+                        text = "Your battery is at ${viewModel.batteryPercentage}%. Running local models consumes significant CPU/GPU/NPU resources and can drain battery very rapidly or lead to device shutdown. Please connect a charger, or confirm if you want to proceed anyway.",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.showLowBatteryDialog = false
+                            if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                val enteredPrompt = viewModel.prompt
+                                viewModel.currentScreen = AppScreen.CHAT
+                                viewModel.startNewChat()
+                                viewModel.prompt = enteredPrompt
+                            }
+                            viewModel.sendMessage(context)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Proceed Anyway", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.showLowBatteryDialog = false }) {
+                        Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             )
         }
 
@@ -930,6 +1076,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val onBackground = MaterialTheme.colorScheme.onBackground
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     val rotation = if (isSearchingInternet) {
         val infiniteTransition = rememberInfiniteTransition(label = "searching")
@@ -952,61 +1099,213 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
         ResponseParser.parseStreamState(text)
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
-    ) {
-        Box {
-            if (isSearchingInternet) {
-                Icon(
-                    imageVector = Icons.Default.Public,
-                    contentDescription = "Searching Web",
-                    tint = secondary,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .graphicsLayer { rotationZ = rotation }
-                )
+    // State for the rate-limited intermediate thinking steps preview
+    var displayThinkingText by remember { mutableStateOf("") }
+    var textVisible by remember { mutableStateOf(true) }
+
+    val currentThinkingContent by rememberUpdatedState(streamState.thinkingContent)
+
+    LaunchedEffect(streamState.isThinking) {
+        if (streamState.isThinking) {
+            val initialLines = currentThinkingContent.lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            displayThinkingText = if (initialLines.isNotEmpty()) {
+                initialLines.takeLast(2).joinToString("\n")
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(CircleShape)
-                        .background(primary.copy(alpha = 0.8f))
-                )
+                "Analyzing..."
+            }
+            textVisible = true
+            
+            while (true) {
+                delay(1000)
+                val lines = currentThinkingContent.lines()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                
+                val newText = if (lines.isNotEmpty()) {
+                    lines.takeLast(2).joinToString("\n")
+                } else {
+                    "Analyzing..."
+                }
+                
+                if (newText != displayThinkingText) {
+                    textVisible = false
+                    delay(300) // Wait for fade out to complete
+                    displayThinkingText = newText
+                    textVisible = true
+                }
             }
         }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        // Assistant Header Row matching ChatBubble style
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(16.dp)
+                    .graphicsLayer(alpha = 0.9f)
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.linearGradient(
+                                colors = listOf(primary, secondary)
+                            ),
+                            blendMode = BlendMode.SrcAtop
+                        )
+                    },
+                tint = Color.Unspecified
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Assistant",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
+                color = onBackground.copy(alpha = 0.6f)
+            )
+            
+            // Sleek pulsing breathing dot next to Assistant header
+            if (isGenerating) {
+                Spacer(modifier = Modifier.width(8.dp))
+                val statusColor = when {
+                    isSearchingInternet && streamState.cleanResponse.isEmpty() && !streamState.isThinking -> MaterialTheme.colorScheme.tertiary
+                    streamState.isThinking -> MaterialTheme.colorScheme.secondary
+                    else -> MaterialTheme.colorScheme.primary
+                }
+                
+                val infiniteTransition = rememberInfiniteTransition(label = "glowing_indicator")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.8f,
+                    targetValue = 0.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "pulseAlpha"
+                )
+                val pulseScale by infiniteTransition.animateFloat(
+                    initialValue = 1.0f,
+                    targetValue = 2.4f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "pulseScale"
+                )
+                
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(16.dp)
+                ) {
+                    // Outer breathing/rippling glow ring
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .graphicsLayer {
+                                scaleX = pulseScale
+                                scaleY = pulseScale
+                                alpha = pulseAlpha
+                            }
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                    
+                    // Inner solid core dot
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(statusColor)
+                    )
+                }
+            }
+        }
+
+        // Content Column
         Column(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp)
+                .animateContentSize(
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                )
         ) {
             if (isSearchingInternet && streamState.cleanResponse.isEmpty() && !streamState.isThinking) {
-                Text(
-                    text = "Searching the web...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = secondary,
-                    fontSize = 14.sp
-                )
-            } else if (streamState.isThinking) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(vertical = 4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Memory,
-                        contentDescription = "Thinking",
-                        tint = primary.copy(alpha = 0.8f),
-                        modifier = Modifier.size(18.dp)
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "Searching Web",
+                        tint = secondary,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .graphicsLayer { rotationZ = rotation }
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Thinking...",
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = primary.copy(alpha = 0.8f)
+                        text = "Searching the web...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = secondary,
+                        fontSize = 14.sp
                     )
+                }
+            } else if (streamState.isThinking) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Memory,
+                            contentDescription = "Thinking",
+                            tint = primary.copy(alpha = 0.8f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Thinking...",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = primary.copy(alpha = 0.8f)
+                        )
+                    }
+                    
+                    // Smooth fading intermediate thinking steps
+                    AnimatedVisibility(
+                        visible = textVisible,
+                        enter = fadeIn(animationSpec = tween(400)),
+                        exit = fadeOut(animationSpec = tween(300))
+                    ) {
+                        Text(
+                            text = displayThinkingText,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                lineHeight = 18.sp,
+                                fontSize = 12.5.sp
+                            ),
+                            color = onBackground.copy(alpha = 0.55f),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = 26.dp, top = 4.dp, bottom = 4.dp)
+                        )
+                    }
                 }
             } else {
                 // Completed thinking block (or no thinking tags at all)
@@ -1017,15 +1316,77 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
                 
                 if (streamState.cleanResponse.isNotEmpty()) {
                     val suffix = if (isGenerating) " ▊" else ""
-                    Text(
-                        text = streamState.cleanResponse + suffix,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            lineHeight = 22.sp,
-                            fontSize = 15.sp
-                        ),
-                        color = onBackground,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    val rawCleanText = streamState.cleanResponse
+                    val parsedBlocks = remember(rawCleanText, isGenerating) {
+                        val parsed = ResponseParser.parse(rawCleanText)
+                        if (isGenerating && parsed.isNotEmpty()) {
+                            val lastIdx = parsed.indexOfLast { it is ChatContentBlock.Text }
+                            if (lastIdx != -1) {
+                                parsed.mapIndexed { idx, block ->
+                                    if (idx == lastIdx) {
+                                        ChatContentBlock.Text((block as ChatContentBlock.Text).content + suffix)
+                                    } else {
+                                        block
+                                    }
+                                }
+                            } else {
+                                parsed + ChatContentBlock.Text(suffix)
+                            }
+                        } else {
+                            parsed
+                        }
+                    }
+
+                    parsedBlocks.forEach { block ->
+                        when (block) {
+                            is ChatContentBlock.Text -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    Markdown(
+                                        content = block.content,
+                                        colors = markdownColor(
+                                            text = onBackground,
+                                            codeBackground = surfaceVariant,
+                                            inlineCodeBackground = surfaceVariant
+                                        ),
+                                        typography = markdownTypography(
+                                            text = MaterialTheme.typography.bodyLarge.copy(
+                                                lineHeight = 26.sp,
+                                                fontSize = 16.sp
+                                            )
+                                        )
+                                    )
+                                }
+                            }
+                            is ChatContentBlock.Checklist -> {
+                                com.rajpawardotin.kosh.ui.chat.components.ChecklistCard(
+                                    items = block.items,
+                                    messageKey = "temp_generating",
+                                    checkedItems = emptyMap(),
+                                    onToggleChecklistItem = { _, _ -> }
+                                )
+                            }
+                            is ChatContentBlock.CodeBlock -> {
+                                com.rajpawardotin.kosh.ui.chat.components.CodeBlockCard(
+                                    language = block.language,
+                                    code = block.code
+                                )
+                            }
+                            is ChatContentBlock.Sources -> {
+                                com.rajpawardotin.kosh.ui.chat.components.SourcesCarousel(items = block.items)
+                            }
+                            is ChatContentBlock.MathBlock -> {
+                                com.rajpawardotin.kosh.ui.chat.components.MathFormulaCard(formula = block.formula)
+                            }
+                            is ChatContentBlock.Thinking -> {
+                                com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = block.content)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                 } else if (isGenerating && !isSearchingInternet) {
                     Text(
                         text = "▊",
