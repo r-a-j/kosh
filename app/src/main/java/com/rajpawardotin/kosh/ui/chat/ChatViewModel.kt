@@ -98,6 +98,8 @@ class ChatViewModel(
     
     private val safeIoDispatcher = ioDispatcher + exceptionHandler
 
+    internal var timeProvider: () -> Long = { System.currentTimeMillis() }
+
     private var generationJob: kotlinx.coroutines.Job? = null
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -1777,6 +1779,16 @@ class ChatViewModel(
         val userMessage = ChatMessage(text = rawPrompt, isUser = true, sourceDocuments = sourceDocsJson)
         chatMessages.add(userMessage)
 
+        val assistantMessageId = java.util.UUID.randomUUID().toString()
+        val assistantPlaceholder = ChatMessage(
+            id = assistantMessageId,
+            text = "",
+            isUser = false,
+            isStreaming = true,
+            sourceDocuments = null
+        )
+        chatMessages.add(assistantPlaceholder)
+
         prompt = ""
         isGenerating = true
         isThinking = true
@@ -1784,7 +1796,6 @@ class ChatViewModel(
         currentResponseChunk = ""
 
         generationJob = viewModelScope.launch(safeIoDispatcher) {
-            var assistantMessageId = ""
             var sourceDocumentsString: String? = null
             try {
                 if (!aiProvider.isInitialized) {
@@ -2016,7 +2027,9 @@ class ChatViewModel(
                 delay(400)
                 withContext(Dispatchers.Main) { isThinking = false }
 
-                assistantMessageId = java.util.UUID.randomUUID().toString()
+                val tokenBuffer = java.lang.StringBuilder()
+                var lastFlushTime = 0L
+                var lastDbWriteTime = 0L
                 var totalChars = 0
                 var generationStartTime = 0L
 
@@ -2029,39 +2042,72 @@ class ChatViewModel(
                         }
                     },
                     onTokenReceived = { token ->
-                        withContext(Dispatchers.Main) {
-                            if (currentResponseChunk.isEmpty()) {
-                                agenticStateLabel = "Formatting response..."
-                            }
-                            currentResponseChunk += token
-                            
-                            // Check repetition loop synchronously on Main thread
-                            if (hasRepetitionLoop(currentResponseChunk)) {
-                                currentResponseChunk += "\n\n[Repetition halted]"
-                                stopGeneration()
-                                showToast("Repetition loop detected. Halting generation.")
-                            }
-                            
-                            // Calculate real tokens per second
+                        val currentText: String
+                        val shouldFlush: Boolean
+                        synchronized(tokenBuffer) {
+                            tokenBuffer.append(token)
                             totalChars += token.length
                             if (generationStartTime == 0L) {
-                                generationStartTime = System.currentTimeMillis()
+                                generationStartTime = timeProvider()
                             }
-                            val elapsedMs = System.currentTimeMillis() - generationStartTime
-                            if (elapsedMs > 100) {
-                                val elapsedSec = elapsedMs / 1000f
-                                val estimatedTokens = totalChars / 4f
-                                tokensPerSecond = estimatedTokens / elapsedSec
+                            val now = timeProvider()
+                            if (now - lastFlushTime >= 32 || token.contains("\n")) {
+                                lastFlushTime = now
+                                currentText = tokenBuffer.toString()
+                                shouldFlush = true
+                            } else {
+                                currentText = ""
+                                shouldFlush = false
                             }
-
-                            if (!isTemporarySession) {
-                                val key = activeSessionKeys[sessionId!!]
-                                val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
-                                val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
+                        }
+                        
+                        if (shouldFlush) {
+                            withContext(Dispatchers.Main) {
+                                if (currentResponseChunk.isEmpty()) {
+                                    agenticStateLabel = "Formatting response..."
+                                }
+                                currentResponseChunk = currentText
                                 
-                                val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
-                                withContext(safeIoDispatcher) {
-                                    messageRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                                val idx = chatMessages.indexOfFirst { it.id == assistantMessageId }
+                                if (idx != -1) {
+                                    chatMessages[idx] = chatMessages[idx].copy(
+                                        text = currentText,
+                                        sourceDocuments = sourceDocumentsString
+                                    )
+                                }
+                                
+                                if (hasRepetitionLoop(currentResponseChunk)) {
+                                    currentResponseChunk += "\n\n[Repetition halted]"
+                                    val stopIdx = chatMessages.indexOfFirst { it.id == assistantMessageId }
+                                    if (stopIdx != -1) {
+                                        chatMessages[stopIdx] = chatMessages[stopIdx].copy(
+                                            text = currentResponseChunk,
+                                            isStreaming = false,
+                                            sourceDocuments = sourceDocumentsString
+                                        )
+                                    }
+                                    stopGeneration()
+                                    showToast("Repetition loop detected. Halting generation.")
+                                }
+                                
+                                val elapsedMs = timeProvider() - generationStartTime
+                                if (elapsedMs > 100) {
+                                    val elapsedSec = elapsedMs / 1000f
+                                    val estimatedTokens = totalChars / 4f
+                                    tokensPerSecond = estimatedTokens / elapsedSec
+                                }
+
+                                val now = timeProvider()
+                                if (now - lastDbWriteTime >= 500 && !isTemporarySession) {
+                                    lastDbWriteTime = now
+                                    val key = activeSessionKeys[sessionId!!]
+                                    val textToSave = if (key != null) CryptoUtils.encryptMessage(currentResponseChunk, key) else currentResponseChunk
+                                    val encryptedSourceDocs = if (key != null && sourceDocumentsString != null) CryptoUtils.encryptMessage(sourceDocumentsString, key) else sourceDocumentsString
+                                    
+                                    val liveAssistantMsg = ChatMessage(id = assistantMessageId, text = textToSave, isUser = false, sourceDocuments = encryptedSourceDocs)
+                                    withContext(safeIoDispatcher) {
+                                        messageRepository.saveMessage(sessionId!!, liveAssistantMsg)
+                                    }
                                 }
                             }
                         }
@@ -2070,8 +2116,13 @@ class ChatViewModel(
 
                 var assistantMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
-                    val msg = ChatMessage(id = assistantMessageId, text = finalResponse, isUser = false, sourceDocuments = sourceDocumentsString)
-                    chatMessages.add(msg)
+                    val idx = chatMessages.indexOfFirst { it.id == assistantMessageId }
+                    val msg = ChatMessage(id = assistantMessageId, text = finalResponse, isUser = false, isStreaming = false, sourceDocuments = sourceDocumentsString)
+                    if (idx != -1) {
+                        chatMessages[idx] = msg
+                    } else {
+                        chatMessages.add(msg)
+                    }
                     currentResponseChunk = ""
                     assistantMessage = msg
                     isThinking = false
@@ -2102,21 +2153,33 @@ class ChatViewModel(
                 }
             } catch (e: Exception) {
                 if (e is CancellationException) {
-                    if (currentResponseChunk.isNotEmpty()) {
-                        val finalMsgId = if (assistantMessageId.isEmpty()) java.util.UUID.randomUUID().toString() else assistantMessageId
-                        withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
-                            val msg = ChatMessage(id = finalMsgId, text = currentResponseChunk, isUser = false, sourceDocuments = sourceDocumentsString)
-                            chatMessages.add(msg)
-                            currentResponseChunk = ""
+                    withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
+                        val idx = chatMessages.indexOfFirst { it.id == assistantMessageId }
+                        if (idx != -1) {
+                            if (currentResponseChunk.isNotEmpty()) {
+                                chatMessages[idx] = chatMessages[idx].copy(
+                                    text = currentResponseChunk,
+                                    isStreaming = false,
+                                    sourceDocuments = sourceDocumentsString
+                                )
+                            } else {
+                                chatMessages.removeAt(idx)
+                            }
                         }
+                        currentResponseChunk = ""
                     }
                     throw e
                 }
                 var errorMessage: ChatMessage? = null
                 withContext(Dispatchers.Main) {
                     isThinking = false
-                    val msg = ChatMessage(text = "Error: ${e.localizedMessage}", isUser = false)
-                    chatMessages.add(msg)
+                    val idx = chatMessages.indexOfFirst { it.id == assistantMessageId }
+                    val msg = ChatMessage(id = assistantMessageId, text = "Error: ${e.localizedMessage}", isUser = false, isStreaming = false)
+                    if (idx != -1) {
+                        chatMessages[idx] = msg
+                    } else {
+                        chatMessages.add(msg)
+                    }
                     errorMessage = msg
                 }
                 if (!isTemporarySession) {

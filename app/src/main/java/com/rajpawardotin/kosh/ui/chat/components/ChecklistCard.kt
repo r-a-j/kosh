@@ -12,7 +12,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.ui.chat.ChecklistItem
@@ -95,53 +100,105 @@ fun ChecklistCard(
 }
 
 fun parseMarkdownToAnnotatedString(text: String): AnnotatedString {
-    val builder = AnnotatedString.Builder()
-    val pattern = """(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\*.*?\*|_.*?_|~~.*?~~)""".toRegex()
-    val matches = pattern.findAll(text)
-    
-    var lastIndex = 0
-    for (match in matches) {
-        if (match.range.first > lastIndex) {
-            builder.append(text.substring(lastIndex, match.range.first))
+    return buildAnnotatedString {
+        var i = 0
+        val n = text.length
+        while (i < n) {
+            when {
+                // Inline Math: $math$
+                text[i] == '$' -> {
+                    val end = text.indexOf('$', i + 1)
+                    if (end != -1) {
+                        val mathContent = text.substring(i + 1, end)
+                        val isLikelyMath = mathContent.contains('\\') ||
+                                mathContent.contains('^') ||
+                                mathContent.contains('_') ||
+                                mathContent.length == 1 ||
+                                (mathContent.length <= 15 && !mathContent.contains(' '))
+                        
+                        if (isLikelyMath) {
+                            append(parseInlineMath(mathContent))
+                        } else {
+                            append("$")
+                            append(parseMarkdownToAnnotatedString(mathContent))
+                            append("$")
+                        }
+                        i = end + 1
+                    } else {
+                        append('$')
+                        i++
+                    }
+                }
+                // Bold & Italic: ***text***
+                i + 2 < n && text[i] == '*' && text[i + 1] == '*' && text[i + 2] == '*' -> {
+                    val end = text.indexOf("***", i + 3)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)) {
+                            append(text.substring(i + 3, end))
+                        }
+                        i = end + 3
+                    } else {
+                        append("***")
+                        i += 3
+                    }
+                }
+                // Bold: **text**
+                i + 1 < n && text[i] == '*' && text[i + 1] == '*' -> {
+                    val end = text.indexOf("**", i + 2)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else {
+                        append("**")
+                        i += 2
+                    }
+                }
+                // Italic: *text*
+                text[i] == '*' -> {
+                    val end = text.indexOf('*', i + 1)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else {
+                        append('*')
+                        i++
+                    }
+                }
+                // Italic: _text_
+                text[i] == '_' -> {
+                    val end = text.indexOf('_', i + 1)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(fontStyle = FontStyle.Italic)) {
+                            append(text.substring(i + 1, end))
+                        }
+                        i = end + 1
+                    } else {
+                        append('_')
+                        i++
+                    }
+                }
+                // Strikethrough: ~~text~~
+                i + 1 < n && text[i] == '~' && text[i + 1] == '~' -> {
+                    val end = text.indexOf("~~", i + 2)
+                    if (end != -1) {
+                        withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                            append(text.substring(i + 2, end))
+                        }
+                        i = end + 2
+                    } else {
+                        append("~~")
+                        i += 2
+                    }
+                }
+                else -> {
+                    append(text[i])
+                    i++
+                }
+            }
         }
-        
-        val token = match.value
-        when {
-            token.startsWith("***") && token.endsWith("***") -> {
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
-                builder.append(token.substring(3, token.length - 3))
-                builder.pop()
-            }
-            token.startsWith("**") && token.endsWith("**") -> {
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold))
-                builder.append(token.substring(2, token.length - 2))
-                builder.pop()
-            }
-            token.startsWith("*") && token.endsWith("*") -> {
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
-                builder.append(token.substring(1, token.length - 1))
-                builder.pop()
-            }
-            token.startsWith("_") && token.endsWith("_") -> {
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic))
-                builder.append(token.substring(1, token.length - 1))
-                builder.pop()
-            }
-            token.startsWith("~~") && token.endsWith("~~") -> {
-                builder.pushStyle(androidx.compose.ui.text.SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
-                builder.append(token.substring(2, token.length - 2))
-                builder.pop()
-            }
-            else -> {
-                builder.append(token)
-            }
-        }
-        lastIndex = match.range.last + 1
     }
-    
-    if (lastIndex < text.length) {
-        builder.append(text.substring(lastIndex))
-    }
-    
-    return builder.toAnnotatedString()
 }

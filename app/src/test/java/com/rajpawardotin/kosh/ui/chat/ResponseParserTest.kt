@@ -270,5 +270,98 @@ class ResponseParserTest {
         assertEquals("Reasoning", state2.thinkingContent)
         assertEquals("Sky is blue", state2.cleanResponse)
     }
+
+    @Test
+    fun testInitialTransitionStates() {
+        // Spaces and newlines should stay in thinking mode
+        val state1 = ResponseParser.parseStreamState("\n\n ")
+        assertTrue(state1.isThinking)
+        assertEquals("", state1.cleanResponse)
+
+        // Bullets alone should stay in thinking mode
+        val state2 = ResponseParser.parseStreamState("* ")
+        assertTrue(state2.isThinking)
+        assertEquals("", state2.cleanResponse)
+
+        // Partial tags with bullets should stay in thinking mode
+        val state3 = ResponseParser.parseStreamState("* <thi")
+        assertTrue(state3.isThinking)
+        assertEquals("", state3.cleanResponse)
+
+        // Numbered lists alone should stay in thinking mode
+        val state4 = ResponseParser.parseStreamState("1. ")
+        assertTrue(state4.isThinking)
+        assertEquals("", state4.cleanResponse)
+
+        // Real text should transition out of initial mode if no tag is present
+        val state5 = ResponseParser.parseStreamState("Hello world")
+        assertFalse(state5.isThinking)
+        assertEquals("Hello world", state5.cleanResponse)
+    }
+
+    @Test
+    fun testCleanUpEmptyListMarkers() {
+        val dirtyText = """
+            * Item 1
+            * 
+            * Item 2
+            - 
+            1. 
+            2. Item 3
+        """.trimIndent()
+        
+        val cleaned = ResponseParser.cleanUpEmptyListMarkers(dirtyText)
+        val expected = """
+            * Item 1
+            * Item 2
+            2. Item 3
+        """.trimIndent()
+        
+        assertEquals(expected, cleaned)
+    }
+
+    @Test
+    fun testDatePreservation() {
+        val text = "The deadline is 15/07/2026."
+        val blocks = ResponseParser.parse(text)
+        assertEquals(1, blocks.size)
+        assertEquals("The deadline is 15/07/2026.", (blocks[0] as ChatContentBlock.Text).content)
+    }
+
+    @Test
+    fun testParagraphSplitting() {
+        val text = """
+            This is paragraph 1.
+            It has multiple lines.
+
+            This is paragraph 2.
+
+            This is paragraph 3.
+        """.trimIndent()
+
+        val blocks = ResponseParser.parse(text)
+        assertEquals(3, blocks.size)
+        assertTrue(blocks[0] is ChatContentBlock.Text)
+        assertEquals("This is paragraph 1.\nIt has multiple lines.", (blocks[0] as ChatContentBlock.Text).content.replace("\r\n", "\n"))
+        assertTrue(blocks[1] is ChatContentBlock.Text)
+        assertEquals("This is paragraph 2.", (blocks[1] as ChatContentBlock.Text).content)
+        assertTrue(blocks[2] is ChatContentBlock.Text)
+        assertEquals("This is paragraph 3.", (blocks[2] as ChatContentBlock.Text).content)
+    }
+
+    @Test
+    fun testParseInlineMath() {
+        val mathText1 = "\\Psi(\\mathbf{r})"
+        val parsed1 = com.rajpawardotin.kosh.ui.chat.components.parseInlineMath(mathText1)
+        assertEquals("Ψ(r)", parsed1.text)
+        
+        val mathText2 = "\\nabla^2"
+        val parsed2 = com.rajpawardotin.kosh.ui.chat.components.parseInlineMath(mathText2)
+        assertEquals("∇2", parsed2.text)
+        
+        val mathText3 = "\\hat{H}"
+        val parsed3 = com.rajpawardotin.kosh.ui.chat.components.parseInlineMath(mathText3)
+        assertEquals("H\u0302", parsed3.text)
+    }
 }
 

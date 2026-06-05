@@ -1,20 +1,31 @@
 package com.rajpawardotin.kosh.ui.chat
 
+import androidx.compose.runtime.Immutable
+
+@Immutable
 sealed interface ChatContentBlock {
+    @Immutable
     data class Text(val content: String) : ChatContentBlock
+    @Immutable
     data class Checklist(val items: List<ChecklistItem>) : ChatContentBlock
+    @Immutable
     data class CodeBlock(val language: String, val code: String) : ChatContentBlock
+    @Immutable
     data class Sources(val items: List<SourceItem>) : ChatContentBlock
+    @Immutable
     data class MathBlock(val formula: String) : ChatContentBlock
+    @Immutable
     data class Thinking(val content: String) : ChatContentBlock
 }
 
+@Immutable
 data class ChecklistItem(
     val index: Int,
     val text: String,
     val initiallyChecked: Boolean
 )
 
+@Immutable
 data class SourceItem(
     val title: String,
     val url: String,
@@ -82,6 +93,13 @@ object ResponseParser {
     )
 
     fun parseStreamState(text: String): StreamState {
+        if (isInitialTransitionState(text)) {
+            return StreamState(
+                isThinking = true,
+                thinkingContent = "",
+                cleanResponse = ""
+            )
+        }
         val state = parseStreamStateInternal(text)
         return StreamState(
             isThinking = state.isThinking,
@@ -90,11 +108,60 @@ object ResponseParser {
         )
     }
 
+    private fun isPartialPrefix(text: String, target: String): Boolean {
+        val trimmed = text.trimStart()
+        if (trimmed.isEmpty()) return false
+        return target.startsWith(trimmed) && trimmed.length < target.length
+    }
+
+    private fun isInitialTransitionState(text: String): Boolean {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return true
+        
+        val listMarkerRegex = """^\s*[-*+•]\s*$""".toRegex()
+        val numberedMarkerRegex = """^\s*\d+\.?\s*$""".toRegex()
+        if (listMarkerRegex.matches(trimmed) || numberedMarkerRegex.matches(trimmed)) {
+            return true
+        }
+        
+        val cleanAfterMarker = stripInitialListMarker(trimmed)
+        if (cleanAfterMarker.isEmpty()) return true
+        
+        if (isPartialPrefix(cleanAfterMarker, "<thinking>") || isPartialPrefix(cleanAfterMarker, "```thinking")) {
+            return true
+        }
+        
+        return false
+    }
+
+    private fun stripInitialListMarker(text: String): String {
+        return text.replaceFirst("""^\s*[-*+•]\s*""".toRegex(), "")
+                   .replaceFirst("""^\s*\d+\.\s*""".toRegex(), "")
+                   .trim()
+    }
+
+    fun cleanUpEmptyListMarkers(text: String): String {
+        return text.lines()
+            .filter { line ->
+                val trimmed = line.trim()
+                !trimmed.matches("""^[-*+•]$""".toRegex()) &&
+                !trimmed.matches("""^[-*+•]\s+$""".toRegex()) &&
+                !trimmed.matches("""^\d+\.$""".toRegex()) &&
+                !trimmed.matches("""^\d+\.\s+$""".toRegex())
+            }
+            .joinToString("\n")
+    }
+
     private fun parseStreamStateInternal(text: String): StreamState {
         val xmlStart = text.indexOf("<thinking>")
         val fenceStart = text.indexOf("```thinking")
         
         if (xmlStart == -1 && fenceStart == -1) {
+            val startsWithXmlPrefix = isPartialPrefix(text, "<thinking>")
+            val startsWithFencePrefix = isPartialPrefix(text, "```thinking")
+            if (startsWithXmlPrefix || startsWithFencePrefix) {
+                return StreamState(isThinking = true, thinkingContent = "", cleanResponse = "")
+            }
             return StreamState(isThinking = false, thinkingContent = "", cleanResponse = text)
         }
         
@@ -158,7 +225,7 @@ object ResponseParser {
         val allMatches = (xmlMatches + fenceMatches).sortedBy { it.range.first }.toList()
         
         if (allMatches.isEmpty()) {
-            return Pair(emptyList(), text)
+            return Pair(emptyList(), cleanUpEmptyListMarkers(text).trim())
         }
         
         val thinkingContents = mutableListOf<String>()
@@ -178,7 +245,9 @@ object ResponseParser {
             cleanTextBuilder.append(text.substring(lastIndex))
         }
         
-        return Pair(thinkingContents, cleanTextBuilder.toString().trim())
+        val cleanText = cleanTextBuilder.toString().trim()
+        val finalCleanText = cleanUpEmptyListMarkers(cleanText).trim()
+        return Pair(thinkingContents, finalCleanText)
     }
 
     fun parse(text: String): List<ChatContentBlock> {
@@ -189,7 +258,7 @@ object ResponseParser {
         val blocks = mutableListOf<ChatContentBlock>()
         
         if (allMatches.isEmpty()) {
-            val cleanBlocks = parseCleanText(text)
+            val cleanBlocks = parseCleanText(cleanUpEmptyListMarkers(text))
             blocks.addAll(cleanBlocks)
         } else {
             var lastIndex = 0
@@ -199,7 +268,7 @@ object ResponseParser {
                 // Parse the clean text before this thinking block
                 if (match.range.first > lastIndex) {
                     val subText = text.substring(lastIndex, match.range.first)
-                    blocks.addAll(parseCleanText(subText))
+                    blocks.addAll(parseCleanText(cleanUpEmptyListMarkers(subText)))
                 }
                 
                 val thinking = match.groupValues[1].trim()
@@ -211,7 +280,7 @@ object ResponseParser {
             
             if (lastIndex < text.length) {
                 val remainingText = text.substring(lastIndex)
-                blocks.addAll(parseCleanText(remainingText))
+                blocks.addAll(parseCleanText(cleanUpEmptyListMarkers(remainingText)))
             }
         }
         
@@ -379,7 +448,11 @@ object ResponseParser {
                 )
             } else {
                 flushChecklist()
-                currentTextBuffer.append(line).append("\n")
+                if (line.isBlank()) {
+                    flushText()
+                } else {
+                    currentTextBuffer.append(line).append("\n")
+                }
             }
         }
         

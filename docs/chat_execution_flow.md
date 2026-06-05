@@ -92,24 +92,27 @@ The view model passes the message history, document context, web search snippets
 ### Step 5: JNI LLM Execution & Token Streaming
 1. Sets `isThinking = true` and `agenticStateLabel = "Thinking..."`.
 2. Applies a brief artificial delay (400ms) to allow the "Thinking" visual pulse to settle organically.
-3. Calls `AgentLoopExecutor.executeAgentLoop` to initialize the JNI inference pipeline:
+3. Instantly creates and inserts an assistant placeholder message (`ChatMessage` with `isStreaming = true` and a unique `assistantMessageId`) into the `chatMessages` list on the Main thread.
+4. Calls `AgentLoopExecutor.executeAgentLoop` to initialize the JNI inference pipeline:
    - Manual load order check for libraries (`libLiteRt.so`, `libQnnSystem.so`, `libQnnHtp.so`, etc.) if Qualcomm NPU is selected.
    - Writes the `engine_crashed = true` sentinel database entry to intercept crashes, clearing it upon JNI return.
-4. Runs JNI generation and receives streamed tokens back:
+5. Runs JNI generation and receives streamed tokens back:
+   - **Token Buffering**: Tokens are accumulated in a thread-safe buffer and flushed to the Main thread at most once every `32ms` (approx. 30fps) or when a newline is encountered. This prevents UI thread overhead.
    - Sets `agenticStateLabel = "Formatting response..."` on the first received token.
-   - Progressively appends tokens to `currentResponseChunk` and updates `tokensPerSecond` metric.
+   - Progressively updates `currentResponseChunk` and updates the text of the assistant placeholder message in `chatMessages` inline.
    - Compares chunks against repetition patterns to halt loops if the model gets stuck.
-   - **Real-Time Stripping**: The UI `ThinkingIndicator` intercepts `currentResponseChunk` in real-time, parsing it with `ResponseParser.parseStreamState(...)` to separate and hide the raw thinking process, rendering a clean "Thinking..." card while generating and streaming the clean output below it with a static `▊` terminal cursor.
-   - **Crash-Safety Saves**: Saves progressive chunks into SQLite (`messageRepository.saveMessage`) during execution to preserve progress if the OS kills the process.
+   - **Real-Time Stripping**: The UI `ThinkingIndicator` (rendered inline inside `ChatBubble` for the streaming message) intercepts `currentResponseChunk` in real-time, parsing it with `ResponseParser.parseStreamState(...)` to separate and hide the raw thinking process.
+   - **Database Write Throttling**: Progressive crash-safety saves to SQLite (`messageRepository.saveMessage`) are throttled to at most once every `500ms` during generation to prevent disk I/O bottlenecks.
 
 ---
 
 ### Step 6: Completion & Asynchronous Memory Updates
 When JNI signals completion (`onDone`):
-1. Persists the final full Assistant response (encrypting the text and referenced source documents if the session is locked).
-2. Clears the streaming UI text buffers and sets `isThinking = false`.
-3. Triggers `runBackgroundMemoryUpdates` asynchronously on the background dispatcher:
+1. Updates the assistant placeholder message in `chatMessages` inline to set `isStreaming = false` with the final response. Because the item key remains `assistantMessageId` throughout streaming and completion, Compose reuses the same view structure, removing completion flashing and item re-entrance animations.
+2. Persists the final full Assistant response to SQLite (encrypting the text and referenced source documents if the session is locked).
+3. Clears the streaming UI text buffers and sets `isThinking = false`.
+4. Triggers `runBackgroundMemoryUpdates` asynchronously on the background dispatcher:
    - **Fact Extraction**: Submits the latest exchange to the LLM: `"Extract key user preferences, facts... from this interaction"`, parses output, merges it with the session's existing profile, and saves to the SQLite `sessions` table.
    - **Rolling Summarization**: If the chat exceeds 10 turns, passes the older history (excluding sliding window) and current summary to the LLM to update the running context, storing it back to the database.
-4. Updates the session's `lastActive` time and `lastSearchQuery` fields.
-5. Clears generation flags, returning states to `Ready`.
+5. Updates the session's `lastActive` time and `lastSearchQuery` fields.
+6. Clears generation flags, returning states to `Ready`.

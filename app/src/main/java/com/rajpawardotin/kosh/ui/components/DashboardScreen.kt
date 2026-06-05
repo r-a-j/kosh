@@ -610,14 +610,16 @@ fun DashboardScreen(
                                          
                                          Spacer(modifier = Modifier.width(4.dp))
                                          
+                                         val renameEnabled = !viewModel.isGenerating && !isLocked
                                          IconButton(
                                              onClick = { sessionToRename = session },
+                                             enabled = renameEnabled,
                                              modifier = Modifier.size(24.dp)
                                          ) {
                                              Icon(
                                                  imageVector = Icons.Default.Edit,
                                                  contentDescription = "Rename",
-                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                 tint = if (renameEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f),
                                                  modifier = Modifier.size(14.dp)
                                              )
                                          }

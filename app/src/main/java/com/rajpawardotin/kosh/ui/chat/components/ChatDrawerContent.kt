@@ -224,14 +224,16 @@ fun ChatDrawerContent(
                                 )
                             }
 
+                            val renameEnabled = !viewModel.isGenerating && (!isEncrypted || isUnlocked)
                             IconButton(
                                 onClick = { sessionToRename = session },
+                                enabled = renameEnabled,
                                 modifier = Modifier.size(24.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Rename",
-                                    tint = onSurfaceMuted,
+                                    tint = if (renameEnabled) onSurfaceMuted else onSurfaceMuted.copy(alpha = 0.3f),
                                     modifier = Modifier.size(14.dp)
                                 )
                             }

@@ -63,6 +63,7 @@ class ChatViewModelTest {
             testDispatcher
         )
         viewModel.modelPath = "fake/model/path.bin"
+        viewModel.timeProvider = { testDispatcher.scheduler.currentTime }
     }
  
     @After

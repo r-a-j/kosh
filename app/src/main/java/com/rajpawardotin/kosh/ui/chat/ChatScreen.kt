@@ -17,8 +17,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,9 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
+import com.rajpawardotin.kosh.ui.chat.components.MarkdownText
 import com.rajpawardotin.kosh.ui.chat.ChatContentBlock
 import com.rajpawardotin.kosh.ui.chat.ResponseParser
 import java.io.File
@@ -113,10 +113,55 @@ fun ChatScreen(
     }
 
     val scrollState = rememberLazyListState()
+    val isDragged by scrollState.interactionSource.collectIsDraggedAsState()
+    var userHasScrolledUp by remember { mutableStateOf(false) }
+
+    val lastItemIndex by remember {
+        derivedStateOf {
+            (viewModel.chatMessages.size - 1).coerceAtLeast(0)
+        }
+    }
+
+    val isAtBottom by remember {
+        derivedStateOf {
+            val layoutInfo = scrollState.layoutInfo
+            val visibleItemsInfo = layoutInfo.visibleItemsInfo
+            if (visibleItemsInfo.isEmpty()) {
+                true
+            } else {
+                val lastVisibleItem = visibleItemsInfo.last()
+                val isLastItem = lastVisibleItem.index == layoutInfo.totalItemsCount - 1
+                if (isLastItem) {
+                    val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                    val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+                    // Within 40 pixels threshold
+                    lastItemBottom - viewportBottom <= 40
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(isAtBottom) {
+        if (isAtBottom) {
+            userHasScrolledUp = false
+        }
+    }
+
+    LaunchedEffect(isDragged, isAtBottom) {
+        if (isDragged && !isAtBottom) {
+            userHasScrolledUp = true
+        }
+    }
+
+    LaunchedEffect(viewModel.currentSessionId) {
+        userHasScrolledUp = false
+    }
+
     val showScrollToBottom by remember {
         derivedStateOf {
-            scrollState.firstVisibleItemIndex > 1 || 
-            (scrollState.firstVisibleItemIndex == 1 && scrollState.firstVisibleItemScrollOffset > 100)
+            !isAtBottom
         }
     }
     val emptyStateScrollState = rememberScrollState()
@@ -313,14 +358,44 @@ fun ChatScreen(
 
 
 
-    LaunchedEffect(viewModel.chatMessages.size, viewModel.currentResponseChunk, viewModel.isThinking, viewModel.isSearchingInternet, viewModel.isGenerating) {
-        if (viewModel.chatMessages.isNotEmpty() || viewModel.currentResponseChunk.isNotEmpty() || viewModel.isThinking || viewModel.isSearchingInternet || viewModel.isGenerating) {
-            scrollState.animateScrollToItem(0)
+    val chatMessages = viewModel.chatMessages
+    
+    // Scroll to bottom when user sends a new message or assistant finishes
+    LaunchedEffect(chatMessages.size) {
+        if (chatMessages.isNotEmpty()) {
+            val lastMessage = chatMessages.last()
+            if (lastMessage.isUser) {
+                userHasScrolledUp = false
+                scrollState.animateScrollToBottom(lastItemIndex)
+            } else {
+                if (!userHasScrolledUp) {
+                    scrollState.animateScrollToBottom(lastItemIndex)
+                }
+            }
         }
     }
 
+    // Scroll to bottom when generation starts
+    LaunchedEffect(viewModel.isGenerating, viewModel.isThinking, viewModel.isSearchingInternet) {
+        val isStartingActive = viewModel.isGenerating || viewModel.isThinking || viewModel.isSearchingInternet
+        if (isStartingActive && !userHasScrolledUp) {
+            scrollState.animateScrollToBottom(lastItemIndex)
+        }
+    }
+
+    // Smooth streaming autoscroll (keeping stream stuck to bottom)
+    val latestChunkText = viewModel.currentResponseChunk
+    LaunchedEffect(latestChunkText, userHasScrolledUp, isDragged) {
+        if (!userHasScrolledUp && !isDragged && (viewModel.isGenerating || viewModel.isThinking) && latestChunkText.isNotEmpty()) {
+            scrollState.scrollToBottom(lastItemIndex)
+        }
+    }
+
+    // Initial scroll to bottom when session loads
     LaunchedEffect(viewModel.currentSessionId) {
-        scrollState.scrollToItem(0)
+        if (chatMessages.isNotEmpty()) {
+            scrollState.scrollToBottom(lastItemIndex)
+        }
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
@@ -530,7 +605,7 @@ fun ChatScreen(
                                                             topBoundaryPx = topBoundaryPx,
                                                             topFadePx = topFadePx
                                                         ),
-                                                    reverseLayout = true,
+                                                    reverseLayout = false,
                                                     contentPadding = PaddingValues(
                                                         start = 16.dp,
                                                         end = 16.dp,
@@ -539,22 +614,10 @@ fun ChatScreen(
                                                     ),
                                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                                 ) {
-                                                    // Index 0 is visual BOTTOM
-
-                                                    if (viewModel.isThinking || viewModel.isSearchingInternet || viewModel.currentResponseChunk.isNotEmpty() || viewModel.isGenerating) {
-                                                        item {
-                                                            ThinkingIndicator(
-                                                                text = when {
-                                                                    viewModel.currentResponseChunk.isNotEmpty() -> viewModel.currentResponseChunk
-                                                                    else -> viewModel.agenticStateLabel
-                                                                },
-                                                                isSearchingInternet = viewModel.isSearchingInternet,
-                                                                isGenerating = viewModel.isGenerating
-                                                            )
-                                                        }
-                                                    }
-
-                                                    items(viewModel.chatMessages.reversed()) { message ->
+                                                    items(
+                                                        items = viewModel.chatMessages,
+                                                        key = { it.id }
+                                                    ) { message ->
                                                         val currentlySpeakingId by viewModel.currentlySpeakingMessageId.collectAsState()
                                                         ChatBubble(
                                                             message = message,
@@ -570,7 +633,11 @@ fun ChatScreen(
                                                             },
                                                             onManageTagsClick = if (!viewModel.isTemporarySession && !isLocked) {
                                                                 { showManageTagsDialog = true }
-                                                            } else null
+                                                            } else null,
+                                                            isSearchingInternet = viewModel.isSearchingInternet,
+                                                            isGenerating = viewModel.isGenerating,
+                                                            agenticStateLabel = viewModel.agenticStateLabel,
+                                                            modifier = Modifier.animateItem()
                                                         )
                                                     }
                                                 }
@@ -587,7 +654,7 @@ fun ChatScreen(
                                                     SmallFloatingActionButton(
                                                         onClick = {
                                                             scope.launch {
-                                                                scrollState.animateScrollToItem(0)
+                                                                scrollState.animateScrollToBottom(lastItemIndex)
                                                             }
                                                         },
                                                         containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
@@ -652,6 +719,7 @@ fun ChatScreen(
                                              viewModel.startNewChat()
                                              viewModel.prompt = enteredPrompt
                                          }
+                                         userHasScrolledUp = false
                                          viewModel.sendMessage(context)
                                      }
                                  },
@@ -1071,12 +1139,21 @@ private fun triggerAppBiometricUnlock(context: Context, viewModel: ChatViewModel
     }
 }
 
+private data class DisplayState(
+    val streamState: ResponseParser.StreamState,
+    val parsedBlocks: List<ChatContentBlock>
+)
+
 @Composable
-fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: Boolean = false) {
+fun ThinkingIndicator(
+    text: String,
+    isSearchingInternet: Boolean,
+    isGenerating: Boolean = false,
+    modifier: Modifier = Modifier
+) {
     val primary = MaterialTheme.colorScheme.primary
     val secondary = MaterialTheme.colorScheme.secondary
     val onBackground = MaterialTheme.colorScheme.onBackground
-    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     val rotation = if (isSearchingInternet) {
         val infiniteTransition = rememberInfiniteTransition(label = "searching")
@@ -1094,19 +1171,67 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
         0f
     }
 
-    // Parse the stream state in real-time
-    val streamState = remember(text) {
-        ResponseParser.parseStreamState(text)
+    // State for throttled parsed stream state and parsed blocks combined to ensure single-tick updates
+    var displayState by remember {
+        mutableStateOf(
+            DisplayState(
+                streamState = ResponseParser.StreamState(isThinking = false, thinkingContent = "", cleanResponse = ""),
+                parsedBlocks = emptyList()
+            )
+        )
     }
 
     // State for the rate-limited intermediate thinking steps preview
     var displayThinkingText by remember { mutableStateOf("") }
     var textVisible by remember { mutableStateOf(true) }
 
-    val currentThinkingContent by rememberUpdatedState(streamState.thinkingContent)
+    // Use rememberUpdatedState so we can read the latest text inside the LaunchedEffect loop
+    // without triggering a restart of the coroutine (which would cancel the delay and break throttling).
+    val latestText by rememberUpdatedState(text)
 
-    LaunchedEffect(streamState.isThinking) {
-        if (streamState.isThinking) {
+    // Throttled background parsing loop to offload heavy calculations from the Main Thread
+    LaunchedEffect(isGenerating) {
+        var lastProcessedText = ""
+        while (true) {
+            val currentText = latestText
+            if (currentText != lastProcessedText) {
+                lastProcessedText = currentText
+                withContext(Dispatchers.Default) {
+                    val parsedStream = ResponseParser.parseStreamState(lastProcessedText)
+                    val rawCleanText = parsedStream.cleanResponse
+                    val suffix = if (isGenerating) " ▊" else ""
+                    
+                    val parsed = ResponseParser.parse(rawCleanText)
+                    val finalBlocks = if (isGenerating && parsed.isNotEmpty()) {
+                        val lastIdx = parsed.indexOfLast { it is ChatContentBlock.Text }
+                        if (lastIdx != -1) {
+                            parsed.mapIndexed { idx, block ->
+                                if (idx == lastIdx) {
+                                    ChatContentBlock.Text((block as ChatContentBlock.Text).content + suffix)
+                                } else {
+                                    block
+                                }
+                            }
+                        } else {
+                            parsed + ChatContentBlock.Text(suffix)
+                        }
+                    } else {
+                        parsed
+                    }
+                    
+                    withContext(Dispatchers.Main) {
+                        displayState = DisplayState(parsedStream, finalBlocks)
+                    }
+                }
+            }
+            delay(60) // Steady throttle to ~16.6 FPS that is NOT interrupted by new token emissions
+        }
+    }
+
+    // Keep displayThinkingText updated from streamState.thinkingContent at a controlled rate
+    val currentThinkingContent by rememberUpdatedState(displayState.streamState.thinkingContent)
+    LaunchedEffect(displayState.streamState.isThinking) {
+        if (displayState.streamState.isThinking) {
             val initialLines = currentThinkingContent.lines()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
@@ -1140,113 +1265,18 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        // Assistant Header Row matching ChatBubble style
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.AutoAwesome,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(16.dp)
-                    .graphicsLayer(alpha = 0.9f)
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.linearGradient(
-                                colors = listOf(primary, secondary)
-                            ),
-                            blendMode = BlendMode.SrcAtop
-                        )
-                    },
-                tint = Color.Unspecified
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Assistant",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                ),
-                color = onBackground.copy(alpha = 0.6f)
-            )
-            
-            // Sleek pulsing breathing dot next to Assistant header
-            if (isGenerating) {
-                Spacer(modifier = Modifier.width(8.dp))
-                val statusColor = when {
-                    isSearchingInternet && streamState.cleanResponse.isEmpty() && !streamState.isThinking -> MaterialTheme.colorScheme.tertiary
-                    streamState.isThinking -> MaterialTheme.colorScheme.secondary
-                    else -> MaterialTheme.colorScheme.primary
-                }
-                
-                val infiniteTransition = rememberInfiniteTransition(label = "glowing_indicator")
-                val pulseAlpha by infiniteTransition.animateFloat(
-                    initialValue = 0.8f,
-                    targetValue = 0.0f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1500, easing = LinearEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "pulseAlpha"
-                )
-                val pulseScale by infiniteTransition.animateFloat(
-                    initialValue = 1.0f,
-                    targetValue = 2.4f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1500, easing = LinearEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "pulseScale"
-                )
-                
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(16.dp)
-                ) {
-                    // Outer breathing/rippling glow ring
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .graphicsLayer {
-                                scaleX = pulseScale
-                                scaleY = pulseScale
-                                alpha = pulseAlpha
-                            }
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                    
-                    // Inner solid core dot
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(statusColor)
-                    )
-                }
-            }
-        }
-
         // Content Column
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp)
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioLowBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                )
         ) {
-            if (isSearchingInternet && streamState.cleanResponse.isEmpty() && !streamState.isThinking) {
+            if (isSearchingInternet && displayState.streamState.cleanResponse.isEmpty() && !displayState.streamState.isThinking) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(vertical = 4.dp)
@@ -1267,7 +1297,7 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
                         fontSize = 14.sp
                     )
                 }
-            } else if (streamState.isThinking) {
+            } else if (displayState.streamState.isThinking) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1309,83 +1339,54 @@ fun ThinkingIndicator(text: String, isSearchingInternet: Boolean, isGenerating: 
                 }
             } else {
                 // Completed thinking block (or no thinking tags at all)
-                if (streamState.thinkingContent.isNotEmpty()) {
-                    com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = streamState.thinkingContent)
+                if (displayState.streamState.thinkingContent.isNotEmpty()) {
+                    com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = displayState.streamState.thinkingContent)
                     Spacer(modifier = Modifier.height(8.dp))
                 }
                 
-                if (streamState.cleanResponse.isNotEmpty()) {
-                    val suffix = if (isGenerating) " ▊" else ""
-                    val rawCleanText = streamState.cleanResponse
-                    val parsedBlocks = remember(rawCleanText, isGenerating) {
-                        val parsed = ResponseParser.parse(rawCleanText)
-                        if (isGenerating && parsed.isNotEmpty()) {
-                            val lastIdx = parsed.indexOfLast { it is ChatContentBlock.Text }
-                            if (lastIdx != -1) {
-                                parsed.mapIndexed { idx, block ->
-                                    if (idx == lastIdx) {
-                                        ChatContentBlock.Text((block as ChatContentBlock.Text).content + suffix)
-                                    } else {
-                                        block
+                if (displayState.streamState.cleanResponse.isNotEmpty()) {
+                    val parsedBlocks = displayState.parsedBlocks
+
+                    parsedBlocks.forEachIndexed { index, block ->
+                        key("temp_generating_$index") {
+                            when (block) {
+                                is ChatContentBlock.Text -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        MarkdownText(
+                                            content = block.content
+                                        )
                                     }
                                 }
-                            } else {
-                                parsed + ChatContentBlock.Text(suffix)
-                            }
-                        } else {
-                            parsed
-                        }
-                    }
-
-                    parsedBlocks.forEach { block ->
-                        when (block) {
-                            is ChatContentBlock.Text -> {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                ) {
-                                    Markdown(
-                                        content = block.content,
-                                        colors = markdownColor(
-                                            text = onBackground,
-                                            codeBackground = surfaceVariant,
-                                            inlineCodeBackground = surfaceVariant
-                                        ),
-                                        typography = markdownTypography(
-                                            text = MaterialTheme.typography.bodyLarge.copy(
-                                                lineHeight = 26.sp,
-                                                fontSize = 16.sp
-                                            )
-                                        )
+                                is ChatContentBlock.Checklist -> {
+                                    com.rajpawardotin.kosh.ui.chat.components.ChecklistCard(
+                                        items = block.items,
+                                        messageKey = "temp_generating",
+                                        checkedItems = emptyMap(),
+                                        onToggleChecklistItem = { _, _ -> }
                                     )
                                 }
+                                is ChatContentBlock.CodeBlock -> {
+                                    com.rajpawardotin.kosh.ui.chat.components.CodeBlockCard(
+                                        language = block.language,
+                                        code = block.code
+                                    )
+                                }
+                                is ChatContentBlock.Sources -> {
+                                    com.rajpawardotin.kosh.ui.chat.components.SourcesCarousel(items = block.items)
+                                }
+                                is ChatContentBlock.MathBlock -> {
+                                    com.rajpawardotin.kosh.ui.chat.components.MathFormulaCard(formula = block.formula)
+                                }
+                                is ChatContentBlock.Thinking -> {
+                                    com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = block.content)
+                                }
                             }
-                            is ChatContentBlock.Checklist -> {
-                                com.rajpawardotin.kosh.ui.chat.components.ChecklistCard(
-                                    items = block.items,
-                                    messageKey = "temp_generating",
-                                    checkedItems = emptyMap(),
-                                    onToggleChecklistItem = { _, _ -> }
-                                )
-                            }
-                            is ChatContentBlock.CodeBlock -> {
-                                com.rajpawardotin.kosh.ui.chat.components.CodeBlockCard(
-                                    language = block.language,
-                                    code = block.code
-                                )
-                            }
-                            is ChatContentBlock.Sources -> {
-                                com.rajpawardotin.kosh.ui.chat.components.SourcesCarousel(items = block.items)
-                            }
-                            is ChatContentBlock.MathBlock -> {
-                                com.rajpawardotin.kosh.ui.chat.components.MathFormulaCard(formula = block.formula)
-                            }
-                            is ChatContentBlock.Thinking -> {
-                                com.rajpawardotin.kosh.ui.chat.components.ThinkingBlockCard(content = block.content)
-                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 } else if (isGenerating && !isSearchingInternet) {
                     Text(
@@ -2382,5 +2383,33 @@ fun HardwareStatsHUD(
                 }
             }
         }
+    }
+}
+
+private suspend fun LazyListState.animateScrollToBottom(lastItemIndex: Int) {
+    val layoutInfo = this.layoutInfo
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val lastVisibleItem = visibleItems.find { it.index == lastItemIndex }
+    if (lastVisibleItem != null) {
+        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+        val offset = lastVisibleItem.size - viewportHeight
+        this.animateScrollToItem(lastItemIndex, offset)
+    } else {
+        val viewportHeight = (layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding).coerceAtLeast(0)
+        this.animateScrollToItem(lastItemIndex, -viewportHeight)
+    }
+}
+
+private suspend fun LazyListState.scrollToBottom(lastItemIndex: Int) {
+    val layoutInfo = this.layoutInfo
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val lastVisibleItem = visibleItems.find { it.index == lastItemIndex }
+    if (lastVisibleItem != null) {
+        val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+        val offset = lastVisibleItem.size - viewportHeight
+        this.scrollToItem(lastItemIndex, offset)
+    } else {
+        val viewportHeight = (layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding).coerceAtLeast(0)
+        this.scrollToItem(lastItemIndex, -viewportHeight)
     }
 }

@@ -301,14 +301,16 @@ fun JournalListScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
+                                    val renameEnabled = !viewModel.isGenerating && (!isEncrypted || isUnlocked)
                                     IconButton(
                                         onClick = { sessionToRename = session },
+                                        enabled = renameEnabled,
                                         modifier = Modifier.size(28.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
                                             contentDescription = "Rename",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                            tint = if (renameEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.22f),
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
