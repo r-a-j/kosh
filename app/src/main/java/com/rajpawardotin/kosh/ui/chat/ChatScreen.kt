@@ -164,6 +164,17 @@ fun ChatScreen(
             !isAtBottom
         }
     }
+    var unreadCount by remember { mutableStateOf(0) }
+    LaunchedEffect(viewModel.chatMessages.size) {
+        if (!isAtBottom) {
+            unreadCount++
+        }
+    }
+    LaunchedEffect(isAtBottom) {
+        if (isAtBottom) {
+            unreadCount = 0
+        }
+    }
     val emptyStateScrollState = rememberScrollState()
     val density = LocalDensity.current
     var inputHeightDp by remember { mutableStateOf(80.dp) }
@@ -670,37 +681,6 @@ fun ChatScreen(
                                                     }
                                                 }
 
-                                                // Scroll to Bottom Button
-                                                AnimatedVisibility(
-                                                    visible = showScrollToBottom,
-                                                    enter = fadeIn(animationSpec = tween(300)) + scaleIn(animationSpec = tween(300), initialScale = 0.8f),
-                                                    exit = fadeOut(animationSpec = tween(300)) + scaleOut(animationSpec = tween(300), targetScale = 0.8f),
-                                                    modifier = Modifier
-                                                        .align(Alignment.BottomEnd)
-                                                        .navigationBarsPadding()
-                                                        .imePadding()
-                                                        .padding(end = 20.dp, bottom = inputHeightDp + 24.dp)
-                                                ) {
-                                                    SmallFloatingActionButton(
-                                                        onClick = {
-                                                            scope.launch {
-                                                                scrollState.animateScrollToBottom(lastItemIndex)
-                                                            }
-                                                        },
-                                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-                                                        contentColor = MaterialTheme.colorScheme.primary,
-                                                        shape = CircleShape,
-                                                        modifier = Modifier
-                                                            .size(40.dp)
-                                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.KeyboardArrowDown,
-                                                            contentDescription = "Scroll to bottom",
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
-                                                    }
-                                                }
                                             }
                                         }
                                     }
@@ -788,6 +768,57 @@ fun ChatScreen(
                                     onChatModeChange = { viewModel.updateChatMode(it) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                            }
+                            
+                            // Scroll to Bottom Button (aligned dynamically above the Send/Stop button)
+                            AnimatedVisibility(
+                                visible = showScrollToBottom,
+                                enter = fadeIn(animationSpec = tween(300)) + 
+                                        scaleIn(animationSpec = tween(300), initialScale = 0.8f) +
+                                        slideInVertically(animationSpec = tween(300)) { it / 2 },
+                                exit = fadeOut(animationSpec = tween(300)) + 
+                                       scaleOut(animationSpec = tween(300), targetScale = 0.8f) +
+                                       slideOutVertically(animationSpec = tween(300)) { it / 2 },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(end = 20.dp)
+                                    .offset(y = (-28).dp)
+                            ) {
+                                BadgedBox(
+                                    badge = {
+                                        if (unreadCount > 0) {
+                                            Badge(
+                                                containerColor = MaterialTheme.colorScheme.error,
+                                                contentColor = MaterialTheme.colorScheme.onError,
+                                                modifier = Modifier.offset(x = (-4).dp, y = 4.dp)
+                                            ) {
+                                                Text(unreadCount.toString())
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    val localHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+                                    SmallFloatingActionButton(
+                                        onClick = {
+                                            localHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                            scope.launch {
+                                                scrollState.animateScrollToBottom(lastItemIndex)
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                                        contentColor = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Scroll to bottom",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 

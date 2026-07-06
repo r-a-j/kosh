@@ -1257,6 +1257,54 @@ class ChatViewModelTest {
         testScheduler.advanceUntilIdle()
         assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL, viewModel.currentChatMode)
     }
+
+    @Test
+    fun testRAGStateRestorationAfterBackgrounding() = runTest(testDispatcher) {
+        val sessionId = "rag_restore_session"
+        val session = ChatSession(
+            id = sessionId,
+            title = "RAG Restoration",
+            createdAt = 1000L,
+            lastActive = 1000L,
+            modelPath = "fake/model/path.bin",
+            lastSearchQuery = null
+        )
+        fakeSessionRepo.saveSession(session)
+
+        // Save a mock document chunk to the database
+        val mockDoc = com.rajpawardotin.kosh.domain.model.SessionDocument(
+            id = "chunk_1",
+            sessionId = sessionId,
+            fileName = "instructions.txt",
+            fileType = "text",
+            fileSize = 100L,
+            chunkIndex = 0,
+            chunkText = "This is some private instructions text for testing.",
+            isEncrypted = false,
+            createdAt = 1000L
+        )
+        fakeDocumentRepo.saveSessionDocument(mockDoc)
+
+        // Load the session
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+
+        // 1. Initially, documents should be loaded
+        assertEquals(1, viewModel.activeSessionDocuments.size)
+        assertEquals("instructions.txt", viewModel.activeSessionDocuments[0].fileName)
+
+        // 2. Simulate background lock (clears memory state)
+        viewModel.lockAppOnBackground()
+        assertTrue(viewModel.activeSessionDocuments.isEmpty())
+
+        // 3. User sends a message (this calls retrieveContext internally)
+        viewModel.prompt = "What are the private instructions?"
+        viewModel.sendMessage(context)
+        testScheduler.advanceUntilIdle()
+
+        // 4. Verify that activeSessionDocuments was self-healed and re-loaded!
+        assertTrue(viewModel.activeSessionDocuments.any { it.fileName == "instructions.txt" })
+    }
 }
 
 

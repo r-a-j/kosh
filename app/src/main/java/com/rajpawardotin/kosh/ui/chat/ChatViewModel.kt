@@ -2262,7 +2262,30 @@ class ChatViewModel(
         return documentProcessingUseCase.chunkText(text, chunkSize, overlap)
     }
 
+    private fun ensureActiveSessionDocumentsLoaded(sessionId: String) {
+        if (activeSessionDocuments.isEmpty()) {
+            val session = savedSessions.find { it.id == sessionId }
+            val isEncrypted = session?.encryptedKeyPassword != null
+            val isUnlocked = activeSessionKeys.containsKey(sessionId)
+            
+            if (!isEncrypted) {
+                val sessionDocs = documentRepository.getSessionDocuments(sessionId)
+                activeSessionDocuments.addAll(sessionDocs)
+            } else if (isUnlocked) {
+                val key = activeSessionKeys[sessionId]!!
+                val sessionDocs = documentRepository.getSessionDocuments(sessionId)
+                val decryptedDocs = sessionDocs.map { doc ->
+                    val decName = try { CryptoUtils.decryptMessage(doc.fileName, key) } catch (e: Exception) { doc.fileName }
+                    val decText = try { CryptoUtils.decryptMessage(doc.chunkText, key) } catch (e: Exception) { doc.chunkText }
+                    doc.copy(fileName = decName, chunkText = decText)
+                }
+                activeSessionDocuments.addAll(decryptedDocs)
+            }
+        }
+    }
+
     private fun retrieveContext(sessionId: String, query: String, justAttached: Boolean = false): Pair<String, List<String>> {
+        ensureActiveSessionDocumentsLoaded(sessionId)
         val isEncrypted = activeSessionKeys.containsKey(sessionId)
         return llmUseCase.retrieveContext(sessionId, query, isEncrypted, activeSessionDocuments, justAttached)
     }
@@ -2358,6 +2381,9 @@ class ChatViewModel(
                 }
 
                 // 3. RAG Memory Consolidation
+                withContext(Dispatchers.Main) {
+                    ensureActiveSessionDocumentsLoaded(sessionId)
+                }
                 val inMemoryDoc = ragConsolidationUseCase.execute(
                     sessionId = sessionId,
                     lastUserMsg = lastUserMsg,
