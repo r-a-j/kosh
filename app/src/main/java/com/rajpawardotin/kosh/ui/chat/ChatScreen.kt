@@ -169,7 +169,7 @@ fun ChatScreen(
     var inputHeightDp by remember { mutableStateOf(80.dp) }
     
     // Configurable fading edge thickness/height
-    var topFadeHeightDp by remember { mutableStateOf(16.dp) }
+    var topFadeHeightDp by remember { mutableStateOf(48.dp) }
     var headerHeightDp by remember { mutableStateOf(80.dp) }
 
     val isHistoryEmpty = viewModel.chatMessages.isEmpty() && !viewModel.isThinking && !viewModel.isGenerating && viewModel.currentResponseChunk.isEmpty()
@@ -395,6 +395,15 @@ fun ChatScreen(
     LaunchedEffect(viewModel.currentSessionId) {
         if (chatMessages.isNotEmpty()) {
             scrollState.scrollToBottom(lastItemIndex)
+        }
+    }
+
+    // Auto-scroll to bottom when generation completes and stats HUD collapses
+    LaunchedEffect(viewModel.isGenerating) {
+        if (!viewModel.isGenerating && chatMessages.isNotEmpty()) {
+            // Wait for collapse animations and layout passes to settle
+            kotlinx.coroutines.delay(220)
+            scrollState.animateScrollToBottom(lastItemIndex)
         }
     }
 
@@ -628,7 +637,7 @@ fun ChatScreen(
                                                     contentPadding = PaddingValues(
                                                         start = 16.dp,
                                                         end = 16.dp,
-                                                        top = headerHeightDp + topFadeHeightDp + 8.dp,
+                                                        top = headerHeightDp + 8.dp,
                                                         bottom = inputHeightDp + 32.dp
                                                     ),
                                                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -699,71 +708,87 @@ fun ChatScreen(
                             }
                         }
 
-                        // 2. ChatInput and Stats HUD Container (always visible)
-                        Column(
+                        // 2. ChatInput and Stats HUD Container (always visible with soft gradient background)
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .imePadding()
-                                .navigationBarsPadding()
-                                .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colorStops = arrayOf(
+                                            0.0f to Color.Transparent,
+                                            0.12f to MaterialTheme.colorScheme.background.copy(alpha = 0.45f),
+                                            0.35f to MaterialTheme.colorScheme.background.copy(alpha = 0.85f),
+                                            0.6f to MaterialTheme.colorScheme.background.copy(alpha = 0.98f),
+                                            1.0f to MaterialTheme.colorScheme.background
+                                        )
+                                    )
+                                )
                                 .onGloballyPositioned { coordinates ->
                                     inputHeightDp = with(density) { coordinates.size.height.toDp() }
                                 }
-                                .align(Alignment.BottomCenter),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Dynamic Performance HUD
-                            AnimatedVisibility(
-                                visible = viewModel.isGenerating && viewModel.showHardwareStats,
-                                enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
-                                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .navigationBarsPadding()
+                                    .imePadding()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 20.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                HardwareStatsHUD(
-                                    backend = viewModel.selectedBackend,
-                                    speed = viewModel.tokensPerSecond,
-                                    load = viewModel.npuLoad,
-                                    ram = viewModel.ramUsage
+                                // Dynamic Performance HUD
+                                AnimatedVisibility(
+                                    visible = viewModel.isGenerating && viewModel.showHardwareStats,
+                                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                                ) {
+                                    HardwareStatsHUD(
+                                        backend = viewModel.selectedBackend,
+                                        speed = viewModel.tokensPerSecond,
+                                        load = viewModel.npuLoad,
+                                        ram = viewModel.ramUsage
+                                    )
+                                }
+
+                                ChatInput(
+                                    value = viewModel.prompt,
+                                    onValueChange = { viewModel.prompt = it },
+                                    onSend = {
+                                         val hasInput = viewModel.prompt.isNotBlank() || viewModel.attachedFiles.isNotEmpty()
+                                         if (hasInput && viewModel.batteryPercentage < 15 && !viewModel.isCharging) {
+                                             viewModel.showLowBatteryDialog = true
+                                         } else {
+                                             if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                                 val enteredPrompt = viewModel.prompt
+                                                 viewModel.currentScreen = AppScreen.CHAT
+                                                 viewModel.startNewChat()
+                                                 viewModel.prompt = enteredPrompt
+                                             }
+                                             userHasScrolledUp = false
+                                             viewModel.sendMessage(context)
+                                         }
+                                     },
+                                    onStop = { viewModel.stopGeneration() },
+                                    onVoiceClick = {
+                                        if (viewModel.currentScreen == AppScreen.DASHBOARD) {
+                                            viewModel.currentScreen = AppScreen.CHAT
+                                            viewModel.startNewChat()
+                                        }
+                                        startVoiceInput()
+                                    },
+                                    onAttachClick = { documentPickerLauncher.launch("*/*") },
+                                    attachedFiles = viewModel.attachedFiles,
+                                    onDetachFile = { viewModel.detachFile(it) },
+                                    enabled = viewModel.modelPath != null,
+                                    isGenerating = viewModel.isGenerating,
+                                    isInternetEnabled = viewModel.isInternetEnabled,
+                                    isSearchForced = viewModel.isSearchForced,
+                                    onToggleSearch = { viewModel.toggleSearchForced() },
+                                    chatMode = viewModel.currentChatMode,
+                                    onChatModeChange = { viewModel.updateChatMode(it) },
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
-
-                            ChatInput(
-                                value = viewModel.prompt,
-                                onValueChange = { viewModel.prompt = it },
-                                onSend = {
-                                     val hasInput = viewModel.prompt.isNotBlank() || viewModel.attachedFiles.isNotEmpty()
-                                     if (hasInput && viewModel.batteryPercentage < 15 && !viewModel.isCharging) {
-                                         viewModel.showLowBatteryDialog = true
-                                     } else {
-                                         if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                             val enteredPrompt = viewModel.prompt
-                                             viewModel.currentScreen = AppScreen.CHAT
-                                             viewModel.startNewChat()
-                                             viewModel.prompt = enteredPrompt
-                                         }
-                                         userHasScrolledUp = false
-                                         viewModel.sendMessage(context)
-                                     }
-                                 },
-                                onStop = { viewModel.stopGeneration() },
-                                onVoiceClick = {
-                                    if (viewModel.currentScreen == AppScreen.DASHBOARD) {
-                                        viewModel.currentScreen = AppScreen.CHAT
-                                        viewModel.startNewChat()
-                                    }
-                                    startVoiceInput()
-                                },
-                                onAttachClick = { documentPickerLauncher.launch("*/*") },
-                                attachedFiles = viewModel.attachedFiles,
-                                onDetachFile = { viewModel.detachFile(it) },
-                                enabled = viewModel.modelPath != null,
-                                isGenerating = viewModel.isGenerating,
-                                isInternetEnabled = viewModel.isInternetEnabled,
-                                isSearchForced = viewModel.isSearchForced,
-                                onToggleSearch = { viewModel.toggleSearchForced() },
-                                chatMode = viewModel.currentChatMode,
-                                onChatModeChange = { viewModel.updateChatMode(it) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
                         }
 
                         // 3. Floating Header Column (floats on top of the content)
@@ -2044,20 +2069,20 @@ private fun Modifier.fadingEdges(
         if (height <= 0f || topFadePx <= 0f) return@drawWithContent
         
         val width = size.width
-        val fadeEnd = topBoundaryPx + topFadePx
+        val fadeStart = (topBoundaryPx - topFadePx).coerceAtLeast(0f)
+        val fadeEnd = topBoundaryPx
         
-        if (fadeEnd > 0f) {
+        if (fadeEnd > fadeStart) {
             val stops = arrayOf(
                 0f to Color.Black,
-                (topBoundaryPx / fadeEnd).coerceIn(0f, 1f) to Color.Black,
+                (fadeStart / fadeEnd).coerceIn(0f, 1f) to Color.Black,
                 *EASED_FADE_STOPS_DST_OUT.map { (stop, color) ->
-                    val fraction = topBoundaryPx + stop * topFadePx
+                    val fraction = fadeStart + stop * (fadeEnd - fadeStart)
                     (fraction / fadeEnd).coerceIn(0f, 1f) to color
                 }.toTypedArray(),
                 1f to Color.Transparent
             )
             
-            // Sort stops to ensure they are strictly increasing and unique
             val sortedStops = stops.distinctBy { it.first }.sortedBy { it.first }.toTypedArray()
             
             drawRect(
