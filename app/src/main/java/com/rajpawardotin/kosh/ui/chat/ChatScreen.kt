@@ -446,6 +446,25 @@ fun ChatScreen(
                 onPickModel = { filePickerLauncher.launch(arrayOf("*/*")) },
                 onExportBackup = { showExportPasswordDialog = true },
                 onImportBackup = { importBackupLauncher.launch(arrayOf("*/*")) },
+                onToggleScreenshot = { enabled ->
+                    if (!enabled) {
+                        viewModel.toggleScreenshot(false)
+                    } else {
+                        if (!viewModel.isScreenshotPasscodeSet) {
+                            showScreenshotSetupDialog = true
+                        } else {
+                            if (viewModel.isScreenshotBiometricEnabled) {
+                                viewModel.unlockScreenshotWithBiometrics(context) { success ->
+                                    if (!success) {
+                                        showScreenshotUnlockDialog = true
+                                    }
+                                }
+                            } else {
+                                showScreenshotUnlockDialog = true
+                            }
+                        }
+                    }
+                },
                 onBackClick = {
                     viewModel.currentScreen = previousScreen
                 },

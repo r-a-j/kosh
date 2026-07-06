@@ -370,23 +370,27 @@ class ChatViewModel(
         agenticStateLabel = "Ready"
     }
 
+    private fun destroyKey(key: SecretKey) {
+        if (key is DestroyableSecretKey) {
+            key.clear()
+        } else {
+            try {
+                val keyField = key.javaClass.getDeclaredField("key")
+                keyField.isAccessible = true
+                val keyBytes = keyField.get(key) as? ByteArray
+                if (keyBytes != null) {
+                    java.util.Arrays.fill(keyBytes, 0.toByte())
+                }
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
+
     fun clearActiveSessionKeys() {
         stopGeneration()
         for (key in activeSessionKeys.values) {
-            if (key is DestroyableSecretKey) {
-                key.clear()
-            } else {
-                try {
-                    val keyField = key.javaClass.getDeclaredField("key")
-                    keyField.isAccessible = true
-                    val keyBytes = keyField.get(key) as? ByteArray
-                    if (keyBytes != null) {
-                        java.util.Arrays.fill(keyBytes, 0.toByte())
-                    }
-                } catch (e: Exception) {
-                    // Ignore
-                }
-            }
+            destroyKey(key)
         }
         activeSessionKeys.clear()
         activeSessionDocuments.clear()
@@ -882,7 +886,10 @@ class ChatViewModel(
         viewModelScope.launch(safeIoDispatcher) {
             sessionRepository.deleteSession(sessionId)
             withContext(Dispatchers.Main) {
-                activeSessionKeys.remove(sessionId)
+                val removedKey = activeSessionKeys.remove(sessionId)
+                if (removedKey != null) {
+                    destroyKey(removedKey)
+                }
                 if (currentSessionId == sessionId) {
                     startNewChat()
                 }
@@ -1250,17 +1257,9 @@ class ChatViewModel(
                         encryptedKeyBiometric = null
                     )
                     sessionRepository.saveSession(updatedSession)
-                    val removedKey = activeSessionKeys[sessionId]
+                    val removedKey = activeSessionKeys.remove(sessionId)
                     if (removedKey != null) {
-                        try {
-                            val keyField = removedKey.javaClass.getDeclaredField("key")
-                            keyField.isAccessible = true
-                            val keyBytes = keyField.get(removedKey) as? ByteArray
-                            if (keyBytes != null) {
-                                java.util.Arrays.fill(keyBytes, 0.toByte())
-                            }
-                        } catch (e: Exception) {}
-                        activeSessionKeys.remove(sessionId)
+                        destroyKey(removedKey)
                     }
                     loadSessionInternal(sessionId)
                     withContext(Dispatchers.Main) {

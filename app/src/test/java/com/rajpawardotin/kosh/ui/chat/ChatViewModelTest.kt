@@ -1158,5 +1158,65 @@ class ChatViewModelTest {
         toastJob.cancel()
         testToastJob.cancel()
     }
+
+    @Test
+    fun testDeleteSessionDestroysSessionKey() = runTest(testDispatcher) {
+        val sessionId = "to-be-deleted"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Delete Me",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeSessionRepo.saveSession(session)
+
+        val keyBytes = ByteArray(32) { 1.toByte() }
+        val secretKey = com.rajpawardotin.kosh.data.DestroyableSecretKey(keyBytes)
+        viewModel.activeSessionKeys[sessionId] = secretKey
+
+        // Act
+        viewModel.deleteSession(sessionId)
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        assertFalse(viewModel.activeSessionKeys.containsKey(sessionId))
+        assertNull(secretKey.getEncoded())
+    }
+
+    @Test
+    fun testRemoveChatLockDestroysKey() = runTest(testDispatcher) {
+        val sessionId = "lock-to-be-removed"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Locked Session",
+            createdAt = 1000L,
+            lastActive = 2000L,
+            modelPath = null,
+            lastSearchQuery = null,
+            passwordHash = "some_hash",
+            salt = "some_salt",
+            validationToken = "some_token",
+            encryptedKeyPassword = "encrypted_key_pass"
+        )
+        fakeSessionRepo.saveSession(session)
+
+        val keyBytes = ByteArray(32) { 2.toByte() }
+        val secretKey = com.rajpawardotin.kosh.data.DestroyableSecretKey(keyBytes)
+        viewModel.activeSessionKeys[sessionId] = secretKey
+
+        var callbackSuccess = false
+        viewModel.removeSessionLock(sessionId) { success ->
+            callbackSuccess = success
+        }
+        testScheduler.advanceUntilIdle()
+
+        // Assert
+        assertTrue(callbackSuccess)
+        assertFalse(viewModel.activeSessionKeys.containsKey(sessionId))
+        assertNull(secretKey.getEncoded())
+    }
 }
+
 

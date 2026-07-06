@@ -46,6 +46,7 @@ fun SettingsScreen(
     onPickModel: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
+    onToggleScreenshot: (Boolean) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -808,7 +809,7 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { viewModel.toggleScreenshot(!viewModel.isScreenshotEnabled) }
+                                    .clickable { onToggleScreenshot(!viewModel.isScreenshotEnabled) }
                                     .padding(vertical = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -829,12 +830,7 @@ fun SettingsScreen(
                                 KoshSwitch(
                                     checked = viewModel.isScreenshotEnabled,
                                     onCheckedChange = { enabled ->
-                                        if (!enabled) {
-                                            viewModel.toggleScreenshot(false)
-                                        } else {
-                                            // Handle biometric or passcode confirmation in settings screen
-                                            viewModel.toggleScreenshot(true) // Simpler callback route for inline settings screen
-                                        }
+                                        onToggleScreenshot(enabled)
                                     }
                                 )
                             }
