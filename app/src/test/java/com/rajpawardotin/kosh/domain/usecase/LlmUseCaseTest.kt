@@ -240,4 +240,40 @@ class LlmUseCaseTest {
         // 2. Check that relevant past turns were fetched (containing 'Kotlin')
         assertTrue(prompt.contains("- User: User turn 1 with Kotlin code"))
     }
+
+    @Test
+    fun testCompileFinalPromptBranchesSystemPromptBasedOnChatMode() {
+        // Test FAST mode prompt
+        val fastPrompt = llmUseCase.compileFinalPrompt(
+            chatMessages = emptyList(),
+            rawPrompt = "Test query",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            chatMode = com.rajpawardotin.kosh.domain.model.ChatMode.FAST
+        )
+        assertTrue(fastPrompt.contains("IMPORTANT: You MUST answer the user's query directly and concisely. Do NOT write down any reasoning or step-by-step thinking process"))
+
+        // Test BALANCED (NORMAL) mode prompt
+        val normalPrompt = llmUseCase.compileFinalPrompt(
+            chatMessages = emptyList(),
+            rawPrompt = "Test query",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            chatMode = com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL
+        )
+        assertTrue(normalPrompt.contains("Before answering the user's query or calling any tool, you MUST write down a brief and concise step-by-step reasoning process"))
+
+        // Test DEEP THINK (THINKING) mode prompt
+        val thinkingPrompt = llmUseCase.compileFinalPrompt(
+            chatMessages = emptyList(),
+            rawPrompt = "Test query",
+            documentContext = "",
+            searchResults = null,
+            searchQuery = null,
+            chatMode = com.rajpawardotin.kosh.domain.model.ChatMode.THINKING
+        )
+        assertTrue(thinkingPrompt.contains("Before answering the user's query or calling any tool, you MUST write down an extremely detailed, comprehensive, step-by-step reasoning process"))
+    }
 }

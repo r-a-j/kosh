@@ -760,6 +760,8 @@ fun ChatScreen(
                                 isInternetEnabled = viewModel.isInternetEnabled,
                                 isSearchForced = viewModel.isSearchForced,
                                 onToggleSearch = { viewModel.toggleSearchForced() },
+                                chatMode = viewModel.currentChatMode,
+                                onChatModeChange = { viewModel.updateChatMode(it) },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

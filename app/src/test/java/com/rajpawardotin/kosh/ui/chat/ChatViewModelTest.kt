@@ -1217,6 +1217,46 @@ class ChatViewModelTest {
         assertFalse(viewModel.activeSessionKeys.containsKey(sessionId))
         assertNull(secretKey.getEncoded())
     }
+
+    @Test
+    fun testChatModeSavingAndLoading() = runTest(testDispatcher) {
+        // 1. Initially should be FAST default
+        assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.FAST, viewModel.currentChatMode)
+
+        // 2. Change mode globally (when sessionId is null)
+        viewModel.updateChatMode(com.rajpawardotin.kosh.domain.model.ChatMode.THINKING)
+        assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.THINKING, viewModel.currentChatMode)
+        assertEquals("THINKING", fakeSettings.getString("global_chat_mode", ""))
+
+        // 3. Create a session and verify changing mode persists to session-specific key
+        val sessionId = "session_mode_test"
+        val session = ChatSession(
+            id = sessionId,
+            title = "Mode Session",
+            createdAt = 1000L,
+            lastActive = 1000L,
+            modelPath = null,
+            lastSearchQuery = null
+        )
+        fakeSessionRepo.saveSession(session)
+        
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+
+        viewModel.updateChatMode(com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL)
+        assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL, viewModel.currentChatMode)
+        assertEquals("NORMAL", fakeSettings.getString("chat_mode_$sessionId", ""))
+
+        // 4. Starting new chat resets mode to global default
+        viewModel.startNewChat()
+        testScheduler.advanceUntilIdle()
+        assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.THINKING, viewModel.currentChatMode)
+
+        // 5. Loading the previous session loads its specific mode
+        viewModel.loadSession(sessionId)
+        testScheduler.advanceUntilIdle()
+        assertEquals(com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL, viewModel.currentChatMode)
+    }
 }
 
 

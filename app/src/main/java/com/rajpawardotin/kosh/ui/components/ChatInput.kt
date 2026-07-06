@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rajpawardotin.kosh.domain.model.AttachedFile
+import com.rajpawardotin.kosh.domain.model.ChatMode
 
 @Composable
 fun ChatInput(
@@ -55,6 +56,8 @@ fun ChatInput(
     isInternetEnabled: Boolean,
     isSearchForced: Boolean,
     onToggleSearch: () -> Unit,
+    chatMode: ChatMode,
+    onChatModeChange: (ChatMode) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -127,6 +130,70 @@ fun ChatInput(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // Premium Chat Mode Selector Segmented Bar
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ChatMode.entries.forEach { mode ->
+                val isSelected = chatMode == mode
+                val contentColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                    label = "mode_text_color"
+                )
+                val backgroundColor by animateColorAsState(
+                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    label = "mode_bg_color"
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1.0f else 0.96f,
+                    label = "mode_scale"
+                )
+
+                Box(
+                    modifier = Modifier
+                        .graphicsLayer(scaleX = scale, scaleY = scale)
+                        .background(
+                            color = backgroundColor,
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable {
+                            if (!isGenerating && enabled) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onChatModeChange(mode)
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = when (mode) {
+                            ChatMode.FAST -> "FAST"
+                            ChatMode.NORMAL -> "BALANCED"
+                            ChatMode.THINKING -> "DEEP THINK"
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.4.sp,
+                            fontSize = 11.5.sp
+                        ),
+                        color = contentColor
+                    )
+                }
+            }
+        }
         // Horizontal Attachment Preview Bar
         AnimatedVisibility(
             visible = attachedFiles.isNotEmpty(),

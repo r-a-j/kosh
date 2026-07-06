@@ -615,7 +615,8 @@ class LlmUseCase(
         toolSchemas: List<String> = emptyList(),
         maxContextChars: Int = 8000, // approx 2048 tokens
         summary: String? = null,
-        facts: String? = null
+        facts: String? = null,
+        chatMode: com.rajpawardotin.kosh.domain.model.ChatMode = com.rajpawardotin.kosh.domain.model.ChatMode.FAST
     ): String {
         val budgetForHistory = maxContextChars - rawPrompt.length - documentContext.length - (searchResults?.length ?: 0) - (summary?.length ?: 0) - (facts?.length ?: 0) - 1500
         
@@ -683,9 +684,17 @@ class LlmUseCase(
         promptSb.append("### SYSTEM INSTRUCTIONS\n")
         promptSb.append("You are Kosh, a private, secure offline personal assistant running on the user's device. ")
         promptSb.append("You help the user brainstorm, study, and analyze information.\n")
-        promptSb.append("- Before answering the user's query or calling any tool, you MUST write down your detailed step-by-step reasoning process wrapped inside <thinking> and </thinking> tags. ")
-        promptSb.append("Once your reasoning process is complete, output your final response (or tool call) outside of the <thinking> tags. ")
-        promptSb.append("Always include this reasoning block for all responses to allow Kosh to render your thought process card.\n")
+        when (chatMode) {
+            com.rajpawardotin.kosh.domain.model.ChatMode.FAST -> {
+                promptSb.append("- IMPORTANT: You MUST answer the user's query directly and concisely. Do NOT write down any reasoning or step-by-step thinking process, and do NOT use <thinking> or </thinking> tags. Start your response directly with the answer.\n")
+            }
+            com.rajpawardotin.kosh.domain.model.ChatMode.NORMAL -> {
+                promptSb.append("- Before answering the user's query or calling any tool, you MUST write down a brief and concise step-by-step reasoning process wrapped inside <thinking> and </thinking> tags. Once your reasoning process is complete, output your final response (or tool call) outside of the <thinking> tags. Always include this reasoning block.\n")
+            }
+            com.rajpawardotin.kosh.domain.model.ChatMode.THINKING -> {
+                promptSb.append("- Before answering the user's query or calling any tool, you MUST write down an extremely detailed, comprehensive, step-by-step reasoning process wrapped inside <thinking> and </thinking> tags. Critically analyze all assumptions, explore edge cases, and double-check facts. Once complete, output your final response (or tool call) outside of the <thinking> tags. Always include this reasoning block.\n")
+            }
+        }
         
         if (toolSchemas.isNotEmpty()) {
             promptSb.append("\n### AVAILABLE AGENT TOOLS\n")

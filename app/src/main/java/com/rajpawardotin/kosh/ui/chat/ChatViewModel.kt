@@ -15,6 +15,7 @@ import com.rajpawardotin.kosh.data.DestroyableSecretKey
 import com.rajpawardotin.kosh.domain.model.ChatMessage
 import com.rajpawardotin.kosh.data.TtsProvider
 import com.rajpawardotin.kosh.domain.model.ChatSession
+import com.rajpawardotin.kosh.domain.model.ChatMode
 
 import com.rajpawardotin.kosh.domain.model.AttachedFile
 import com.rajpawardotin.kosh.domain.model.SessionDocument
@@ -361,6 +362,19 @@ class ChatViewModel(
     var isScreenshotBiometricEnabled by mutableStateOf(settingsProvider.getBoolean("screenshot_biometric_enabled", false))
         private set
     
+    var currentChatMode by mutableStateOf(ChatMode.valueOf(settingsProvider.getString("global_chat_mode", "FAST")))
+        private set
+
+    fun updateChatMode(mode: ChatMode) {
+        currentChatMode = mode
+        val sessionId = currentSessionId
+        if (sessionId != null) {
+            settingsProvider.putString("chat_mode_$sessionId", mode.name)
+        } else {
+            settingsProvider.putString("global_chat_mode", mode.name)
+        }
+    }
+
     val keyManager = com.rajpawardotin.kosh.data.ActiveSessionKeyManager()
     val activeSessionKeys get() = keyManager.activeSessionKeys
 
@@ -798,6 +812,13 @@ class ChatViewModel(
             activeSessionTags.addAll(sessionTags)
             
             lastSearchQuery = session?.lastSearchQuery
+
+            val storedMode = settingsProvider.getString("chat_mode_$sessionId", "FAST")
+            currentChatMode = try {
+                ChatMode.valueOf(storedMode)
+            } catch (e: Exception) {
+                ChatMode.FAST
+            }
         }
 
         
@@ -846,6 +867,11 @@ class ChatViewModel(
         activeSessionDocuments.clear()
         activeSessionTags.clear()
         nextSessionTags.clear()
+        currentChatMode = try {
+            ChatMode.valueOf(settingsProvider.getString("global_chat_mode", "FAST"))
+        } catch (e: Exception) {
+            ChatMode.FAST
+        }
         if (isTemporary) {
             showToast("Temporary Vault active (history disabled)")
         } else {
@@ -1994,7 +2020,8 @@ class ChatViewModel(
                     toolSchemas = registeredSkills.map { it.getSchema() },
                     maxContextChars = contextLimitChars,
                     summary = currentSession?.summary,
-                    facts = currentSession?.facts
+                    facts = currentSession?.facts,
+                    chatMode = currentChatMode
                 )
 
                 if (lastQueryUsed != null) {
