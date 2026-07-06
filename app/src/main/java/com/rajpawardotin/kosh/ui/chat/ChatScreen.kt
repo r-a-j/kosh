@@ -655,24 +655,27 @@ fun ChatScreen(
                                                 ) {
                                                     items(
                                                         items = viewModel.chatMessages,
-                                                        key = { it.id }
+                                                        key = { it.id },
+                                                        contentType = { if (it.isUser) "user_bubble" else "assistant_bubble" }
                                                     ) { message ->
                                                         val currentlySpeakingId by viewModel.currentlySpeakingMessageId.collectAsState()
+                                                        
+                                                        val onPlay = remember(viewModel) { { id: String, text: String -> viewModel.playTts(id, text) } }
+                                                        val onStop = remember(viewModel) { { viewModel.stopTts() } }
+                                                        val onToggle = remember(message.id, viewModel) { { index: Int, checked: Boolean -> viewModel.toggleChecklistItem(message.id, index, checked) } }
+                                                        val onFeedback = remember(message.id, viewModel) { { feedback: Int -> viewModel.updateMessageFeedback(message.id, feedback) } }
+                                                        val onManageTags = remember(viewModel) { { showManageTagsDialog = true } }
+                                                        val onManageTagsClick = if (!viewModel.isTemporarySession && !isLocked) onManageTags else null
+
                                                         ChatBubble(
                                                             message = message,
                                                             currentlySpeakingMessageId = currentlySpeakingId,
-                                                            onPlayTts = { id, text -> viewModel.playTts(id, text) },
-                                                            onStopTts = { viewModel.stopTts() },
+                                                            onPlayTts = onPlay,
+                                                            onStopTts = onStop,
                                                             checkedItems = viewModel.checkedItems,
-                                                            onToggleChecklistItem = { index, checked ->
-                                                                viewModel.toggleChecklistItem(message.id, index, checked)
-                                                            },
-                                                            onFeedbackChanged = { feedback ->
-                                                                viewModel.updateMessageFeedback(message.id, feedback)
-                                                            },
-                                                            onManageTagsClick = if (!viewModel.isTemporarySession && !isLocked) {
-                                                                { showManageTagsDialog = true }
-                                                            } else null,
+                                                            onToggleChecklistItem = onToggle,
+                                                            onFeedbackChanged = onFeedback,
+                                                            onManageTagsClick = onManageTagsClick,
                                                             isSearchingInternet = viewModel.isSearchingInternet,
                                                             isGenerating = viewModel.isGenerating,
                                                             agenticStateLabel = viewModel.agenticStateLabel,
