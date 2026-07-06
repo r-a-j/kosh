@@ -83,9 +83,7 @@ fun ResponseActionsRow(
                         context.contentResolver.openOutputStream(it)?.use { outputStream ->
                             outputStream.write(textToCopy.toByteArray())
                         }
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Saved to text file!", Toast.LENGTH_SHORT).show()
-                        }
+                        // Success handled silently to reduce toast spam
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
                             Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -108,9 +106,7 @@ fun ResponseActionsRow(
             onClick = { 
                 val nextFeedback = if (isThumbUpSelected) 0 else 1
                 onFeedbackChanged(nextFeedback)
-                if (nextFeedback == 1) {
-                    Toast.makeText(context, "Feedback recorded: Helpful", Toast.LENGTH_SHORT).show()
-                }
+                // Feedback recorded silently to reduce toast spam
             },
             modifier = Modifier.size(36.dp)
         ) {
@@ -127,9 +123,7 @@ fun ResponseActionsRow(
             onClick = { 
                 val nextFeedback = if (isThumbDownSelected) 0 else -1
                 onFeedbackChanged(nextFeedback)
-                if (nextFeedback == -1) {
-                    Toast.makeText(context, "Feedback recorded: Unhelpful", Toast.LENGTH_SHORT).show()
-                }
+                // Feedback recorded silently to reduce toast spam
             },
             modifier = Modifier.size(36.dp)
         ) {
@@ -330,7 +324,7 @@ fun ResponseActionsRow(
                         TextButton(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(textToCopy))
-                                Toast.makeText(context, "Copied source to clipboard!", Toast.LENGTH_SHORT).show()
+                                // Success handled silently to reduce toast spam
                             }
                         ) {
                             Text("Copy Source", fontWeight = FontWeight.Bold)

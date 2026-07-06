@@ -228,7 +228,7 @@ fun ChatScreen(
             if (isSessionLocked && currentSession.encryptedKeyBiometric != null) {
                 viewModel.unlockSessionWithBiometrics(currentSessionId, context) { success ->
                     if (success) {
-                        Toast.makeText(context, "Chat Unlocked via Biometrics", Toast.LENGTH_SHORT).show()
+                        // Success handled silently to reduce toast spam
                     }
                 }
             }
@@ -1067,7 +1067,7 @@ fun ChatScreen(
                 onDismiss = {
                     showRecoveryPhraseDialog = false
                     sessionRecoveryMnemonic = null
-                    Toast.makeText(context, "Chat Locked & Secured", Toast.LENGTH_SHORT).show()
+                    // Success handled silently to reduce toast spam
                 }
             )
         }
