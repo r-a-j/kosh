@@ -629,7 +629,7 @@ fun ChatScreen(
                                                         start = 16.dp,
                                                         end = 16.dp,
                                                         top = headerHeightDp + topFadeHeightDp + 8.dp,
-                                                        bottom = inputHeightDp + 8.dp
+                                                        bottom = inputHeightDp + 32.dp
                                                     ),
                                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                                 ) {
@@ -668,7 +668,9 @@ fun ChatScreen(
                                                     exit = fadeOut(animationSpec = tween(300)) + scaleOut(animationSpec = tween(300), targetScale = 0.8f),
                                                     modifier = Modifier
                                                         .align(Alignment.BottomEnd)
-                                                        .padding(end = 20.dp, bottom = inputHeightDp + 12.dp)
+                                                        .navigationBarsPadding()
+                                                        .imePadding()
+                                                        .padding(end = 20.dp, bottom = inputHeightDp + 24.dp)
                                                 ) {
                                                     SmallFloatingActionButton(
                                                         onClick = {
