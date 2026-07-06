@@ -255,6 +255,9 @@ object ResponseParser {
         
         val cleanText = cleanTextBuilder.toString().trim()
         val finalCleanText = sanitizeThinkingTags(cleanUpEmptyListMarkers(cleanText)).trim()
+        if (finalCleanText.isEmpty() && thinkingContents.isNotEmpty()) {
+            return Pair(thinkingContents, thinkingContents.joinToString("\n\n"))
+        }
         return Pair(thinkingContents, finalCleanText)
     }
 
@@ -292,6 +295,24 @@ object ResponseParser {
             }
         }
         
+        // Fallback: If no actual answer text block was produced but we have thinking blocks,
+        // treat the thinking contents as the text answer as well so the user gets the analysis directly.
+        val hasMainContent = blocks.any { 
+            it is ChatContentBlock.Text || 
+            it is ChatContentBlock.CodeBlock || 
+            it is ChatContentBlock.Checklist || 
+            it is ChatContentBlock.MathBlock 
+        }
+        if (!hasMainContent) {
+            val thinkingBlocks = blocks.filterIsInstance<ChatContentBlock.Thinking>()
+            if (thinkingBlocks.isNotEmpty()) {
+                val combinedThinking = thinkingBlocks.joinToString("\n\n") { it.content }
+                if (combinedThinking.isNotEmpty()) {
+                    blocks.add(ChatContentBlock.Text(combinedThinking))
+                }
+            }
+        }
+
         // Parse sources from the entire text
         val sources = parseSources(text)
         if (sources.isNotEmpty()) {

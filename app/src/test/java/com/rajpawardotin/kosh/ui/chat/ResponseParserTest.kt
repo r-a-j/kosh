@@ -379,5 +379,22 @@ class ResponseParserTest {
         assertTrue(parsedBlocks[1] is ChatContentBlock.Text)
         assertEquals("Here is the clean response.\nAnother line.", (parsedBlocks[1] as ChatContentBlock.Text).content.replace("\r\n", "\n"))
     }
+
+    @Test
+    fun testResponseParserThinkingFallbackWhenResponseIsBlank() {
+        val onlyThinkingText = "<thinking>This is my complete analysis of the document.</thinking>"
+        val (thinking, clean) = ResponseParser.extractThinkingSegments(onlyThinkingText)
+        
+        assertEquals(1, thinking.size)
+        assertEquals("This is my complete analysis of the document.", thinking[0])
+        assertEquals("This is my complete analysis of the document.", clean)
+        
+        val parsedBlocks = ResponseParser.parse(onlyThinkingText)
+        // Should parse into: Thinking block AND Text fallback block
+        assertEquals(2, parsedBlocks.size)
+        assertTrue(parsedBlocks[0] is ChatContentBlock.Thinking)
+        assertTrue(parsedBlocks[1] is ChatContentBlock.Text)
+        assertEquals("This is my complete analysis of the document.", (parsedBlocks[1] as ChatContentBlock.Text).content)
+    }
 }
 
