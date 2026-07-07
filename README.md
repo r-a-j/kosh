@@ -12,37 +12,37 @@ In a world where every chatbot sends your personal thoughts to the cloud, Kosh b
 
 <h3 align="center">🎨 Premium Theme Variations</h3>
 <p align="center">
-  <img src="docs/images/00_landing_theme_obsidian.png" width="31%" alt="Obsidian Dark Theme" />
-  <img src="docs/images/00_landing_theme_aero.png" width="31%" alt="Aero Glass Theme" />
-  <img src="docs/images/00_landing_theme_sand.png" width="31%" alt="Sand Warm Theme" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/00_landing_theme_obsidian.png" width="31%" alt="Obsidian Dark Theme" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/00_landing_theme_aero.png" width="31%" alt="Aero Glass Theme" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/00_landing_theme_sand.png" width="31%" alt="Sand Warm Theme" />
 </p>
 <p align="center"><i>Kosh offers distinct, premium design systems with rich glassmorphic effects (Obsidian Dark, Aero Glass, and Sand Warm) tailored to fit your style.</i></p>
 
 <h3 align="center">💬 Conversational AI & Document RAG Flow</h3>
 <p align="center">
-  <img src="docs/images/04_sample_new_chat.png" width="31%" alt="New Chat Initialization" />
-  <img src="docs/images/03_sample_chat.png" width="31%" alt="Active Chat with RAG Citations" />
-  <img src="docs/images/05_model_hub.png" width="31%" alt="Model Manager Dashboard" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/04_sample_new_chat.png" width="31%" alt="New Chat Initialization" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/03_sample_chat.png" width="31%" alt="Active Chat with RAG Citations" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/05_model_hub.png" width="31%" alt="Model Manager Dashboard" />
 </p>
 <p align="center"><i>From initializing a fresh vault session, interacting with local models using real-time document chunk citation widgets, to managing downloaded LLMs.</i></p>
 
 <h3 align="center">🧠 LiteRT Model Administration</h3>
 <p align="center">
-  <img src="docs/images/06_model_hub_02.png" width="48%" alt="Model Import Wizard" />
-  <img src="docs/images/07_model_hub_03.png" width="48%" alt="Model Details & Backend Select" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/06_model_hub_02.png" width="48%" alt="Model Import Wizard" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/07_model_hub_03.png" width="48%" alt="Model Details & Backend Select" />
 </p>
 <p align="center"><i>Verify integrity upon model import, manage tag routing, and choose hardware acceleration backends (CPU, GPU, NPU) dynamically.</i></p>
 
 <h3 align="center">⚙️ Preferences & System Diagnostics</h3>
 <p align="center">
-  <img src="docs/images/02_settings.png" width="48%" alt="General Settings Screen" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/02_settings.png" width="48%" alt="General Settings Screen" />
 </p>
 
 <details>
   <summary><b>🔍 Expand to view full scrollable Settings Dashboard</b></summary>
   <br/>
   <p align="center">
-    <img src="docs/images/02_settings_02.png" width="60%" alt="Scrollable Settings" />
+    <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/02_settings_02.png" width="60%" alt="Scrollable Settings" />
   </p>
 </details>
 
