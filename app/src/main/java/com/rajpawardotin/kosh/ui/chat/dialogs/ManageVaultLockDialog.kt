@@ -42,7 +42,6 @@ fun ManageVaultLockDialog(
                         viewModel.activeSessionKeys.remove(sessionId)
                         viewModel.loadSession(sessionId)
                         onDismiss()
-                        Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
@@ -63,7 +62,6 @@ fun ManageVaultLockDialog(
                         viewModel.removeSessionLock(sessionId) { success ->
                             isProcessing = false
                             if (success) {
-                                Toast.makeText(context, "Password Lock Removed", Toast.LENGTH_SHORT).show()
                                 onDismiss()
                             } else {
                                 Toast.makeText(context, "Failed to remove lock", Toast.LENGTH_SHORT).show()

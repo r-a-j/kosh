@@ -305,7 +305,6 @@ fun ChatDrawerContent(
                                         if (viewModel.currentSessionId == session.id) {
                                             viewModel.loadSession(session.id)
                                         }
-                                        Toast.makeText(context, "Chat Locked", Toast.LENGTH_SHORT).show()
                                     },
                                     modifier = Modifier.size(24.dp)
                                 ) {

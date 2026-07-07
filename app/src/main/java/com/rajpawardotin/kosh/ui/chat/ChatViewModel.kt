@@ -415,9 +415,9 @@ class ChatViewModel(
         
         if (isAppLockEnabled) {
             isAppLocked = true
-            showToast("Kosh Locked in Background")
+            // Silently lock in background to reduce toast spam
         } else {
-            showToast("Vault Sealed in Background")
+            // Silently seal vault in background to reduce toast spam
         }
     }
 
@@ -429,9 +429,9 @@ class ChatViewModel(
         isAppLockEnabled = enabled
         settingsProvider.putString("app_lock_enabled", enabled.toString())
         if (enabled) {
-            showToast("App Lock on Startup enabled")
+            // App lock updated silently
         } else {
-            showToast("App Lock on Startup disabled")
+            // App lock updated silently
         }
     }
 
@@ -998,7 +998,7 @@ class ChatViewModel(
                                                      saveSessionEncrypted(updatedSession)
                                                      loadSavedSessionsInternal()
                                                      withContext(Dispatchers.Main) {
-                                                         showToast("Chat locked and secured successfully")
+                                                         // Chat locked silently to reduce toast spam
                                                          onResult(true, mnemonic)
                                                      }
                                                 } else {
@@ -1045,7 +1045,6 @@ class ChatViewModel(
                         saveSessionEncrypted(updatedSession)
                         loadSavedSessionsInternal()
                         withContext(Dispatchers.Main) {
-                            showToast("Chat locked and secured successfully")
                             onResult(true, mnemonic)
                         }
                     } else {
@@ -1099,7 +1098,6 @@ class ChatViewModel(
                 loadSessionInternal(sessionId)
 
                 withContext(Dispatchers.Main) {
-                    showToast("Vault recovered successfully")
                     onResult(true)
                 }
             } catch (e: Exception) {
@@ -1132,7 +1130,6 @@ class ChatViewModel(
                 activeSessionKeys[sessionId] = sessionKey
                 loadSessionInternal(sessionId)
                 withContext(Dispatchers.Main) {
-                    showToast("Vault Unlocked successfully")
                     onResult(true)
                 }
             } catch (e: Exception) {
@@ -1195,7 +1192,6 @@ class ChatViewModel(
                                 activeSessionKeys[sessionId] = sessionKey
                                 loadSessionInternal(sessionId)
                                 withContext(Dispatchers.Main) {
-                                    showToast("Vault Unlocked successfully")
                                     onResult(true)
                                 }
                             } catch (e: Exception) {
@@ -1275,7 +1271,7 @@ class ChatViewModel(
                     }
                     loadSessionInternal(sessionId)
                     withContext(Dispatchers.Main) {
-                        showToast("Chat lock removed")
+                        // Lock removed silently to reduce toast spam
                         onResult(true)
                     }
                 } else {
@@ -1396,7 +1392,7 @@ class ChatViewModel(
     fun updateAppTheme(theme: String) {
         appTheme = theme
         settingsProvider.putString("app_theme", theme)
-        showToast("Theme changed to ${theme.replace("_", " ")}")
+        // Theme changed silently to reduce toast spam
     }
 
     fun loadAllTags() {
@@ -1428,7 +1424,7 @@ class ChatViewModel(
             withContext(Dispatchers.Main) {
                 if (success) {
                     loadAllTags()
-                    showToast("Tag '$name' created")
+                    // Tag created silently to reduce toast spam
                 } else {
                     showToast("Tag already exists or is invalid")
                 }
@@ -1464,7 +1460,7 @@ class ChatViewModel(
                             loadAllTags()
                             loadSavedSessionsInternal()
                             currentSessionId?.let { loadActiveSessionTagsInternal(it) }
-                            showToast("Tag updated")
+                            // Tag updated silently to reduce toast spam
                         } else {
                             showToast("Failed to rename tag")
                         }
@@ -1497,7 +1493,7 @@ class ChatViewModel(
                             loadAllTags()
                             loadSavedSessionsInternal()
                             currentSessionId?.let { loadActiveSessionTagsInternal(it) }
-                            showToast("Tag deleted and disassociated")
+                            // Tag deleted silently to reduce toast spam
                         } else {
                             showToast("Failed to delete tag")
                         }
