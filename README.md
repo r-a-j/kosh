@@ -2,6 +2,10 @@
 
 > *Your Personal Cognitive Vault & Local Second Brain.*
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/kosh_banner.png" width="100%" alt="Kosh Banner" />
+</p>
+
 **Kosh** (meaning *Vault* or *Treasure* in Sanskrit/Hindi) is a radically private, offline-first personal knowledge assistant. It is designed to index, process, and query your life's context, documents, and data completely on your device. 
 
 In a world where every chatbot sends your personal thoughts to the cloud, Kosh brings the power of Artificial Intelligence directly to your phone. It runs Large Language Models (LLMs) locally, ensuring your data never leaves your hands. 
