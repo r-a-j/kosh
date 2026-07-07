@@ -3,7 +3,7 @@
 > *Your Personal Cognitive Vault & Local Second Brain.*
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/kosh_banner.png" width="100%" alt="Kosh Banner" />
+  <img src="https://raw.githubusercontent.com/r-a-j/kosh/refs/heads/main/docs/images/kosh_logo.svg" width="128" height="128" alt="Kosh Logo" />
 </p>
 
 **Kosh** (meaning *Vault* or *Treasure* in Sanskrit/Hindi) is a radically private, offline-first personal knowledge assistant. It is designed to index, process, and query your life's context, documents, and data completely on your device. 
