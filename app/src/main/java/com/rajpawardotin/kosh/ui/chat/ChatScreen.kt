@@ -161,7 +161,7 @@ fun ChatScreen(
 
     val showScrollToBottom by remember {
         derivedStateOf {
-            !isAtBottom
+            viewModel.currentScreen == AppScreen.CHAT && !isAtBottom && viewModel.chatMessages.isNotEmpty()
         }
     }
     var unreadCount by remember { mutableStateOf(0) }

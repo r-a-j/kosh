@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.saveable.rememberSaveable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -128,8 +129,35 @@ fun DashboardScreen(
                 ))
         )
 
+        val scope = rememberCoroutineScope()
         val scrollState = rememberLazyListState()
         var isSearchFocused by remember { mutableStateOf(false) }
+
+        val isAtBottom by remember {
+            derivedStateOf {
+                val layoutInfo = scrollState.layoutInfo
+                val visibleItemsInfo = layoutInfo.visibleItemsInfo
+                if (visibleItemsInfo.isEmpty()) {
+                    true
+                } else {
+                    val lastVisibleItem = visibleItemsInfo.last()
+                    val isLastItem = lastVisibleItem.index == layoutInfo.totalItemsCount - 1
+                    if (isLastItem) {
+                        val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                        val viewportBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+                        lastItemBottom - viewportBottom <= 40
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+
+        val showScrollToBottom by remember {
+            derivedStateOf {
+                !isAtBottom && filteredSessions.isNotEmpty()
+            }
+        }
 
         LaunchedEffect(isSearchFocused) {
             if (isSearchFocused) {
@@ -801,6 +829,43 @@ fun DashboardScreen(
                 viewModel = viewModel,
                 onDismiss = { sessionToRename = null }
             )
+        }
+
+        // Scroll to Bottom Button (aligned dynamically above the search/input bar)
+        AnimatedVisibility(
+            visible = showScrollToBottom,
+            enter = fadeIn(animationSpec = tween(300)) + 
+                    scaleIn(animationSpec = tween(300), initialScale = 0.8f) +
+                    slideInVertically(animationSpec = tween(300)) { it / 2 },
+            exit = fadeOut(animationSpec = tween(300)) + 
+                   scaleOut(animationSpec = tween(300), targetScale = 0.8f) +
+                   slideOutVertically(animationSpec = tween(300)) { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = bottomPadding + 16.dp)
+        ) {
+            val localHaptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+            SmallFloatingActionButton(
+                onClick = {
+                    localHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                    scope.launch {
+                        val lastItemIndex = (scrollState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                        scrollState.animateScrollToItem(lastItemIndex)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                contentColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape,
+                modifier = Modifier
+                    .size(40.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Scroll to bottom",
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
